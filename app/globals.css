@@ -1,0 +1,284 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Vibe2Gether Romantic Theme - Light Mode */
+  --background: #ffffff;
+  --foreground: #1a1a1a;
+  --card: #f7f7f7;
+  --card-foreground: #1a1a1a;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a1a;
+  --primary: #ff477e;
+  --primary-foreground: #ffffff;
+  --secondary: #6a4cff;
+  --secondary-foreground: #ffffff;
+  --muted: #fdf2f5;
+  --muted-foreground: #666666;
+  --accent: #ffaa42;
+  --accent-foreground: #1a1a1a;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #ffe4eb;
+  --input: #ffe4eb;
+  --ring: #ff477e;
+  --chart-1: #ff477e;
+  --chart-2: #ffaa42;
+  --chart-3: #6a4cff;
+  --chart-4: #ffc266;
+  --chart-5: #ff6b9d;
+  --radius: 0.75rem;
+  --sidebar: #fff5f7;
+  --sidebar-foreground: #1a1a1a;
+  --sidebar-primary: #ff477e;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #fdf2f5;
+  --sidebar-accent-foreground: #1a1a1a;
+  --sidebar-border: #ffe4eb;
+  --sidebar-ring: #ff477e;
+}
+
+.dark {
+  /* Vibe2Gether Romantic Theme - Dark Mode */
+  --background: #0d0d0f;
+  --foreground: #ededed;
+  --card: #1a1a1c;
+  --card-foreground: #ededed;
+  --popover: #1a1a1c;
+  --popover-foreground: #ededed;
+  --primary: #ff477e;
+  --primary-foreground: #ffffff;
+  --secondary: #c5a6ff;
+  --secondary-foreground: #0d0d0f;
+  --muted: #252528;
+  --muted-foreground: #a3a3a3;
+  --accent: #ffaa42;
+  --accent-foreground: #0d0d0f;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #2a2a2d;
+  --input: #2a2a2d;
+  --ring: #b26cff;
+  --chart-1: #ff477e;
+  --chart-2: #ffaa42;
+  --chart-3: #b26cff;
+  --chart-4: #ffc266;
+  --chart-5: #ff6b9d;
+  --sidebar: #141416;
+  --sidebar-foreground: #ededed;
+  --sidebar-primary: #ff477e;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #252528;
+  --sidebar-accent-foreground: #ededed;
+  --sidebar-border: #2a2a2d;
+  --sidebar-ring: #b26cff;
+}
+
+@theme inline {
+  --font-sans: "Plus Jakarta Sans", "Geist", sans-serif;
+  --font-mono: "Geist Mono", monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom gradient animations */
+@keyframes gradient-x {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(255, 71, 126, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(255, 71, 126, 0.6);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-gradient-x {
+  background-size: 200% 200%;
+  animation: gradient-x 3s ease infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #ff477e 0%, #ffaa42 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Gradient background */
+.gradient-bg {
+  background: linear-gradient(135deg, #ff477e 0%, #ffaa42 100%);
+}
+
+/* Gradient border */
+.gradient-border {
+  position: relative;
+  background: var(--card);
+  border-radius: var(--radius);
+}
+
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(135deg, #ff477e 0%, #ffaa42 100%);
+  border-radius: calc(var(--radius) + 2px);
+  z-index: -1;
+}
+
+/* Glass effect */
+.glass {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.dark .glass {
+  background: rgba(26, 26, 28, 0.8);
+}
+
+/* Hide scrollbar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Blob animations */
+@keyframes blob {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(20px, -50px) scale(1.1);
+  }
+  50% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+  75% {
+    transform: translate(50px, 50px) scale(1.05);
+  }
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-3000 {
+  animation-delay: 3s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
+
+/* Video background blob positions */
+.blob-top-right {
+  top: 10%;
+  right: 10%;
+}
+
+.blob-middle-left {
+  top: 50%;
+  left: 10%;
+}
+
+.blob-middle-right {
+  top: 30%;
+  right: 20%;
+}

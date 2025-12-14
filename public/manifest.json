@@ -1,0 +1,72 @@
+{
+  "name": "Vibe2Gether - Find Your Perfect Match",
+  "short_name": "Vibe2Gether",
+  "description": "Connect with amazing people worldwide. Dating meets marketplace on the most romantic social platform.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ff477e",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/v2g-logo.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/v2g-logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/v2g-logo.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["dating", "social", "lifestyle"],
+  "screenshots": [
+    {
+      "src": "/v2g-logo.jpg",
+      "sizes": "540x720",
+      "type": "image/jpeg",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/v2g-logo.jpg",
+      "sizes": "1280x720",
+      "type": "image/jpeg",
+      "form_factor": "wide"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Explore Profiles",
+      "short_name": "Explore",
+      "description": "Browse and discover amazing people",
+      "url": "/explore",
+      "icons": [
+        {
+          "src": "/v2g-logo.jpg",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "My Matches",
+      "short_name": "Matches",
+      "description": "View your matches",
+      "url": "/dashboard/matches",
+      "icons": [
+        {
+          "src": "/v2g-logo.jpg",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}
