@@ -105,8 +105,8 @@ export default function AdminDashboard() {
             <CardTitle>Activity Overview</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="w-full h-80 p-6">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="w-full p-6" style={{ height: "320px" }}>
+              <ResponsiveContainer width="100%" height={320}>
                 <AreaChart data={chartData}>
                   <defs>
                     <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">

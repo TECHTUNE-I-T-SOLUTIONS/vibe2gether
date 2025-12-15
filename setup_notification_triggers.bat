@@ -1,0 +1,75 @@
+@echo off
+REM Notification Triggers Setup Helper for Windows
+REM This script provides instructions for setting up notification triggers in Supabase
+
+echo.
+echo ==========================================
+echo Vibe2Gether Notification Triggers Setup
+echo ==========================================
+echo.
+echo STEP 1: API Update [DONE]
+echo - Modified /app/api/notifications/route.ts
+echo - Now returns flattened actor information
+echo - Handles null actor_id (system notifications)
+echo.
+echo STEP 2: Run SQL Triggers in Supabase
+echo ==========================================
+echo.
+echo 1. Go to: https://supabase.com/dashboard
+echo 2. Select your project
+echo 3. Go to: SQL Editor (left sidebar)
+echo 4. Click: New Query
+echo 5. Open this file: scripts/013_comprehensive_notification_triggers.sql
+echo 6. Copy all content and paste into Supabase SQL Editor
+echo 7. Click: Run (or press Ctrl+Enter)
+echo.
+echo This will:
+echo   + Drop existing notification triggers (if any)
+echo   + Create proper triggers for all user actions
+echo   + Add system notification on signup
+echo   + Add new_post notifications for followers
+echo   + Add product approval notifications
+echo   + Add product purchase notifications
+echo.
+echo ==========================================
+echo TESTING THE TRIGGERS
+echo ==========================================
+echo.
+echo After running the SQL, test each trigger:
+echo.
+echo 1. Welcome Notification:
+echo    - Sign up with a new account
+echo    - Check dashboard notifications
+echo    - Should see "Welcome to Vibe2Gether!" message
+echo.
+echo 2. Other Notifications:
+echo    - Like a post ^-^> post author gets notified
+echo    - Follow someone ^-^> they get notified
+echo    - Post something ^-^> followers get notified
+echo    - Approve product ^-^> seller gets notified
+echo    - Buy a product ^-^> seller gets notified
+echo.
+echo ==========================================
+echo TROUBLESHOOTING
+echo ==========================================
+echo.
+echo If notifications aren't working:
+echo.
+echo 1. Check trigger status in Supabase:
+echo    - SQL Editor ^-^> New Query
+echo    - Run: SELECT tgname FROM pg_trigger;
+echo    - Should see all trigger names
+echo.
+echo 2. Check for errors in logs:
+echo    - Go to: Logs ^-^> Postgres Logs
+echo    - Look for any error messages
+echo.
+echo 3. Verify tables exist:
+echo    - Go to: Table Editor
+echo    - Confirm these tables: users, posts, likes, follows, etc
+echo.
+echo ==========================================
+echo Questions? Check: FIX_NOTIFICATION_TRIGGERS.md
+echo ==========================================
+echo.
+pause

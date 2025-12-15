@@ -18,7 +18,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Vibe2Gether - Find Your Perfect Match",
   description: "Connect with amazing people worldwide. Dating meets marketplace on the most romantic social platform.",
-  generator: "v0.app",
   keywords: ["dating", "social", "marketplace", "connection", "love", "relationships"],
   authors: [{ name: "Vibe2Gether" }],
   manifest: "/manifest.json",

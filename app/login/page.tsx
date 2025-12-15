@@ -17,6 +17,7 @@ import { motion } from "framer-motion"
 import { AuthHeader } from "@/components/auth-header"
 import { VideoBackground } from "@/components/video-background"
 import { useLanguage } from "@/lib/i18n/context"
+import { LoginErrorModal } from "@/components/login-error-modal"
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
@@ -42,11 +43,16 @@ export default function LoginPage() {
       })
 
       if (result?.error) {
-        toast({
-          title: "Login failed",
-          description: result.error,
-          variant: "destructive",
-        })
+        // Show modal only for "User not found", toast for other errors
+        if (result.error === "User not found") {
+          router.push(`/login?error=user_not_found&email=${encodeURIComponent(email)}`)
+        } else {
+          toast({
+            title: "Invalid Credentials",
+            description: "The email or password you entered is incorrect. Please try again.",
+            variant: "destructive",
+          })
+        }
       } else {
         toast({
           title: "Welcome back!",
@@ -250,6 +256,7 @@ export default function LoginPage() {
           <VideoBackground />
         </div>
       </div>
+      <LoginErrorModal />
     </>
   )
 }

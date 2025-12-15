@@ -14,47 +14,62 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          throw new Error("Email and password required")
-        }
+        try {
+          if (!credentials?.email || !credentials?.password) {
+            throw new Error("Email and password required")
+          }
 
-        const supabase = await createClient()
+          const supabase = await createClient()
 
-        // Get user from database
-        const { data: user, error } = await supabase
-          .from("users")
-          .select("*")
-          .eq("email", credentials.email.toLowerCase())
-          .single()
+          // Get user from database - handle case where user doesn't exist
+          const { data: users, error } = await supabase
+            .from("users")
+            .select("*")
+            .eq("email", credentials.email.toLowerCase())
 
-        if (error || !user) {
-          throw new Error("Invalid email or password")
-        }
+          if (error) {
+            console.error("Database error:", error)
+            throw new Error("Invalid email or password")
+          }
 
-        // Verify password
-        const isValidPassword = await bcrypt.compare(credentials.password, user.password_hash)
+          const user = users && users.length > 0 ? users[0] : null
 
-        if (!isValidPassword) {
-          throw new Error("Invalid email or password")
-        }
+          if (!user) {
+            // User not found - throw specific error
+            throw new Error("User not found")
+          }
 
-        // Check if user is active
-        if (!user.is_active) {
-          throw new Error("Account is deactivated")
-        }
+          // Verify password
+          const isValidPassword = await bcrypt.compare(credentials.password, user.password_hash)
 
-        // Update last login
-        await supabase.from("users").update({ last_login_at: new Date().toISOString() }).eq("id", user.id)
+          if (!isValidPassword) {
+            throw new Error("Invalid email or password")
+          }
 
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.display_name || user.full_name,
-          image: user.profile_picture,
-          isVerified: user.is_verified,
-          isPremium: user.is_premium,
-          isAdmin: user.is_admin,
-          coins: user.coins_balance,
+          // Check if user is active
+          if (!user.is_active) {
+            throw new Error("Account is deactivated")
+          }
+
+          // Update last login
+          await supabase
+            .from("users")
+            .update({ last_login_at: new Date().toISOString() })
+            .eq("id", user.id)
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.display_name || user.full_name,
+            image: user.profile_picture,
+            isVerified: user.is_verified,
+            isPremium: user.is_premium,
+            isAdmin: user.is_admin,
+            coins: user.coins_balance,
+          }
+        } catch (error) {
+          console.error("Authorization error:", error)
+          throw error
         }
       },
     }),
@@ -72,8 +87,10 @@ export const authOptions: NextAuthOptions = {
       if (account?.provider === "google" || account?.provider === "facebook") {
         const supabase = await createClient()
 
-        // Check if user exists
-        const { data: existingUser } = await supabase.from("users").select("*").eq("email", user.email).single()
+        // Check if user exists - handle case where user doesn't exist
+        const { data: existingUsers } = await supabase.from("users").select("*").eq("email", user.email)
+
+        const existingUser = existingUsers && existingUsers.length > 0 ? existingUsers[0] : null
 
         if (!existingUser) {
           // Create new user
@@ -84,13 +101,19 @@ export const authOptions: NextAuthOptions = {
             profile_picture: user.image || "",
             is_verified: true,
             email_verified_at: new Date().toISOString(),
+            last_login_at: new Date().toISOString(),
             password_hash: await bcrypt.hash(Math.random().toString(36), 10), // Random password for OAuth users
+            coins_balance: 50, // Welcome bonus
+            total_coins_earned: 50,
           })
 
           if (error) {
             console.error("Error creating OAuth user:", error)
             return false
           }
+        } else {
+          // Update last login for existing user
+          await supabase.from("users").update({ last_login_at: new Date().toISOString() }).eq("id", existingUser.id)
         }
       }
       return true

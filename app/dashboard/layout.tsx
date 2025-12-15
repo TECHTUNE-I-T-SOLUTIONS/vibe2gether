@@ -12,7 +12,7 @@ export default function DashboardLayout({
       <DashboardSidebar />
       <div className="lg:ml-64">
         <DashboardHeader />
-        <main className="pt-16 lg:pt-0 pb-8 lg:pb-8">{children}</main>
+        <main className="pt-16 md:pt-20 lg:pt-16 pb-8">{children}</main>
       </div>
     </div>
   )

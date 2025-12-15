@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { useI18n } from "@/lib/i18n/context"
-import { useSession } from "next-auth/react"
+import { useUserProfile } from "@/hooks/use-user-profile"
 import {
   Heart,
   MessageCircle,
@@ -32,11 +32,13 @@ import {
 
 export default function DashboardPage() {
   const { t } = useI18n()
-  const { data: session } = useSession()
+  const { user: profileUser, loading: profileLoading } = useUserProfile()
   const [stats, setStats] = useState([])
   const [recentActivity, setRecentActivity] = useState([])
   const [matches, setMatches] = useState([])
   const [coinBalance, setCoinBalance] = useState(0)
+  const [unreadMessages, setUnreadMessages] = useState(0)
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -54,10 +56,10 @@ export default function DashboardPage() {
         }
 
         const data = await response.json()
-        setStats(data.stats)
-        setRecentActivity(data.recentActivity)
-        setMatches(data.matches)
-        setCoinBalance(data.coinBalance)
+        setStats(data.stats || [])
+        setRecentActivity(data.recentActivity || [])
+        setMatches(data.matches || [])
+        setCoinBalance(data.coinBalance || 0)
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred")
         console.error("Dashboard data fetch error:", err)
@@ -66,22 +68,90 @@ export default function DashboardPage() {
       }
     }
 
-    if (session) {
-      fetchDashboardData()
+    async function fetchNotifications() {
+      try {
+        const response = await fetch("/api/notifications")
+        if (response.ok) {
+          const data = await response.json()
+          setUnreadNotifications(data.unreadCount || 0)
+        }
+      } catch (err) {
+        console.error("Failed to fetch notifications:", err)
+      }
     }
-  }, [session])
-  
-  // Use session data for user profile
-  const userName = session?.user?.name || "User"
-  const userImage = session?.user?.image || "/placeholder.svg?height=128&width=128"
-  const userEmail = session?.user?.email || ""
+
+    async function fetchMessages() {
+      try {
+        const response = await fetch("/api/messages")
+        if (response.ok) {
+          const data = await response.json()
+          const unreadCount = (data.conversations || []).reduce(
+            (total: number, conv: any) => total + (conv.unreadCount || 0),
+            0
+          )
+          setUnreadMessages(unreadCount)
+        }
+      } catch (err) {
+        console.error("Failed to fetch messages:", err)
+      }
+    }
+
+    fetchDashboardData()
+    fetchNotifications()
+    fetchMessages()
+  }, [])
+
+  if (profileLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (!profileUser) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-muted-foreground">Failed to load profile</p>
+      </div>
+    )
+  }
+
+  // Calculate profile completion percentage
+  const calculateProfileCompletion = () => {
+    let completed = 0
+    const totalFields = 10
+
+    if (profileUser.full_name) completed++
+    if (profileUser.display_name) completed++
+    if (profileUser.profile_picture) completed++
+    if (profileUser.cover_picture) completed++
+    if (profileUser.bio) completed++
+    if (profileUser.city) completed++
+    if (profileUser.country) completed++
+    if (profileUser.date_of_birth) completed++
+    if (profileUser.gender) completed++
+    if (profileUser.interests && profileUser.interests.length > 0) completed++
+
+    return Math.round((completed / totalFields) * 100)
+  }
+
+  const profileCompletion = calculateProfileCompletion()
 
   return (
-    <div className="p-4 md:p-6 lg:p-8">
+    <div className="p-4 md:p-4 lg:px-6">
       {/* Profile Header */}
       <Card className="border-border/50 overflow-hidden mb-8">
         {/* Cover */}
         <div className="h-32 md:h-48 gradient-bg relative">
+          {profileUser.cover_picture && (
+            <Image
+              src={profileUser.cover_picture}
+              alt="Cover"
+              fill
+              className="object-cover"
+            />
+          )}
           <Button
             size="icon"
             variant="secondary"
@@ -96,7 +166,13 @@ export default function DashboardPage() {
             {/* Avatar */}
             <div className="relative flex-shrink-0">
               <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full border-4 border-background overflow-hidden bg-muted flex items-center justify-center">
-                <Image src={userImage} alt={userName} fill className="object-cover object-center" />
+                {profileUser.profile_picture ? (
+                  <Image src={profileUser.profile_picture} alt={profileUser.display_name || profileUser.full_name} fill className="object-cover object-center" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary to-accent text-white text-3xl font-bold">
+                    {(profileUser.display_name || profileUser.full_name || "U").charAt(0).toUpperCase()}
+                  </div>
+                )}
               </div>
               <Button size="icon" className="absolute bottom-0 right-0 rounded-full w-8 h-8 gradient-bg">
                 <Camera className="w-4 h-4" />
@@ -107,17 +183,28 @@ export default function DashboardPage() {
             {/* Info */}
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
-                <h1 className="text-2xl md:text-3xl font-bold">{userName}</h1>
-                <Verified className="w-6 h-6 text-blue-500 fill-blue-500" />
+                <h1 className="text-2xl md:text-3xl font-bold">{profileUser.display_name || profileUser.full_name}</h1>
+                {profileUser.is_verified && (
+                  <Verified className="w-6 h-6 text-blue-500 fill-blue-500" />
+                )}
               </div>
-              <p className="text-muted-foreground mb-2">{userEmail}</p>
+              <p className="text-muted-foreground mb-2">{profileUser.email}</p>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge className="gradient-bg text-primary-foreground">
-                  <Sparkles className="w-3 h-3 mr-1" />
-                  {t("premium")}
-                </Badge>
-                <Badge variant="outline">Adventure Seeker</Badge>
-                <Badge variant="outline">Music Lover</Badge>
+                {profileUser.is_premium && (
+                  <Badge className="gradient-bg text-primary-foreground">
+                    <Sparkles className="w-3 h-3 mr-1" />
+                    {t("premium")}
+                  </Badge>
+                )}
+                {profileUser.interests && profileUser.interests.length > 0 && (
+                  <>
+                    {profileUser.interests.slice(0, 2).map((interest) => (
+                      <Badge key={interest} variant="outline">
+                        {interest}
+                      </Badge>
+                    ))}
+                  </>
+                )}
               </div>
             </div>
 
@@ -141,11 +228,13 @@ export default function DashboardPage() {
           <div className="mt-6 p-4 bg-muted/50 rounded-xl">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium">Profile Completion</span>
-              <span className="text-sm text-primary font-semibold">85%</span>
+              <span className="text-sm text-primary font-semibold">{profileCompletion}%</span>
             </div>
-            <Progress value={85} className="h-2" />
+            <Progress value={profileCompletion} className="h-2" />
             <p className="text-xs text-muted-foreground mt-2">
-              Add more photos to complete your profile and get more matches!
+              {profileCompletion < 100
+                ? "Complete your profile to get more matches!"
+                : "Your profile is complete! 🎉"}
             </p>
           </div>
         </CardContent>
@@ -356,14 +445,14 @@ export default function DashboardPage() {
                 <Button variant="ghost" className="w-full justify-start rounded-xl">
                   <MessageCircle className="w-5 h-5 mr-3 text-primary" />
                   {t("messages")}
-                  <Badge className="ml-auto">3</Badge>
+                  {unreadMessages > 0 && <Badge className="ml-auto">{unreadMessages}</Badge>}
                 </Button>
               </Link>
               <Link href="/dashboard/notifications">
                 <Button variant="ghost" className="w-full justify-start rounded-xl">
                   <Bell className="w-5 h-5 mr-3 text-accent" />
                   {t("notifications")}
-                  <Badge className="ml-auto">12</Badge>
+                  {unreadNotifications > 0 && <Badge className="ml-auto">{unreadNotifications}</Badge>}
                 </Button>
               </Link>
               <Link href="/events">

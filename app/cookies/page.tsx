@@ -42,7 +42,7 @@ export default function CookiesPage() {
   return (
     <div className="min-h-screen">
       <Header />
-      <main>
+      <main className="pt-16 md:pt-20">
         {/* Hero */}
         <section className="relative py-20 md:py-32 overflow-hidden">
           <div className="absolute inset-0 gradient-bg opacity-10" />

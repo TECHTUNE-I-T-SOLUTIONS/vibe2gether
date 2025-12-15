@@ -64,7 +64,7 @@ export default function HelpPage() {
   return (
     <div className="min-h-screen">
       <Header />
-      <main>
+      <main className="pt-16 md:pt-20">
         {/* Hero */}
         <section className="relative py-16 md:py-24 overflow-hidden">
           <div className="absolute inset-0 gradient-bg opacity-10" />

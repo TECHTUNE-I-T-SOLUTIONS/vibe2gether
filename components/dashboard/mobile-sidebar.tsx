@@ -20,13 +20,15 @@ import {
   HelpCircle,
   LogOut,
   Rss,
+  Copy,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { LogoutConfirmationDialog } from "@/components/logout-confirmation-dialog"
 import { SheetClose } from "@/components/ui/sheet"
+import { useUserProfile } from "@/hooks/use-user-profile"
 
 interface SidebarItem {
   icon: React.ElementType
@@ -40,8 +42,8 @@ const mainItems: SidebarItem[] = [
   { icon: Rss, label: "feed", href: "/dashboard/feed" },
   { icon: User, label: "profile", href: "/dashboard/profile" },
   { icon: Heart, label: "yourMatches", href: "/dashboard/matches" },
-  { icon: MessageCircle, label: "messages", href: "/dashboard/messages", badge: 3 },
-  { icon: Bell, label: "notifications", href: "/dashboard/notifications", badge: 12 },
+  { icon: MessageCircle, label: "messages", href: "/dashboard/messages" },
+  { icon: Bell, label: "notifications", href: "/dashboard/notifications" },
 ]
 
 const secondaryItems: SidebarItem[] = [
@@ -60,7 +62,35 @@ export function MobileSidebar() {
   const pathname = usePathname()
   const { t } = useI18n()
   const { data: session } = useSession()
+  const { user } = useUserProfile()
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
+  const [messageBadge, setMessageBadge] = useState(0)
+  const [notificationBadge, setNotificationBadge] = useState(0)
+
+  useEffect(() => {
+    async function fetchBadgeCounts() {
+      try {
+        const notifRes = await fetch("/api/notifications")
+        if (notifRes.ok) {
+          const notifData = await notifRes.json()
+          setNotificationBadge(notifData.unreadCount || 0)
+        }
+
+        const messagesRes = await fetch("/api/messages")
+        if (messagesRes.ok) {
+          const messagesData = await messagesRes.json()
+          const unreadCount = (messagesData.conversations || []).reduce(
+            (total: number, conv: any) => total + (conv.unreadCount || 0),
+            0
+          )
+          setMessageBadge(unreadCount)
+        }
+      } catch (err) {
+        console.error("Failed to fetch badge counts:", err)
+      }
+    }
+    fetchBadgeCounts()
+  }, [])
 
   const getInitials = (name: string) => {
     return name
@@ -96,19 +126,36 @@ export function MobileSidebar() {
       </div>
 
       {/* User Profile Section */}
-      <div className="p-4 border-b border-sidebar-border">
-        <Link href="/dashboard/profile" className="flex gap-3 items-start mb-3">
+      <div className="p-4 border-b border-sidebar-border space-y-3">
+        <Link href="/dashboard/profile" className="flex gap-3 items-start">
           <Avatar className="w-12 h-12 ring-2 ring-primary/20 flex-shrink-0">
-            <AvatarImage src={userImage} />
+            <AvatarImage src={session?.user?.image || user?.profile_picture} />
             <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-primary-foreground">
-              {getInitials(userName)}
+              {getInitials(session?.user?.name || "User")}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm text-sidebar-foreground truncate">{userName}</p>
-            <p className="text-xs text-sidebar-foreground/60 truncate">{userEmail}</p>
+            <p className="font-semibold text-sm text-sidebar-foreground truncate">{session?.user?.name || "User"}</p>
+            <p className="text-xs text-sidebar-foreground/60 truncate">{session?.user?.email || ""}</p>
           </div>
         </Link>
+        {user?.referral_code && (
+          <div className="bg-primary/5 rounded-lg p-3 border border-primary/20">
+            <p className="text-xs text-muted-foreground mb-1">Referral Code</p>
+            <div className="flex items-center gap-2">
+              <code className="text-sm font-mono font-bold text-primary flex-1">{user.referral_code}</code>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(user.referral_code)
+                }}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                title="Copy referral code"
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Navigation Sections */}
@@ -118,6 +165,11 @@ export function MobileSidebar() {
           {mainItems.map((item) => {
             const Icon = item.icon
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+            // Add dynamic badges
+            const badge = 
+              item.href === "/dashboard/messages" ? messageBadge :
+              item.href === "/dashboard/notifications" ? notificationBadge :
+              item.badge
 
             return (
               <SheetClose asChild key={item.href}>
@@ -132,9 +184,9 @@ export function MobileSidebar() {
                 >
                   <Icon className="w-5 h-5 flex-shrink-0" />
                   <span className="flex-1">{t(item.label)}</span>
-                  {item.badge && (
+                  {badge && badge > 0 && (
                     <Badge className="gradient-bg text-xs px-1.5 ml-auto">
-                      {item.badge}
+                      {badge}
                     </Badge>
                   )}
                 </Link>

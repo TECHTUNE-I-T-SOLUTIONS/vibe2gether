@@ -23,13 +23,15 @@ import {
   LogOut,
   Sparkles,
   Rss,
+  Copy,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { LogoutConfirmationDialog } from "@/components/logout-confirmation-dialog"
+import { useUserProfile } from "@/hooks/use-user-profile"
 
 interface SidebarItem {
   icon: React.ElementType
@@ -43,8 +45,8 @@ const mainItems: SidebarItem[] = [
   { icon: Rss, label: "feed", href: "/dashboard/feed" },
   { icon: User, label: "profile", href: "/dashboard/profile" },
   { icon: Heart, label: "yourMatches", href: "/dashboard/matches" },
-  { icon: MessageCircle, label: "messages", href: "/dashboard/messages", badge: 3 },
-  { icon: Bell, label: "notifications", href: "/dashboard/notifications", badge: 12 },
+  { icon: MessageCircle, label: "messages", href: "/dashboard/messages" },
+  { icon: Bell, label: "notifications", href: "/dashboard/notifications" },
 ]
 
 const secondaryItems: SidebarItem[] = [
@@ -63,7 +65,35 @@ function SidebarContent() {
   const pathname = usePathname()
   const { t } = useI18n()
   const { data: session } = useSession()
+  const { user } = useUserProfile()
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
+  const [messageBadge, setMessageBadge] = useState(0)
+  const [notificationBadge, setNotificationBadge] = useState(0)
+
+  useEffect(() => {
+    async function fetchBadgeCounts() {
+      try {
+        const notifRes = await fetch("/api/notifications")
+        if (notifRes.ok) {
+          const notifData = await notifRes.json()
+          setNotificationBadge(notifData.unreadCount || 0)
+        }
+
+        const messagesRes = await fetch("/api/messages")
+        if (messagesRes.ok) {
+          const messagesData = await messagesRes.json()
+          const unreadCount = (messagesData.conversations || []).reduce(
+            (total: number, conv: any) => total + (conv.unreadCount || 0),
+            0
+          )
+          setMessageBadge(unreadCount)
+        }
+      } catch (err) {
+        console.error("Failed to fetch badge counts:", err)
+      }
+    }
+    fetchBadgeCounts()
+  }, [])
 
   const getInitials = (name: string) => {
     return name
@@ -73,15 +103,29 @@ function SidebarContent() {
       .toUpperCase()
   }
 
-  const userName = session?.user?.name || "User"
-  const userEmail = session?.user?.email || ""
-  const userImage = session?.user?.image || ""
-  const initials = getInitials(userName)
+  const userName = user?.display_name || session?.user?.name || "User"
+  const userEmail = user?.email || session?.user?.email || ""
+  const userImage = user?.profile_picture || session?.user?.image || ""
+  const initials = getInitials(user?.full_name || session?.user?.name || "User")
+
+  // Calculate profile completion percentage
+  const profileFields = [
+    user?.date_of_birth,
+    user?.gender,
+    user?.bio,
+    user?.profile_picture,
+    user?.cover_picture,
+    user?.country,
+    user?.city,
+    user?.interests,
+  ]
+  const completedFields = profileFields.filter((field) => field !== null && field !== undefined && field !== "").length
+  const profileCompletion = Math.round((completedFields / profileFields.length) * 100)
 
   return (
     <>
       {/* User Profile Mini */}
-      <div className="p-4 border-b border-sidebar-border">
+      <div className="p-4 border-b border-sidebar-border space-y-3">
         <div className="flex items-center gap-3">
           <Avatar className="w-12 h-12 ring-2 ring-primary/20">
             <AvatarImage src={userImage} alt={userName} />
@@ -92,16 +136,35 @@ function SidebarContent() {
             <p className="text-sm text-muted-foreground truncate">{userEmail}</p>
           </div>
         </div>
-        <div className="mt-3">
+        <div>
           <div className="flex items-center justify-between text-xs mb-1">
-            <span className="text-muted-foreground">Profile: 85%</span>
-            <Badge variant="outline" className="text-xs">
-              <Sparkles className="w-3 h-3 mr-1" />
-              Premium
-            </Badge>
+            <span className="text-muted-foreground">Profile: {profileCompletion}%</span>
+            {user?.is_premium && (
+              <Badge variant="outline" className="text-xs">
+                <Sparkles className="w-3 h-3 mr-1" />
+                Premium
+              </Badge>
+            )}
           </div>
-          <Progress value={85} className="h-1.5" />
+          <Progress value={profileCompletion} className="h-1.5" />
         </div>
+        {user?.referral_code && (
+          <div className="bg-primary/5 rounded-lg p-3 border border-primary/20">
+            <p className="text-xs text-muted-foreground mb-1">Referral Code</p>
+            <div className="flex items-center gap-2">
+              <code className="text-sm font-mono font-bold text-primary flex-1">{user.referral_code}</code>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(user.referral_code)
+                }}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                title="Copy referral code"
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main Navigation */}
@@ -110,6 +173,11 @@ function SidebarContent() {
           {mainItems.map((item) => {
             const Icon = item.icon
             const isActive = pathname === item.href
+            // Add dynamic badges
+            const badge = 
+              item.href === "/dashboard/messages" ? messageBadge :
+              item.href === "/dashboard/notifications" ? notificationBadge :
+              item.badge
             return (
               <Link
                 key={item.href}
@@ -123,11 +191,11 @@ function SidebarContent() {
               >
                 <Icon className="w-5 h-5" />
                 <span className="flex-1">{t(item.label)}</span>
-                {item.badge && (
+                {badge && badge > 0 && (
                   <Badge
                     className={cn("h-5 min-w-5 justify-center", isActive ? "bg-white/20" : "gradient-bg text-white")}
                   >
-                    {item.badge}
+                    {badge}
                   </Badge>
                 )}
               </Link>
@@ -191,7 +259,7 @@ export function DashboardSidebar() {
   return (
     <>
       {/* Desktop Sidebar - only visible on lg+ screens */}
-      <aside className="hidden lg:flex flex-col w-64 h-screen bg-sidebar border-r border-sidebar-border sticky top-0">
+      <aside className="hidden lg:fixed lg:flex flex-col w-64 h-screen bg-sidebar border-r border-sidebar-border left-0 top-0 z-30">
         <div className="p-4 border-b border-sidebar-border">
           <Link href="/" className="flex items-center gap-2">
             <div className="relative w-10 h-10 rounded-full overflow-hidden">

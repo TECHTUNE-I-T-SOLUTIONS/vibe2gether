@@ -1,5 +1,6 @@
 "use client"
-import { Heart, MessageCircle, Users, Eye, Coins, Star, Gift, Calendar, CheckCheck, Bell, Trash2 } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Heart, MessageCircle, Users, Eye, Coins, Star, Gift, Calendar, CheckCheck, Bell, Trash2, Loader2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -7,80 +8,50 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useI18n } from "@/lib/i18n/context"
 
-const notifications = [
-  {
-    id: 1,
-    type: "like",
-    user: { name: "Emma Rodriguez", avatar: "/emma-woman-avatar.jpg" },
-    message: "liked your profile",
-    time: "2 min ago",
-    read: false,
-    coins: 1,
-  },
-  {
-    id: 2,
-    type: "follow",
-    user: { name: "James Chen", avatar: "/placeholder.svg?height=40&width=40" },
-    message: "started following you",
-    time: "15 min ago",
-    read: false,
-    coins: 2,
-  },
-  {
-    id: 3,
-    type: "message",
-    user: { name: "Sofia Martinez", avatar: "/placeholder.svg?height=40&width=40" },
-    message: "sent you a message",
-    time: "1 hour ago",
-    read: false,
-    coins: 0,
-  },
-  {
-    id: 4,
-    type: "view",
-    user: { name: "Yuki Tanaka", avatar: "/placeholder.svg?height=40&width=40" },
-    message: "viewed your profile",
-    time: "2 hours ago",
-    read: true,
-    coins: 0,
-  },
-  {
-    id: 5,
-    type: "match",
-    user: { name: "Isabella", avatar: "/placeholder.svg?height=40&width=40" },
-    message: "You have a new match!",
-    time: "3 hours ago",
-    read: true,
-    coins: 5,
-  },
-  {
-    id: 6,
-    type: "gift",
-    user: { name: "Marcus Williams", avatar: "/placeholder.svg?height=40&width=40" },
-    message: "sent you a virtual gift",
-    time: "5 hours ago",
-    read: true,
-    coins: 10,
-  },
-  {
-    id: 7,
-    type: "event",
-    user: { name: "System", avatar: "/v2g-logo.png" },
-    message: "Upcoming event: Singles Mixer this Saturday!",
-    time: "1 day ago",
-    read: true,
-    coins: 0,
-  },
-  {
-    id: 8,
-    type: "premium",
-    user: { name: "System", avatar: "/v2g-logo.png" },
-    message: "Someone special liked you! Upgrade to see who",
-    time: "2 days ago",
-    read: true,
-    coins: 0,
-  },
-]
+interface NotificationItem {
+  id: string
+  type: string
+  user_id: string
+  actor_name: string
+  actor_image: string
+  title?: string
+  message?: string
+  created_at: string
+  read: boolean
+}
+
+const getNotificationMessage = (notification: NotificationItem): string => {
+  // Use the actual message from the notification if available
+  if (notification.message) {
+    return notification.message
+  }
+  
+  // Fallback to generic messages based on type
+  switch (notification.type) {
+    case "like":
+      return `${notification.actor_name} liked your post`
+    case "follow":
+      return `${notification.actor_name} started following you`
+    case "comment":
+      return `${notification.actor_name} commented on your post`
+    case "view":
+      return `${notification.actor_name} viewed your post`
+    case "match":
+      return `You have a new match!`
+    case "message":
+      return `${notification.actor_name} sent you a message`
+    case "save":
+      return `${notification.actor_name} saved your post`
+    case "new_post":
+      return `${notification.actor_name} posted something new`
+    case "coins_earned":
+      return `You earned coins!`
+    case "system":
+      return notification.title || "System notification"
+    default:
+      return `${notification.actor_name} interacted with you`
+  }
+}
 
 const getIcon = (type: string) => {
   switch (type) {
@@ -107,6 +78,28 @@ const getIcon = (type: string) => {
 
 export default function NotificationsPage() {
   const { t } = useI18n()
+  const [notifications, setNotifications] = useState<NotificationItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function fetchNotifications() {
+      try {
+        setLoading(true)
+        const response = await fetch("/api/notifications")
+        if (!response.ok) throw new Error("Failed to fetch notifications")
+        const data = await response.json()
+        setNotifications(data.notifications || [])
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "An error occurred")
+        console.error("Fetch error:", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchNotifications()
+  }, [])
+
   const unreadCount = notifications.filter((n) => !n.read).length
 
   return (
@@ -127,6 +120,12 @@ export default function NotificationsPage() {
           </Button>
         </div>
       </div>
+
+      {error && (
+        <div className="mb-6 p-4 bg-destructive/10 text-destructive rounded-lg">
+          {error}
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid sm:grid-cols-3 gap-4 mb-8">
@@ -158,7 +157,7 @@ export default function NotificationsPage() {
               <Coins className="w-6 h-6 text-accent" />
             </div>
             <div>
-              <p className="text-2xl font-bold">+{notifications.reduce((acc, n) => acc + n.coins, 0)}</p>
+              <p className="text-2xl font-bold">+{notifications.filter((n) => n.type === "coins_earned").length}</p>
               <p className="text-sm text-muted-foreground">Coins Earned</p>
             </div>
           </CardContent>
@@ -182,70 +181,78 @@ export default function NotificationsPage() {
         </TabsList>
 
         <TabsContent value="all">
-          <Card className="border-border/50">
-            <CardContent className="p-0 divide-y divide-border">
-              {notifications.map((notification) => (
-                <div
-                  key={notification.id}
-                  className={`flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors ${!notification.read ? "bg-primary/5" : ""}`}
-                >
-                  <div className="relative">
-                    <Avatar className="w-12 h-12">
-                      <AvatarImage src={notification.user.avatar || "/placeholder.svg"} />
-                      <AvatarFallback>{notification.user.name[0]}</AvatarFallback>
-                    </Avatar>
-                    <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-background flex items-center justify-center border border-border">
-                      {getIcon(notification.type)}
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : notifications.length === 0 ? (
+            <Card className="border-border/50">
+              <CardContent className="p-8 text-center">
+                <Bell className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                <p className="text-muted-foreground">No notifications yet</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-border/50">
+              <CardContent className="p-0 divide-y divide-border">
+                {notifications.map((notification) => (
+                  <div
+                    key={notification.id}
+                    className={`flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors ${!notification.read ? "bg-primary/5" : ""}`}
+                  >
+                    <div className="relative">
+                      <Avatar className="w-12 h-12">
+                        <AvatarImage src={notification.actor_image || "/placeholder.svg"} />
+                        <AvatarFallback>{notification.actor_name[0]}</AvatarFallback>
+                      </Avatar>
+                      <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-background flex items-center justify-center border border-border">
+                        {getIcon(notification.type)}
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`${!notification.read ? "font-semibold" : ""}`}>
-                      <span className="font-medium">{notification.user.name}</span>{" "}
-                      <span className="text-muted-foreground">{notification.message}</span>
-                    </p>
-                    <p className="text-sm text-muted-foreground">{notification.time}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {notification.coins > 0 && (
-                      <Badge variant="outline" className="text-accent border-accent/30 bg-accent/10">
-                        <Coins className="w-3 h-3 mr-1" />+{notification.coins}
-                      </Badge>
-                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className={`${!notification.read ? "font-semibold" : ""}`}>
+                        {notification.title || notification.message || getNotificationMessage(notification)}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {new Date(notification.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
                     {!notification.read && <div className="w-2 h-2 rounded-full gradient-bg" />}
                   </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+                ))}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="likes">
           <Card className="border-border/50">
             <CardContent className="p-0 divide-y divide-border">
-              {notifications
-                .filter((n) => n.type === "like")
-                .map((notification) => (
-                  <div
-                    key={notification.id}
-                    className={`flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors ${!notification.read ? "bg-primary/5" : ""}`}
-                  >
-                    <Avatar className="w-12 h-12">
-                      <AvatarImage src={notification.user.avatar || "/placeholder.svg"} />
-                      <AvatarFallback>{notification.user.name[0]}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <p>
-                        <span className="font-medium">{notification.user.name}</span> {notification.message}
-                      </p>
-                      <p className="text-sm text-muted-foreground">{notification.time}</p>
+              {notifications.filter((n) => n.type === "like").length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  <p>No likes yet</p>
+                </div>
+              ) : (
+                notifications
+                  .filter((n) => n.type === "like")
+                  .map((notification) => (
+                    <div
+                      key={notification.id}
+                      className={`flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors ${!notification.read ? "bg-primary/5" : ""}`}
+                    >
+                      <Avatar className="w-12 h-12">
+                        <AvatarImage src={notification.actor_image || "/placeholder.svg"} />
+                        <AvatarFallback>{notification.actor_name[0]}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <p>
+                          {notification.message || getNotificationMessage(notification)}
+                        </p>
+                        <p className="text-sm text-muted-foreground">{new Date(notification.created_at).toLocaleDateString()}</p>
+                      </div>
                     </div>
-                    {notification.coins > 0 && (
-                      <Badge variant="outline" className="text-accent border-accent/30">
-                        +{notification.coins} coins
-                      </Badge>
-                    )}
-                  </div>
-                ))}
+                  ))
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -253,28 +260,34 @@ export default function NotificationsPage() {
         <TabsContent value="follows">
           <Card className="border-border/50">
             <CardContent className="p-0 divide-y divide-border">
-              {notifications
-                .filter((n) => n.type === "follow")
-                .map((notification) => (
-                  <div
-                    key={notification.id}
-                    className={`flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors ${!notification.read ? "bg-primary/5" : ""}`}
-                  >
-                    <Avatar className="w-12 h-12">
-                      <AvatarImage src={notification.user.avatar || "/placeholder.svg"} />
-                      <AvatarFallback>{notification.user.name[0]}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <p>
-                        <span className="font-medium">{notification.user.name}</span> {notification.message}
-                      </p>
-                      <p className="text-sm text-muted-foreground">{notification.time}</p>
+              {notifications.filter((n) => n.type === "follow").length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  <p>No new follows yet</p>
+                </div>
+              ) : (
+                notifications
+                  .filter((n) => n.type === "follow")
+                  .map((notification) => (
+                    <div
+                      key={notification.id}
+                      className={`flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors ${!notification.read ? "bg-primary/5" : ""}`}
+                    >
+                      <Avatar className="w-12 h-12">
+                        <AvatarImage src={notification.actor_image || "/placeholder.svg"} />
+                        <AvatarFallback>{notification.actor_name[0]}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <p>
+                          {notification.message || getNotificationMessage(notification)}
+                        </p>
+                        <p className="text-sm text-muted-foreground">{new Date(notification.created_at).toLocaleDateString()}</p>
+                      </div>
+                      <Button size="sm" className="rounded-full gradient-bg">
+                        Follow Back
+                      </Button>
                     </div>
-                    <Button size="sm" className="rounded-full gradient-bg">
-                      Follow Back
-                    </Button>
-                  </div>
-                ))}
+                  ))
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -282,28 +295,34 @@ export default function NotificationsPage() {
         <TabsContent value="messages">
           <Card className="border-border/50">
             <CardContent className="p-0 divide-y divide-border">
-              {notifications
-                .filter((n) => n.type === "message")
-                .map((notification) => (
-                  <div
-                    key={notification.id}
-                    className={`flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors ${!notification.read ? "bg-primary/5" : ""}`}
-                  >
-                    <Avatar className="w-12 h-12">
-                      <AvatarImage src={notification.user.avatar || "/placeholder.svg"} />
-                      <AvatarFallback>{notification.user.name[0]}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <p>
-                        <span className="font-medium">{notification.user.name}</span> {notification.message}
-                      </p>
-                      <p className="text-sm text-muted-foreground">{notification.time}</p>
+              {notifications.filter((n) => n.type === "message").length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  <p>No message notifications yet</p>
+                </div>
+              ) : (
+                notifications
+                  .filter((n) => n.type === "message")
+                  .map((notification) => (
+                    <div
+                      key={notification.id}
+                      className={`flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors ${!notification.read ? "bg-primary/5" : ""}`}
+                    >
+                      <Avatar className="w-12 h-12">
+                        <AvatarImage src={notification.actor_image || "/placeholder.svg"} />
+                        <AvatarFallback>{notification.actor_name[0]}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <p>
+                          {notification.message || getNotificationMessage(notification)}
+                        </p>
+                        <p className="text-sm text-muted-foreground">{new Date(notification.created_at).toLocaleDateString()}</p>
+                      </div>
+                      <Button size="sm" variant="outline" className="rounded-full bg-transparent">
+                        Reply
+                      </Button>
                     </div>
-                    <Button size="sm" variant="outline" className="rounded-full bg-transparent">
-                      Reply
-                    </Button>
-                  </div>
-                ))}
+                  ))
+              )}
             </CardContent>
           </Card>
         </TabsContent>

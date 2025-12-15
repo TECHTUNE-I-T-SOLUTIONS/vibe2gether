@@ -1,23 +1,23 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import {
-  Camera,
   Edit,
   MapPin,
   Calendar,
-  Briefcase,
-  GraduationCap,
   Heart,
   Music,
   Film,
   Utensils,
   Plane,
   BookOpen,
-  Plus,
   Check,
   X,
+  Users,
+  Share2,
+  Copy,
+  Loader2,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -26,8 +26,9 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { useI18n } from "@/lib/i18n/context"
+import { useUserProfile } from "@/hooks/use-user-profile"
 
-const interests = [
+const interestsList = [
   { icon: Music, label: "Music" },
   { icon: Film, label: "Movies" },
   { icon: Utensils, label: "Cooking" },
@@ -36,33 +37,105 @@ const interests = [
   { icon: Heart, label: "Fitness" },
 ]
 
-const photos = [
-  "/placeholder.svg?height=300&width=300",
-  "/placeholder.svg?height=300&width=300",
-  "/placeholder.svg?height=300&width=300",
-  "/placeholder.svg?height=300&width=300",
-  "/placeholder.svg?height=300&width=300",
-]
-
 export default function ProfilePage() {
   const { t } = useI18n()
+  const { user, loading, error } = useUserProfile()
   const [isEditing, setIsEditing] = useState(false)
-  const [selectedInterests, setSelectedInterests] = useState(["Music", "Travel", "Fitness"])
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([])
+  const [referralLink, setReferralLink] = useState("")
+  const [copiedReferral, setCopiedReferral] = useState(false)
 
-  const toggleInterest = (label: string) => {
-    setSelectedInterests((prev) => (prev.includes(label) ? prev.filter((i) => i !== label) : [...prev, label]))
+  useEffect(() => {
+    if (user?.interests) {
+      setSelectedInterests(Array.isArray(user.interests) ? user.interests : [])
+    }
+  }, [user])
+
+  useEffect(() => {
+    async function fetchReferralLink() {
+      try {
+        const res = await fetch("/api/referral/link")
+        if (res.ok) {
+          const data = await res.json()
+          setReferralLink(data.referralLink)
+        }
+      } catch (err) {
+        console.error("Failed to fetch referral link:", err)
+      }
+    }
+    fetchReferralLink()
+  }, [])
+
+  const toggleInterest = (interest: string) => {
+    setSelectedInterests((prev) =>
+      prev.includes(interest) ? prev.filter((i) => i !== interest) : [...prev, interest]
+    )
   }
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (error || !user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-muted-foreground">{error || "Failed to load profile"}</p>
+      </div>
+    )
+  }
+
+  const dateOfBirth = user.date_of_birth ? new Date(user.date_of_birth).toISOString().split('T')[0] : ''
+  const age = user.date_of_birth
+    ? new Date().getFullYear() - new Date(user.date_of_birth).getFullYear()
+    : 0
+
   return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold mb-2">{t("editProfile")}</h1>
-          <p className="text-muted-foreground">Update your profile information</p>
+    <div className="p-4 md:p-6 lg:p-8">
+      {/* Cover Image - Contained within layout */}
+      {user.cover_picture && (
+        <div className="relative h-32 md:h-48 rounded-xl overflow-hidden mb-8">
+          <Image
+            src={user.cover_picture}
+            alt="Cover"
+            fill
+            className="object-cover"
+            priority
+          />
         </div>
+      )}
+
+      {/* Header */}
+      <div className="flex items-start justify-between mb-8">
+        <div className="flex gap-4">
+          {user.profile_picture && (
+            <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-4 border-background">
+              <Image
+                src={user.profile_picture}
+                alt={user.display_name || user.full_name}
+                fill
+                className="object-cover"
+              />
+            </div>
+          )}
+          <div className="pt-4">
+            <h1 className="text-2xl md:text-3xl font-bold">{user.display_name || user.full_name}</h1>
+            <p className="text-muted-foreground">{user.email}</p>
+            {user.city || user.country ? (
+              <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                <MapPin className="w-4 h-4" />
+                {user.city}, {user.country}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
         {isEditing ? (
           <div className="flex gap-2">
-            <Button variant="outline" className="rounded-full bg-transparent" onClick={() => setIsEditing(false)}>
+            <Button variant="outline" className="rounded-full" onClick={() => setIsEditing(false)}>
               <X className="w-4 h-4 mr-2" />
               Cancel
             </Button>
@@ -72,45 +145,130 @@ export default function ProfilePage() {
             </Button>
           </div>
         ) : (
-          <Button className="rounded-full gradient-bg" onClick={() => setIsEditing(true)}>
-            <Edit className="w-4 h-4 mr-2" />
-            {t("editProfile")}
-          </Button>
+          <div className="flex gap-2">
+            <Button className="rounded-full gradient-bg" onClick={() => setIsEditing(true)}>
+              <Edit className="w-4 h-4 mr-2" />
+              {t("editProfile")}
+            </Button>
+            <Button
+              variant="outline"
+              className="rounded-full"
+              onClick={async () => {
+                const shareData = {
+                  title: `Join me on V2G`,
+                  text: `Check out my profile on V2G!`,
+                  url: window.location.href,
+                }
+                if (navigator.share) {
+                  try {
+                    await navigator.share(shareData)
+                  } catch (err) {
+                    console.error("Error sharing:", err)
+                  }
+                } else {
+                  navigator.clipboard.writeText(
+                    `Check out my profile on V2G: ${window.location.href}`
+                  )
+                }
+              }}
+            >
+              <Share2 className="w-4 h-4 mr-2" />
+              Share
+            </Button>
+          </div>
         )}
       </div>
 
-      <div className="space-y-6">
-        {/* Photos */}
+      {/* Referral Code Card */}
+      {user?.referral_code && (
+        <Card className="border-border/50 mb-8 overflow-hidden">
+          <div className="gradient-bg p-4 text-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-white/70 mb-1">Your Referral Code</p>
+                <p className="text-2xl font-bold font-mono">{user.referral_code}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="bg-white/20 text-white hover:bg-white/30 border-0 rounded-full"
+                  onClick={() => {
+                    navigator.clipboard.writeText(user.referral_code)
+                    setCopiedReferral(true)
+                    setTimeout(() => setCopiedReferral(false), 2000)
+                  }}
+                >
+                  <Copy className="w-4 h-4 mr-1" />
+                  {copiedReferral ? "Copied" : "Copy"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="bg-white/20 text-white hover:bg-white/30 border-0 rounded-full"
+                  onClick={async () => {
+                    const shareData = {
+                      title: "Join V2G",
+                      text: `Join me on V2G using my referral code: ${user.referral_code}`,
+                      url: referralLink,
+                    }
+                    if (navigator.share) {
+                      try {
+                        await navigator.share(shareData)
+                      } catch (err) {
+                        console.error("Error sharing:", err)
+                      }
+                    } else {
+                      navigator.clipboard.writeText(
+                        `Join V2G using my referral code: ${user.referral_code}\n${referralLink}`
+                      )
+                    }
+                  }}
+                >
+                  <Share2 className="w-4 h-4 mr-1" />
+                  Share
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4 mb-8">
         <Card className="border-border/50">
-          <CardHeader>
-            <CardTitle>Photos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-              {photos.map((photo, i) => (
-                <div key={i} className="relative aspect-square rounded-xl overflow-hidden group">
-                  <Image src={photo || "/placeholder.svg"} alt={`Photo ${i + 1}`} fill className="object-cover" />
-                  {isEditing && (
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                      <Button size="icon" variant="secondary" className="rounded-full w-8 h-8">
-                        <Camera className="w-4 h-4" />
-                      </Button>
-                      <Button size="icon" variant="destructive" className="rounded-full w-8 h-8">
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-              {isEditing && (
-                <div className="aspect-square rounded-xl border-2 border-dashed border-border flex items-center justify-center cursor-pointer hover:border-primary transition-colors">
-                  <Plus className="w-8 h-8 text-muted-foreground" />
-                </div>
-              )}
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <p className="text-2xl font-bold">{user.followers_count || 0}</p>
+              <p className="text-sm text-muted-foreground flex items-center justify-center gap-1">
+                <Users className="w-4 h-4" />
+                Followers
+              </p>
             </div>
           </CardContent>
         </Card>
+        <Card className="border-border/50">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <p className="text-2xl font-bold">{user.following_count || 0}</p>
+              <p className="text-sm text-muted-foreground flex items-center justify-center gap-1">
+                <Users className="w-4 h-4" />
+                Following
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-border/50">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <p className="text-2xl font-bold">{user.coins_balance || 0}</p>
+              <p className="text-sm text-muted-foreground">Coins</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
+      <div className="space-y-6">
         {/* Basic Info */}
         <Card className="border-border/50">
           <CardHeader>
@@ -119,18 +277,18 @@ export default function ProfilePage() {
           <CardContent className="space-y-4">
             <div className="grid md:grid-cols-2 gap-4">
               <div>
-                <Label>Display Name</Label>
-                <Input defaultValue="Alex Johnson" disabled={!isEditing} className="mt-1.5" />
+                <Label>Full Name</Label>
+                <Input defaultValue={user.full_name || ""} disabled={!isEditing} className="mt-1.5" />
               </div>
               <div>
-                <Label>Username</Label>
-                <Input defaultValue="alex_vibes" disabled={!isEditing} className="mt-1.5" />
+                <Label>Display Name</Label>
+                <Input defaultValue={user.display_name || ""} disabled={!isEditing} className="mt-1.5" />
               </div>
             </div>
             <div>
               <Label>Bio</Label>
               <Textarea
-                defaultValue="Adventure seeker, music lover, and coffee addict. Looking for someone to explore the world with."
+                defaultValue={user.bio || ""}
                 disabled={!isEditing}
                 className="mt-1.5 min-h-24"
               />
@@ -140,63 +298,60 @@ export default function ProfilePage() {
                 <Label>Location</Label>
                 <div className="relative mt-1.5">
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input defaultValue="New York, USA" disabled={!isEditing} className="pl-10" />
+                  <Input 
+                    defaultValue={`${user.city || ""}, ${user.country || ""}`} 
+                    disabled={!isEditing} 
+                    className="pl-10" 
+                  />
                 </div>
               </div>
               <div>
                 <Label>Birthday</Label>
                 <div className="relative mt-1.5">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input type="date" defaultValue="1995-06-15" disabled={!isEditing} className="pl-10" />
+                  <Input 
+                    type="date" 
+                    defaultValue={dateOfBirth} 
+                    disabled={!isEditing} 
+                    className="pl-10" 
+                  />
                 </div>
               </div>
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <div>
-                <Label>Occupation</Label>
-                <div className="relative mt-1.5">
-                  <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input defaultValue="Software Engineer" disabled={!isEditing} className="pl-10" />
-                </div>
+                <Label>Gender</Label>
+                <Input defaultValue={user.gender || ""} disabled={!isEditing} className="mt-1.5" />
               </div>
               <div>
-                <Label>Education</Label>
-                <div className="relative mt-1.5">
-                  <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input defaultValue="Stanford University" disabled={!isEditing} className="pl-10" />
-                </div>
+                <Label>Looking For</Label>
+                <Input defaultValue={user.looking_for || ""} disabled={!isEditing} className="mt-1.5" />
               </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Interests */}
-        <Card className="border-border/50">
-          <CardHeader>
-            <CardTitle>Interests</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-3">
-              {interests.map((interest) => {
-                const Icon = interest.icon
-                const isSelected = selectedInterests.includes(interest.label)
-                return (
+        {user.interests && user.interests.length > 0 && (
+          <Card className="border-border/50">
+            <CardHeader>
+              <CardTitle>Interests</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-3">
+                {user.interests.map((interest) => (
                   <Badge
-                    key={interest.label}
-                    variant={isSelected ? "default" : "outline"}
-                    className={`px-4 py-2 text-sm cursor-pointer transition-all ${
-                      isSelected ? "gradient-bg" : "hover:border-primary"
-                    } ${!isEditing && "pointer-events-none"}`}
-                    onClick={() => isEditing && toggleInterest(interest.label)}
+                    key={interest}
+                    variant="outline"
+                    className="px-4 py-2 text-sm"
                   >
-                    <Icon className="w-4 h-4 mr-2" />
-                    {interest.label}
+                    {interest}
                   </Badge>
-                )
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   )

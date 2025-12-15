@@ -128,8 +128,8 @@ export default function AdminAnalyticsPage() {
             <CardTitle>User Growth</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="w-full h-72 p-6">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="w-full p-6" style={{ height: "288px" }}>
+              <ResponsiveContainer width="100%" height={288}>
                 <AreaChart data={userGrowthData}>
                   <defs>
                     <linearGradient id="colorGrowth" x1="0" y1="0" x2="0" y2="1">
@@ -154,8 +154,8 @@ export default function AdminAnalyticsPage() {
             <CardTitle>Weekly Engagement</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="w-full h-72 p-6">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="w-full p-6" style={{ height: "288px" }}>
+              <ResponsiveContainer width="100%" height={288}>
                 <BarChart data={engagementData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
                   <XAxis dataKey="day" stroke="#888" />
@@ -182,8 +182,8 @@ export default function AdminAnalyticsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="w-full h-48 p-6">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="w-full p-6" style={{ height: "192px" }}>
+              <ResponsiveContainer width="100%" height={192}>
                 <PieChart>
                   <Pie
                     data={deviceData}
@@ -221,8 +221,8 @@ export default function AdminAnalyticsPage() {
             <CardTitle>Age Demographics</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
+            <div style={{ height: "256px" }}>
+              <ResponsiveContainer width="100%" height={256}>
                 <BarChart data={ageData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
                   <XAxis type="number" stroke="#888" />
