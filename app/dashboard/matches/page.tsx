@@ -1,288 +1,465 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
-import { Heart, MessageCircle, MapPin, Verified, Filter, Sparkles, X, Star, Clock, Zap } from "lucide-react"
+import Link from "next/link"
+import { Heart, X, MessageCircle, Loader2, Sparkles } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useI18n } from "@/lib/i18n/context"
+import { useUserProfile } from "@/hooks/use-user-profile"
+import { getMatches, updateMatchStatus } from "@/lib/supabase/queries"
+import { createClient } from "@/lib/supabase/client"
+import { cn } from "@/lib/utils"
 
-const matches = [
-  {
-    id: 1,
-    name: "Emma",
-    age: 28,
-    location: "New York, USA",
-    image: "/emma-woman-avatar.jpg",
-    vibeScore: 95,
-    verified: true,
-    online: true,
-    premium: true,
-    lastActive: "Now",
-    interests: ["Travel", "Music", "Photography"],
-    bio: "Adventure seeker looking for someone to explore the world with.",
-    matchedAt: "2 hours ago",
-  },
-  {
-    id: 2,
-    name: "Sofia",
-    age: 26,
-    location: "Miami, USA",
-    image: "/professional-woman-avatar.png",
-    vibeScore: 92,
-    verified: true,
-    online: false,
-    premium: false,
-    lastActive: "30 min ago",
-    interests: ["Fitness", "Cooking", "Art"],
-    bio: "Love trying new restaurants and staying active.",
-    matchedAt: "1 day ago",
-  },
-  {
-    id: 3,
-    name: "Yuki",
-    age: 27,
-    location: "Los Angeles, USA",
-    image: "/smiling-woman-avatar.png",
-    vibeScore: 89,
-    verified: true,
-    online: true,
-    premium: false,
-    lastActive: "Now",
-    interests: ["Gaming", "Anime", "Coffee"],
-    bio: "Gamer by night, coffee lover by day.",
-    matchedAt: "3 days ago",
-  },
-  {
-    id: 4,
-    name: "Isabella",
-    age: 25,
-    location: "Chicago, USA",
-    image: "/placeholder.svg?height=400&width=400",
-    vibeScore: 87,
-    verified: false,
-    online: false,
-    premium: false,
-    lastActive: "2 hours ago",
-    interests: ["Reading", "Yoga", "Movies"],
-    bio: "Bookworm looking for my plot twist.",
-    matchedAt: "5 days ago",
-  },
-]
+interface UserData {
+  id: string
+  display_name: string
+  profile_picture: string
+  bio: string
+  gender: string
+  date_of_birth: string
+  country: string
+  city: string
+  interests: string[]
+  looking_for: string
+}
 
-const newLikes = [
-  { id: 1, name: "Sarah", image: "/placeholder.svg?height=100&width=100", blurred: true },
-  { id: 2, name: "Maria", image: "/placeholder.svg?height=100&width=100", blurred: true },
-  { id: 3, name: "Anna", image: "/placeholder.svg?height=100&width=100", blurred: true },
-  { id: 4, name: "Lisa", image: "/placeholder.svg?height=100&width=100", blurred: true },
-]
+interface Match {
+  id: string
+  user1_id: string
+  user2_id: string
+  status: string
+  compatibility_score: number
+  user1: UserData
+  user2: UserData
+}
+
+function calculateAge(dateOfBirth: string): number {
+  const today = new Date()
+  const birthDate = new Date(dateOfBirth)
+  let age = today.getFullYear() - birthDate.getFullYear()
+  const monthDiff = today.getMonth() - birthDate.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--
+  }
+  return age
+}
+
+function calculateCompatibilityScore(
+  currentUser: any,
+  potentialMatch: UserData
+): number {
+  let score = 0
+
+  // Age proximity
+  const currentAge = calculateAge(currentUser.date_of_birth)
+  const matchAge = calculateAge(potentialMatch.date_of_birth)
+  const ageDiff = Math.abs(currentAge - matchAge)
+
+  if (ageDiff <= 5) score += 35
+  else if (ageDiff <= 10) score += 20
+  else if (ageDiff <= 15) score += 10
+
+  // Location match
+  if (currentUser.country && potentialMatch.country) {
+    if (currentUser.country === potentialMatch.country) score += 25
+    if (currentUser.city && potentialMatch.city && currentUser.city === potentialMatch.city)
+      score += 15
+  }
+
+  // Interests overlap
+  const currentInterests = Array.isArray(currentUser.interests) ? currentUser.interests : []
+  const matchInterests = Array.isArray(potentialMatch.interests) ? potentialMatch.interests : []
+  const commonInterests = currentInterests.filter((interest) =>
+    matchInterests.includes(interest)
+  )
+  score += commonInterests.length * 5
+
+  // Gender preference
+  if (currentUser.looking_for && potentialMatch.gender) {
+    if (
+      currentUser.looking_for.toLowerCase() === potentialMatch.gender.toLowerCase()
+    ) {
+      score += 20
+    }
+  }
+
+  return Math.min(score, 100) // Cap at 100
+}
+
+async function findPotentialMatches(
+  currentUser: any,
+  excludeIds: string[]
+) {
+  const supabase = createClient()
+
+  // Get all active users except current user and already matched
+  const { data: potentialMatches, error } = await supabase
+    .from("users")
+    .select(
+      "id, display_name, profile_picture, bio, gender, date_of_birth, country, city, interests, looking_for"
+    )
+    .neq("id", currentUser.id)
+    .eq("is_active", true)
+    .not("id", "in", `(${excludeIds.join(",")})`)
+    .limit(50)
+
+  if (error) {
+    console.error("Error fetching potential matches:", error)
+    return []
+  }
+
+  // Calculate compatibility scores
+  const matchesWithScores = (potentialMatches || []).map((match: UserData) => ({
+    ...match,
+    compatibilityScore: calculateCompatibilityScore(currentUser, match),
+  }))
+
+  // Sort by compatibility score (highest first)
+  return matchesWithScores.sort(
+    (a: any, b: any) => b.compatibilityScore - a.compatibilityScore
+  )
+}
 
 export default function MatchesPage() {
-  const { t } = useI18n()
-  const [selectedMatch, setSelectedMatch] = useState(matches[0])
+  const { user } = useUserProfile()
+  const [activeMatches, setActiveMatches] = useState<Match[]>([])
+  const [potentialMatches, setPotentialMatches] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState<"active" | "potential">("active")
+  const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    async function loadMatches() {
+      if (!user) return
+
+      try {
+        setLoading(true)
+
+        // Get active matches
+        const { data: matches, error } = await getMatches(user.id)
+        if (!error && matches) {
+          setActiveMatches(matches)
+
+          // Get IDs to exclude
+          const ids = new Set([user.id])
+          matches.forEach((match: Match) => {
+            ids.add(match.user1_id)
+            ids.add(match.user2_id)
+          })
+          setExcludedIds(ids)
+        }
+
+        // Get potential matches
+        const potential = await findPotentialMatches(user, Array.from(excludedIds || [user.id]))
+        setPotentialMatches(potential)
+      } catch (err) {
+        console.error("Failed to load matches:", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadMatches()
+  }, [user])
+
+  const handleAcceptMatch = async (matchId: string) => {
+    try {
+      await updateMatchStatus(matchId, "accepted")
+      setActiveMatches((prev) =>
+        prev.map((m) => (m.id === matchId ? { ...m, status: "accepted" } : m))
+      )
+    } catch (err) {
+      console.error("Failed to accept match:", err)
+    }
+  }
+
+  const handleRejectMatch = async (matchId: string) => {
+    try {
+      await updateMatchStatus(matchId, "rejected")
+      setActiveMatches((prev) => prev.filter((m) => m.id !== matchId))
+    } catch (err) {
+      console.error("Failed to reject match:", err)
+    }
+  }
+
+  const handlePassOnPotential = (userId: string) => {
+    setPotentialMatches((prev) => prev.filter((m) => m.id !== userId))
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
+  }
 
   return (
-    <div className="p-4 md:p-6 lg:p-8">
-      <div className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold mb-2">{t("yourMatches")}</h1>
-        <p className="text-muted-foreground">Connect with people who share your vibe</p>
+    <div className="p-4 md:p-6 max-w-4xl mx-auto">
+      <h1 className="text-3xl font-bold mb-8 flex items-center gap-2">
+        <Sparkles className="w-8 h-8" />
+        Matches
+      </h1>
+
+      {/* Tabs */}
+      <div className="flex gap-4 mb-8 border-b border-border">
+        <button
+          onClick={() => setTab("active")}
+          className={cn(
+            "px-4 py-2 font-semibold border-b-2 transition-colors",
+            tab === "active"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          Active Matches ({activeMatches.length})
+        </button>
+        <button
+          onClick={() => setTab("potential")}
+          className={cn(
+            "px-4 py-2 font-semibold border-b-2 transition-colors",
+            tab === "potential"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          Potential Matches ({potentialMatches.length})
+        </button>
       </div>
 
-      {/* Premium CTA - See Who Likes You */}
-      <Card className="border-primary/30 bg-gradient-to-r from-primary/5 to-accent/5 mb-8">
-        <CardContent className="p-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="flex -space-x-3">
-                {newLikes.map((like) => (
-                  <div
-                    key={like.id}
-                    className="relative w-12 h-12 rounded-full overflow-hidden border-2 border-background"
-                  >
-                    <Image
-                      src={like.image || "/placeholder.svg"}
-                      alt={like.name}
-                      fill
-                      className="object-cover blur-sm"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-                  </div>
-                ))}
-              </div>
-              <div>
-                <p className="font-semibold">
-                  <span className="gradient-text">{newLikes.length} people</span> liked you
-                </p>
-                <p className="text-sm text-muted-foreground">Upgrade to Premium to see who they are</p>
+      {/* Active Matches Tab */}
+      {tab === "active" && (
+        <div>
+          {activeMatches.length === 0 ? (
+            <Card className="border-border/50 p-12 text-center">
+              <Heart className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+              <p className="text-muted-foreground mb-4">
+                You don't have any accepted matches yet
+              </p>
+              <Button onClick={() => setTab("potential")} className="gradient-bg">
+                Check Potential Matches
+              </Button>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {activeMatches
+                .filter((m) => m.status === "accepted")
+                .map((match) => {
+                  const otherUser =
+                    match.user1_id === user?.id ? match.user2 : match.user1
+
+                  return (
+                    <Card key={match.id} className="border-border/50 overflow-hidden">
+                      <div className="relative h-48 bg-muted">
+                        {otherUser.profile_picture && (
+                          <Image
+                            src={otherUser.profile_picture}
+                            alt={otherUser.display_name}
+                            fill
+                            className="object-cover"
+                          />
+                        )}
+                      </div>
+
+                      <CardContent className="p-4">
+                        <h3 className="text-xl font-bold mb-2">
+                          {otherUser.display_name}, {calculateAge(otherUser.date_of_birth)}
+                        </h3>
+
+                        {otherUser.bio && (
+                          <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                            {otherUser.bio}
+                          </p>
+                        )}
+
+                        {otherUser.city && (
+                          <p className="text-sm text-muted-foreground mb-4">
+                            {otherUser.city}, {otherUser.country}
+                          </p>
+                        )}
+
+                        {match.compatibility_score > 0 && (
+                          <div className="mb-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-semibold">Compatibility</span>
+                              <span className="font-bold text-primary">
+                                {match.compatibility_score}%
+                              </span>
+                            </div>
+                            <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className="h-full gradient-bg"
+                                style={{
+                                  width: `${match.compatibility_score}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        <Link href={`/dashboard/messages?match=${match.id}`}>
+                          <Button className="w-full gradient-bg">
+                            <MessageCircle className="w-4 h-4 mr-2" />
+                            Send Message
+                          </Button>
+                        </Link>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+            </div>
+          )}
+
+          {/* Pending Matches */}
+          {activeMatches.filter((m) => m.status === "pending").length > 0 && (
+            <div className="mt-8">
+              <h2 className="text-xl font-bold mb-4">Pending Match Requests</h2>
+              <div className="space-y-4">
+                {activeMatches
+                  .filter((m) => m.status === "pending")
+                  .map((match) => {
+                    const otherUser =
+                      match.user1_id === user?.id ? match.user2 : match.user1
+
+                    return (
+                      <Card key={match.id} className="border-border/50 p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <Avatar className="w-12 h-12">
+                              <AvatarImage src={otherUser.profile_picture} />
+                              <AvatarFallback>
+                                {otherUser.display_name?.substring(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-semibold">{otherUser.display_name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {match.compatibility_score}% compatible
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleRejectMatch(match.id)}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="gradient-bg"
+                              onClick={() => handleAcceptMatch(match.id)}
+                            >
+                              <Heart className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
+                    )
+                  })}
               </div>
             </div>
-            <Button className="rounded-full gradient-bg">
-              <Sparkles className="w-4 h-4 mr-2" />
-              See Who Likes You
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Tabs defaultValue="matches" className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <TabsList className="bg-muted/50 p-1 rounded-full">
-            <TabsTrigger value="matches" className="rounded-full">
-              Matches ({matches.length})
-            </TabsTrigger>
-            <TabsTrigger value="pending" className="rounded-full">
-              Pending
-            </TabsTrigger>
-            <TabsTrigger value="archived" className="rounded-full">
-              Archived
-            </TabsTrigger>
-          </TabsList>
-          <Button variant="outline" className="rounded-full bg-transparent">
-            <Filter className="w-4 h-4 mr-2" />
-            Filter
-          </Button>
+          )}
         </div>
+      )}
 
-        <TabsContent value="matches">
-          <div className="grid lg:grid-cols-3 gap-6">
-            {/* Matches List */}
-            <div className="lg:col-span-2 grid sm:grid-cols-2 gap-4">
-              {matches.map((match) => (
+      {/* Potential Matches Tab */}
+      {tab === "potential" && (
+        <div>
+          {potentialMatches.length === 0 ? (
+            <Card className="border-border/50 p-12 text-center">
+              <Sparkles className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+              <p className="text-muted-foreground">
+                No more potential matches available
+              </p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {potentialMatches.map((match) => (
                 <Card
                   key={match.id}
-                  className={`border-border/50 overflow-hidden cursor-pointer transition-all hover:shadow-lg ${selectedMatch.id === match.id ? "ring-2 ring-primary" : ""}`}
-                  onClick={() => setSelectedMatch(match)}
+                  className="border-border/50 overflow-hidden hover:shadow-lg transition-shadow"
                 >
-                  <div className="relative aspect-[4/5]">
-                    <Image src={match.image || "/placeholder.svg"} alt={match.name} fill className="object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-                    {match.online && (
-                      <div className="absolute top-3 right-3 flex items-center gap-1 bg-green-500 text-white px-2 py-1 rounded-full text-xs">
-                        <span className="w-2 h-2 bg-white rounded-full" />
-                        Online
+                  <div className="relative h-48 bg-muted">
+                    {match.profile_picture && (
+                      <Image
+                        src={match.profile_picture}
+                        alt={match.display_name}
+                        fill
+                        className="object-cover"
+                      />
+                    )}
+                  </div>
+
+                  <CardContent className="p-4">
+                    <h3 className="text-xl font-bold mb-2">
+                      {match.display_name}, {calculateAge(match.date_of_birth)}
+                    </h3>
+
+                    {match.bio && (
+                      <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                        {match.bio}
+                      </p>
+                    )}
+
+                    {match.city && (
+                      <p className="text-sm text-muted-foreground mb-3">
+                        {match.city}, {match.country}
+                      </p>
+                    )}
+
+                    {match.interests && match.interests.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {match.interests.slice(0, 3).map((interest: string) => (
+                          <Badge key={interest} variant="secondary" className="text-xs">
+                            {interest}
+                          </Badge>
+                        ))}
                       </div>
                     )}
-                    <Badge className="absolute top-3 left-3 gradient-bg">{match.vibeScore}% Match</Badge>
-                    <div className="absolute bottom-0 left-0 right-0 p-4">
-                      <div className="flex items-center gap-1 mb-1">
-                        <h3 className="text-white font-semibold text-lg">
-                          {match.name}, {match.age}
-                        </h3>
-                        {match.verified && <Verified className="w-4 h-4 text-blue-400 fill-blue-400" />}
-                        {match.premium && <Star className="w-4 h-4 text-accent fill-accent" />}
+
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-semibold">Compatibility</span>
+                        <span className="font-bold text-primary">
+                          {match.compatibilityScore}%
+                        </span>
                       </div>
-                      <p className="text-white/80 text-sm flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />
-                        {match.location}
-                      </p>
+                      <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full gradient-bg"
+                          style={{
+                            width: `${match.compatibilityScore}%`,
+                          }}
+                        />
+                      </div>
                     </div>
-                  </div>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Clock className="w-4 h-4" />
-                        Matched {match.matchedAt}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button size="icon" variant="ghost" className="rounded-full h-9 w-9 text-destructive">
-                          <X className="w-5 h-5" />
-                        </Button>
-                        <Button size="icon" className="rounded-full h-9 w-9 gradient-bg">
-                          <MessageCircle className="w-5 h-5" />
-                        </Button>
-                      </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => handlePassOnPotential(match.id)}
+                      >
+                        <X className="w-4 h-4 mr-2" />
+                        Pass
+                      </Button>
+                      <Button className="flex-1 gradient-bg">
+                        <Heart className="w-4 h-4 mr-2" />
+                        Like
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
-
-            {/* Selected Match Detail */}
-            <div className="hidden lg:block">
-              <Card className="border-border/50 sticky top-24">
-                <div className="relative aspect-square">
-                  <Image
-                    src={selectedMatch.image || "/placeholder.svg"}
-                    alt={selectedMatch.name}
-                    fill
-                    className="object-cover rounded-t-xl"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent rounded-t-xl" />
-                  <div className="absolute bottom-4 left-4 right-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h2 className="text-white font-bold text-2xl">
-                        {selectedMatch.name}, {selectedMatch.age}
-                      </h2>
-                      {selectedMatch.verified && <Verified className="w-5 h-5 text-blue-400 fill-blue-400" />}
-                    </div>
-                    <p className="text-white/80 flex items-center gap-1">
-                      <MapPin className="w-4 h-4" />
-                      {selectedMatch.location}
-                    </p>
-                  </div>
-                </div>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <Badge className="gradient-bg text-primary-foreground">
-                      <Heart className="w-3 h-3 mr-1 fill-current" />
-                      {selectedMatch.vibeScore}% Vibe Match
-                    </Badge>
-                    {selectedMatch.online ? (
-                      <Badge variant="outline" className="border-green-500 text-green-500">
-                        Online Now
-                      </Badge>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">Active {selectedMatch.lastActive}</span>
-                    )}
-                  </div>
-
-                  <p className="text-foreground mb-4">{selectedMatch.bio}</p>
-
-                  <div className="mb-6">
-                    <p className="text-sm font-medium mb-2">Interests</p>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedMatch.interests.map((interest) => (
-                        <Badge key={interest} variant="outline">
-                          {interest}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <Button className="flex-1 rounded-full gradient-bg">
-                      <MessageCircle className="w-4 h-4 mr-2" />
-                      Message
-                    </Button>
-                    <Button variant="outline" className="rounded-full bg-transparent">
-                      <Zap className="w-4 h-4 mr-2" />
-                      Super Like
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="pending">
-          <div className="text-center py-12">
-            <Heart className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No Pending Matches</h3>
-            <p className="text-muted-foreground">Keep swiping to find more matches!</p>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="archived">
-          <div className="text-center py-12">
-            <Clock className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No Archived Matches</h3>
-            <p className="text-muted-foreground">Archived matches will appear here</p>
-          </div>
-        </TabsContent>
-      </Tabs>
+          )}
+        </div>
+      )}
     </div>
   )
 }

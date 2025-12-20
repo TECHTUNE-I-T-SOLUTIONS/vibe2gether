@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { useI18n } from "@/lib/i18n/context"
 import { useUserProfile } from "@/hooks/use-user-profile"
+import { uploadProfilePicture, uploadCoverPicture } from "@/lib/supabase/storage"
+import { updateUserProfile } from "@/lib/supabase/queries"
 import {
   Heart,
   MessageCircle,
@@ -32,7 +34,7 @@ import {
 
 export default function DashboardPage() {
   const { t } = useI18n()
-  const { user: profileUser, loading: profileLoading } = useUserProfile()
+  const { user: profileUser, loading: profileLoading, refetch } = useUserProfile()
   const [stats, setStats] = useState([])
   const [recentActivity, setRecentActivity] = useState([])
   const [matches, setMatches] = useState([])
@@ -40,7 +42,10 @@ export default function DashboardPage() {
   const [unreadMessages, setUnreadMessages] = useState(0)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const coverPictureInputRef = useRef<HTMLInputElement>(null)
+  const profilePictureInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     async function fetchDashboardData() {
@@ -101,6 +106,70 @@ export default function DashboardPage() {
     fetchMessages()
   }, [])
 
+  const handleCoverPictureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !profileUser) return
+
+    try {
+      setUploading(true)
+      const { url, error } = await uploadCoverPicture(profileUser.id, file)
+
+      if (error) {
+        console.error("Upload error:", error)
+        return
+      }
+
+      if (url) {
+        const { error: updateError } = await updateUserProfile(profileUser.id, {
+          cover_picture: url,
+        })
+
+        if (!updateError) {
+          refetch()
+        }
+      }
+    } catch (err) {
+      console.error("Error uploading cover picture:", err)
+    } finally {
+      setUploading(false)
+      if (coverPictureInputRef.current) {
+        coverPictureInputRef.current.value = ""
+      }
+    }
+  }
+
+  const handleProfilePictureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !profileUser) return
+
+    try {
+      setUploading(true)
+      const { url, error } = await uploadProfilePicture(profileUser.id, file)
+
+      if (error) {
+        console.error("Upload error:", error)
+        return
+      }
+
+      if (url) {
+        const { error: updateError } = await updateUserProfile(profileUser.id, {
+          profile_picture: url,
+        })
+
+        if (!updateError) {
+          refetch()
+        }
+      }
+    } catch (err) {
+      console.error("Error uploading profile picture:", err)
+    } finally {
+      setUploading(false)
+      if (profilePictureInputRef.current) {
+        profilePictureInputRef.current.value = ""
+      }
+    }
+  }
+
   if (profileLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -156,9 +225,18 @@ export default function DashboardPage() {
             size="icon"
             variant="secondary"
             className="absolute top-4 right-4 rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/40"
+            onClick={() => coverPictureInputRef.current?.click()}
+            disabled={uploading}
           >
-            <Camera className="w-5 h-5" />
+            {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
           </Button>
+          <input
+            ref={coverPictureInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleCoverPictureUpload}
+            className="hidden"
+          />
         </div>
 
         <CardContent className="pt-0">
@@ -174,9 +252,16 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
-              <Button size="icon" className="absolute bottom-0 right-0 rounded-full w-8 h-8 gradient-bg">
-                <Camera className="w-4 h-4" />
+              <Button size="icon" className="absolute bottom-0 right-0 rounded-full w-8 h-8 gradient-bg" onClick={() => profilePictureInputRef.current?.click()} disabled={uploading}>
+                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
               </Button>
+              <input
+                ref={profilePictureInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleProfilePictureUpload}
+                className="hidden"
+              />
               <div className="absolute -top-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-background" />
             </div>
 

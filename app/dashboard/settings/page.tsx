@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import {
   User,
   Bell,
@@ -26,12 +27,12 @@ import { useTheme } from "next-themes"
 import { LogoutConfirmationDialog } from "@/components/logout-confirmation-dialog"
 
 const settingsSections = [
-  { icon: User, label: "Account", description: "Manage your account details" },
-  { icon: Bell, label: "Notifications", description: "Configure notification preferences" },
-  { icon: Lock, label: "Privacy", description: "Control your privacy settings" },
-  { icon: Shield, label: "Security", description: "Protect your account" },
-  { icon: CreditCard, label: "Billing", description: "Manage your subscription" },
-  { icon: HelpCircle, label: "Help & Support", description: "Get help and contact support" },
+  { icon: User, label: "Account", description: "Manage your account details", href: "/dashboard/settings/account" },
+  { icon: Bell, label: "Notifications", description: "Configure notification preferences", href: "/dashboard/settings/notifications" },
+  { icon: Lock, label: "Privacy", description: "Control your privacy settings", href: "/dashboard/settings/privacy" },
+  { icon: Shield, label: "Security", description: "Protect your account", href: "/dashboard/settings/security" },
+  { icon: CreditCard, label: "Billing", description: "Manage your subscription", href: "/dashboard/settings/billing" },
+  { icon: HelpCircle, label: "Help & Support", description: "Get help and contact support", href: "/help" },
 ]
 
 export default function SettingsPage() {
@@ -157,8 +158,9 @@ export default function SettingsPage() {
             {settingsSections.map((section, i) => {
               const Icon = section.icon
               return (
-                <button
+                <Link
                   key={i}
+                  href={section.href}
                   className="flex items-center w-full p-4 hover:bg-muted/50 transition-colors border-b border-border last:border-0"
                 >
                   <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center mr-4">
@@ -169,7 +171,7 @@ export default function SettingsPage() {
                     <p className="text-sm text-muted-foreground">{section.description}</p>
                   </div>
                   <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                </button>
+                </Link>
               )
             })}
           </CardContent>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Image from "next/image"
 import {
   Edit,
@@ -18,6 +18,8 @@ import {
   Share2,
   Copy,
   Loader2,
+  Camera,
+  Upload,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -27,6 +29,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { useI18n } from "@/lib/i18n/context"
 import { useUserProfile } from "@/hooks/use-user-profile"
+import { uploadProfilePicture, uploadCoverPicture } from "@/lib/supabase/storage"
+import { updateUserProfile } from "@/lib/supabase/queries"
 
 const interestsList = [
   { icon: Music, label: "Music" },
@@ -39,15 +43,36 @@ const interestsList = [
 
 export default function ProfilePage() {
   const { t } = useI18n()
-  const { user, loading, error } = useUserProfile()
+  const { user, loading, error, refetch } = useUserProfile()
   const [isEditing, setIsEditing] = useState(false)
   const [selectedInterests, setSelectedInterests] = useState<string[]>([])
   const [referralLink, setReferralLink] = useState("")
   const [copiedReferral, setCopiedReferral] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [formData, setFormData] = useState({
+    displayName: "",
+    bio: "",
+    city: "",
+    country: "",
+    dateOfBirth: "",
+    gender: "",
+    looking_for: "",
+  })
+  const profilePictureInputRef = useRef<HTMLInputElement>(null)
+  const coverPictureInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (user?.interests) {
+    if (user) {
       setSelectedInterests(Array.isArray(user.interests) ? user.interests : [])
+      setFormData({
+        displayName: user.display_name || "",
+        bio: user.bio || "",
+        city: user.city || "",
+        country: user.country || "",
+        dateOfBirth: user.date_of_birth || "",
+        gender: user.gender || "",
+        looking_for: user.looking_for || "",
+      })
     }
   }, [user])
 
@@ -72,6 +97,92 @@ export default function ProfilePage() {
     )
   }
 
+  const handleProfilePictureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user) return
+
+    try {
+      setUploading(true)
+      const { url, error } = await uploadProfilePicture(user.id, file)
+
+      if (error) {
+        console.error("Upload error:", error)
+        return
+      }
+
+      if (url) {
+        // Update user profile with new picture URL
+        const { error: updateError } = await updateUserProfile(user.id, {
+          profile_picture: url,
+        })
+
+        if (!updateError) {
+          refetch()
+        }
+      }
+    } catch (err) {
+      console.error("Error uploading profile picture:", err)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleCoverPictureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user) return
+
+    try {
+      setUploading(true)
+      const { url, error } = await uploadCoverPicture(user.id, file)
+
+      if (error) {
+        console.error("Upload error:", error)
+        return
+      }
+
+      if (url) {
+        // Update user profile with new cover picture URL
+        const { error: updateError } = await updateUserProfile(user.id, {
+          cover_picture: url,
+        })
+
+        if (!updateError) {
+          refetch()
+        }
+      }
+    } catch (err) {
+      console.error("Error uploading cover picture:", err)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleSaveProfile = async () => {
+    if (!user) return
+
+    try {
+      setUploading(true)
+      const { error } = await updateUserProfile(user.id, {
+        display_name: formData.displayName,
+        bio: formData.bio,
+        city: formData.city,
+        country: formData.country,
+        interests: selectedInterests,
+      })
+
+      if (!error) {
+        setIsEditing(false)
+        refetch()
+      } else {
+        console.error("Update error:", error)
+      }
+    } catch (err) {
+      console.error("Error saving profile:", err)
+    } finally {
+      setUploading(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -88,7 +199,6 @@ export default function ProfilePage() {
     )
   }
 
-  const dateOfBirth = user.date_of_birth ? new Date(user.date_of_birth).toISOString().split('T')[0] : ''
   const age = user.date_of_birth
     ? new Date().getFullYear() - new Date(user.date_of_birth).getFullYear()
     : 0
@@ -311,7 +421,7 @@ export default function ProfilePage() {
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input 
                     type="date" 
-                    defaultValue={dateOfBirth} 
+                    defaultValue={formData.dateOfBirth} 
                     disabled={!isEditing} 
                     className="pl-10" 
                   />
@@ -321,11 +431,11 @@ export default function ProfilePage() {
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <Label>Gender</Label>
-                <Input defaultValue={user.gender || ""} disabled={!isEditing} className="mt-1.5" />
+                <Input defaultValue={formData.gender} disabled={!isEditing} className="mt-1.5" />
               </div>
               <div>
                 <Label>Looking For</Label>
-                <Input defaultValue={user.looking_for || ""} disabled={!isEditing} className="mt-1.5" />
+                <Input defaultValue={formData.looking_for} disabled={!isEditing} className="mt-1.5" />
               </div>
             </div>
           </CardContent>

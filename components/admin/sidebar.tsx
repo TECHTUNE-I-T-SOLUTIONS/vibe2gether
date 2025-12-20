@@ -20,6 +20,8 @@ import {
   MessageSquare,
   CreditCard,
   Shield,
+  Calendar,
+  BookOpen,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -41,6 +43,8 @@ const mainItems: SidebarItem[] = [
 
 const secondaryItems: SidebarItem[] = [
   { icon: ShoppingBag, label: "marketplace", href: "/admin/marketplace" },
+  { icon: Calendar, label: "Events", href: "/admin/events" },
+  { icon: BookOpen, label: "Blog", href: "/admin/blog" },
   { icon: MessageSquare, label: "messages", href: "/admin/messages" },
   { icon: CreditCard, label: "Transactions", href: "/admin/transactions" },
   { icon: BarChart3, label: "analytics", href: "/admin/analytics" },
