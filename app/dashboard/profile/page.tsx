@@ -20,6 +20,7 @@ import {
   Loader2,
   Camera,
   Upload,
+  Shield,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -28,6 +29,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { useI18n } from "@/lib/i18n/context"
+import Link from "next/link"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { uploadProfilePicture, uploadCoverPicture } from "@/lib/supabase/storage"
 import { updateUserProfile } from "@/lib/supabase/queries"
@@ -232,7 +234,17 @@ export default function ProfilePage() {
             </div>
           )}
           <div className="pt-4">
-            <h1 className="text-2xl md:text-3xl font-bold">{user.display_name || user.full_name}</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl md:text-3xl font-bold">{user.display_name || user.full_name}</h1>
+              {user.is_verified && (
+                <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-sm">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Verified
+                </span>
+              )}
+            </div>
             <p className="text-muted-foreground">{user.email}</p>
             {user.city || user.country ? (
               <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
@@ -260,6 +272,14 @@ export default function ProfilePage() {
               <Edit className="w-4 h-4 mr-2" />
               {t("editProfile")}
             </Button>
+            {!user.is_verified && (
+              <Link href="/dashboard/verification">
+                <Button variant="outline" className="rounded-full">
+                  <Shield className="w-4 h-4 mr-2" />
+                  Get Verified
+                </Button>
+              </Link>
+            )}
             <Button
               variant="outline"
               className="rounded-full"

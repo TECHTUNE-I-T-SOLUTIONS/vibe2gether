@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import { useState, useEffect } from "react"
 
 import Link from "next/link"
 import Image from "next/image"
@@ -22,9 +23,11 @@ import {
   Shield,
   Calendar,
   BookOpen,
+  Bell,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { LogoutConfirmationDialog } from "@/components/logout-confirmation-dialog"
 
 interface SidebarItem {
   icon: React.ElementType
@@ -37,8 +40,8 @@ const mainItems: SidebarItem[] = [
   { icon: LayoutDashboard, label: "dashboard", href: "/admin" },
   { icon: Users, label: "users", href: "/admin/users" },
   { icon: FileText, label: "posts", href: "/admin/posts" },
-  { icon: Flag, label: "reports", href: "/admin/reports", badge: 8 },
-  { icon: Star, label: "featuredRequests", href: "/admin/featured", badge: 5 },
+  { icon: Flag, label: "reports", href: "/admin/reports" },
+  { icon: Star, label: "featuredRequests", href: "/admin/featured" },
 ]
 
 const secondaryItems: SidebarItem[] = [
@@ -48,6 +51,7 @@ const secondaryItems: SidebarItem[] = [
   { icon: MessageSquare, label: "messages", href: "/admin/messages" },
   { icon: CreditCard, label: "Transactions", href: "/admin/transactions" },
   { icon: BarChart3, label: "analytics", href: "/admin/analytics" },
+  { icon: Bell, label: "notifications", href: "/admin/notifications" },
 ]
 
 const bottomItems: SidebarItem[] = [
@@ -58,6 +62,55 @@ const bottomItems: SidebarItem[] = [
 export function AdminSidebar() {
   const pathname = usePathname()
   const { t } = useI18n()
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false)
+  const [counts, setCounts] = useState<Record<string, number>>({
+    reports: 0,
+    featured: 0,
+    notifications: 0,
+  })
+  const [isLoadingCounts, setIsLoadingCounts] = useState(true)
+
+  useEffect(() => {
+    fetchCounts()
+  }, [])
+
+  const fetchCounts = async () => {
+    try {
+      setIsLoadingCounts(true)
+      const [reportsRes, featuredRes, notificationsRes] = await Promise.all([
+        fetch("/api/admin/reports?limit=1"),
+        fetch("/api/admin/featured-requests?limit=1"),
+        fetch("/api/admin/notifications?limit=1"),
+      ])
+
+      const newCounts: Record<string, number> = {
+        reports: 0,
+        featured: 0,
+        notifications: 0,
+      }
+
+      if (reportsRes.ok) {
+        const data = await reportsRes.json()
+        newCounts.reports = data.count || data.reports?.filter((r: any) => r.status === "pending").length || 0
+      }
+
+      if (featuredRes.ok) {
+        const data = await featuredRes.json()
+        newCounts.featured = data.count || data.requests?.filter((r: any) => r.status === "pending").length || 0
+      }
+
+      if (notificationsRes.ok) {
+        const data = await notificationsRes.json()
+        newCounts.notifications = data.count || data.notifications?.filter((n: any) => !n.is_read).length || 0
+      }
+
+      setCounts(newCounts)
+    } catch (error) {
+      console.error("Failed to fetch counts:", error)
+    } finally {
+      setIsLoadingCounts(false)
+    }
+  }
 
   return (
     <aside className="hidden lg:flex flex-col w-64 h-screen bg-sidebar border-r border-sidebar-border sticky top-0">
@@ -83,6 +136,14 @@ export function AdminSidebar() {
           {mainItems.map((item) => {
             const Icon = item.icon
             const isActive = pathname === item.href
+            let badge = 0
+
+            if (item.href === "/admin/reports") {
+              badge = counts.reports
+            } else if (item.href === "/admin/featured") {
+              badge = counts.featured
+            }
+
             return (
               <Link
                 key={item.href}
@@ -96,11 +157,11 @@ export function AdminSidebar() {
               >
                 <Icon className="w-5 h-5" />
                 <span className="flex-1">{t(item.label)}</span>
-                {item.badge && (
+                {badge > 0 && (
                   <Badge
                     className={cn("h-5 min-w-5 justify-center", isActive ? "bg-white/20" : "bg-destructive text-white")}
                   >
-                    {item.badge}
+                    {badge > 99 ? "99+" : badge}
                   </Badge>
                 )}
               </Link>
@@ -115,6 +176,12 @@ export function AdminSidebar() {
           {secondaryItems.map((item) => {
             const Icon = item.icon
             const isActive = pathname === item.href
+            let badge = 0
+
+            if (item.href === "/admin/notifications") {
+              badge = counts.notifications
+            }
+
             return (
               <Link
                 key={item.href}
@@ -127,7 +194,14 @@ export function AdminSidebar() {
                 )}
               >
                 <Icon className="w-5 h-5" />
-                <span>{t(item.label)}</span>
+                <span className="flex-1">{t(item.label)}</span>
+                {badge > 0 && (
+                  <Badge
+                    className={cn("h-5 min-w-5 justify-center", isActive ? "bg-white/20" : "bg-destructive text-white")}
+                  >
+                    {badge > 99 ? "99+" : badge}
+                  </Badge>
+                )}
               </Link>
             )
           })}
@@ -151,12 +225,15 @@ export function AdminSidebar() {
         })}
         <Button
           variant="ghost"
+          onClick={() => setShowLogoutDialog(true)}
           className="w-full justify-start gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-destructive hover:text-destructive hover:bg-destructive/10"
         >
           <LogOut className="w-5 h-5" />
           <span>{t("signOut")}</span>
         </Button>
       </div>
+
+      <LogoutConfirmationDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog} isAdminLogout={true} />
     </aside>
   )
 }

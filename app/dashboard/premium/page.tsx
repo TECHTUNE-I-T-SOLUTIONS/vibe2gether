@@ -123,7 +123,7 @@ export default function PremiumUpgradePage() {
 
   if (loading || loadingData) {
     return (
-      <div className="flex items-center justify-center h-96">
+      <div className="flex items-center justify-center h-96 p-2">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     )
@@ -132,7 +132,7 @@ export default function PremiumUpgradePage() {
   const isPremium = subscription?.status === "active"
 
   return (
-    <div className="space-y-8 pb-8">
+    <div className="space-y-8 pb-8 p-4">
       <div className="text-center space-y-3 pt-8">
         <div className="flex items-center justify-center">
           <Crown className="w-8 h-8 text-yellow-500 mr-2" />

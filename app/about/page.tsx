@@ -88,12 +88,10 @@ export default function AboutPage() {
           <div className="container mx-auto px-4 relative z-10">
             <div className="max-w-4xl mx-auto text-center">
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6">
-                Bringing Hearts <span className="gradient-text">Together</span>
+                Bringing People <span className="gradient-text">Together</span>
               </h1>
               <p className="text-xl text-muted-foreground mb-8 leading-relaxed">
-                Vibe2Gether is more than a dating platform — it's a global community where meaningful connections
-                flourish. We combine cutting-edge technology with a human-first approach to help you find love,
-                friendship, and unforgettable experiences.
+                Vibe2Gether is a social platform where communities form — meet new people, create events, buy & sell, post, and earn rewards for participation. We combine cutting-edge technology with a human-first approach to help you connect, share, and grow your network.
               </p>
               <div className="flex flex-wrap justify-center gap-4">
                 <Link href="/signup">
@@ -135,9 +133,7 @@ export default function AboutPage() {
                   Our <span className="gradient-text">Story</span>
                 </h2>
                 <p className="text-lg text-muted-foreground mb-6 leading-relaxed">
-                  Vibe2Gether was born from a simple belief: finding love should be exciting, safe, and accessible to
-                  everyone. Founded in 2025 by a team passionate about human connection, we set out to create a platform
-                  that goes beyond superficial swipes.
+                  Vibe2Gether was born from a simple belief: meaningful connections should be exciting, safe, and accessible to everyone. Founded in 2025 by a team passionate about human connection, we set out to create a platform that goes beyond superficial swipes.
                 </p>
                 <p className="text-lg text-muted-foreground mb-6 leading-relaxed">
                   Today, we're proud to be a global community of over 2 million members from 150+ countries, all seeking
@@ -148,7 +144,7 @@ export default function AboutPage() {
                   {[
                     "AI-powered matching for genuine compatibility",
                     "Verified profiles for a safe community",
-                    "Romantic marketplace for thoughtful gifts",
+                    "Marketplace for experiences, gifts, and local services",
                     "Curated events for real-world connections",
                   ].map((item, i) => (
                     <div key={i} className="flex items-center gap-3">

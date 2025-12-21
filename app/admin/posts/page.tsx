@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
-import { Search, Filter, MoreHorizontal, Eye, Trash2, Flag, Star, Heart, MessageCircle } from "lucide-react"
+import { Search, Eye, Trash2, Flag, Heart, MessageCircle, Loader2, MoreVertical, Check, X } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -16,301 +16,404 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from "@/components/ui/alert-dialog"
 
-const posts = [
-  {
-    id: 1,
-    author: { name: "Emma Rodriguez", avatar: "/emma-woman-avatar.jpg", verified: true },
-    content: "Amazing sunset at the beach today! Who wants to join me next time?",
-    media: [{ type: "image", url: "/romantic-couple-sunset.png" }],
-    likes: 1234,
-    comments: 89,
-    views: 5678,
-    status: "published",
-    flagged: false,
-    featured: true,
-    createdAt: "2 hours ago",
-  },
-  {
-    id: 2,
-    author: { name: "James Chen", avatar: "/placeholder.svg?height=40&width=40", verified: false },
-    content: "Looking for someone to explore the city with this weekend!",
-    media: [],
-    likes: 456,
-    comments: 23,
-    views: 1234,
-    status: "published",
-    flagged: true,
-    featured: false,
-    createdAt: "4 hours ago",
-  },
-  {
-    id: 3,
-    author: { name: "Sofia Martinez", avatar: "/placeholder.svg?height=40&width=40", verified: true },
-    content: "Coffee date anyone? ☕",
-    media: [
-      { type: "image", url: "/couple-coffee-date.png" },
-      { type: "image", url: "/couple-coffee-date.png" },
-    ],
-    likes: 789,
-    comments: 45,
-    views: 2345,
-    status: "published",
-    flagged: false,
-    featured: false,
-    createdAt: "6 hours ago",
-  },
-  {
-    id: 4,
-    author: { name: "Marcus Williams", avatar: "/placeholder.svg?height=40&width=40", verified: false },
-    content: "This is some inappropriate content that was flagged",
-    media: [],
-    likes: 12,
-    comments: 3,
-    views: 156,
-    status: "under_review",
-    flagged: true,
-    featured: false,
-    createdAt: "1 day ago",
-  },
-]
+interface Post {
+  id: string
+  content: string
+  created_at: string
+  status: string
+  is_flagged: boolean
+  is_featured: boolean
+  author: {
+    id: string
+    full_name: string
+    avatar_url?: string
+    is_verified: boolean
+  }
+  likes_count?: number
+  comments_count?: number
+  views_count?: number
+}
 
-const stats = [
-  { label: "Total Posts", value: "156,892" },
-  { label: "Published Today", value: "2,341" },
-  { label: "Pending Review", value: "23" },
-  { label: "Flagged", value: "8" },
-]
+interface Stats {
+  total: number
+  published: number
+  underReview: number
+  flagged: number
+}
 
 export default function AdminPostsPage() {
-  const [selectedPosts, setSelectedPosts] = useState<number[]>([])
+  const [posts, setPosts] = useState<Post[]>([])
+  const [stats, setStats] = useState<Stats>({ total: 0, published: 0, underReview: 0, flagged: 0 })
+  const [loading, setLoading] = useState(true)
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [flaggedFilter, setFlaggedFilter] = useState("all")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [activeTab, setActiveTab] = useState("all")
+  const [deleteId, setDeleteId] = useState<string | null>(null)
 
-  const toggleSelect = (id: number) => {
-    setSelectedPosts((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]))
-  }
+  useEffect(() => {
+    fetchPosts()
+  }, [statusFilter, flaggedFilter])
 
-  const toggleSelectAll = () => {
-    if (selectedPosts.length === posts.length) {
-      setSelectedPosts([])
-    } else {
-      setSelectedPosts(posts.map((p) => p.id))
+  const fetchPosts = async () => {
+    try {
+      setLoading(true)
+      const params = new URLSearchParams()
+      if (statusFilter !== "all") params.append("status", statusFilter)
+      if (flaggedFilter !== "all") params.append("flagged", flaggedFilter)
+
+      const response = await fetch(`/api/admin/posts?${params}`)
+      if (response.ok) {
+        const data = await response.json()
+        setPosts(data.posts || [])
+        setStats(data.stats)
+      }
+    } catch (error) {
+      console.error("Failed to fetch posts:", error)
+    } finally {
+      setLoading(false)
     }
   }
 
+  const handleDeletePost = async (postId: string) => {
+    try {
+      const response = await fetch(`/api/admin/posts?id=${postId}`, { method: "DELETE" })
+      if (response.ok) {
+        setPosts(posts.filter(p => p.id !== postId))
+        setDeleteId(null)
+      }
+    } catch (error) {
+      console.error("Failed to delete post:", error)
+    }
+  }
+
+  const handleFlagToggle = async (postId: string, currentFlag: boolean) => {
+    try {
+      const response = await fetch(`/api/admin/posts`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: postId, is_flagged: !currentFlag })
+      })
+      if (response.ok) {
+        setPosts(posts.map(p => p.id === postId ? { ...p, is_flagged: !currentFlag } : p))
+      }
+    } catch (error) {
+      console.error("Failed to toggle flag:", error)
+    }
+  }
+
+  const handleFeatureToggle = async (postId: string, currentFeature: boolean) => {
+    try {
+      const response = await fetch(`/api/admin/posts`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: postId, is_featured: !currentFeature })
+      })
+      if (response.ok) {
+        setPosts(posts.map(p => p.id === postId ? { ...p, is_featured: !currentFeature } : p))
+      }
+    } catch (error) {
+      console.error("Failed to toggle feature:", error)
+    }
+  }
+
+  const handleStatusChange = async (postId: string, newStatus: string) => {
+    try {
+      const response = await fetch(`/api/admin/posts`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: postId, status: newStatus })
+      })
+      if (response.ok) {
+        setPosts(posts.map(p => p.id === postId ? { ...p, status: newStatus } : p))
+      }
+    } catch (error) {
+      console.error("Failed to update post status:", error)
+    }
+  }
+
+  const filteredPosts = posts.filter((post) => {
+    if (searchQuery && !post.content.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false
+    }
+    if (activeTab !== "all" && post.status !== activeTab) {
+      return false
+    }
+    return true
+  })
+
   return (
-    <div className="p-4 md:p-6 lg:p-8">
+    <div className="min-h-screen p-4 md:p-6 lg:p-8 w-full max-w-7xl mx-auto">
+      {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold mb-2">Post Management</h1>
-        <p className="text-muted-foreground">View, moderate, and manage all platform posts</p>
+        <h1 className="text-3xl md:text-4xl font-bold mb-2">Manage Posts</h1>
+        <p className="text-muted-foreground">Review, moderate, and manage user posts</p>
       </div>
 
-      {/* Stats */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {stats.map((stat, i) => (
-          <Card key={i} className="border-border/50">
-            <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">{stat.label}</p>
-              <p className="text-2xl font-bold mt-1">{stat.value}</p>
-            </CardContent>
-          </Card>
-        ))}
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <Card className="border-border/50">
+          <CardContent className="p-6">
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Total Posts</p>
+              <p className="text-3xl font-bold">{stats.total}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50">
+          <CardContent className="p-6">
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Published</p>
+              <p className="text-3xl font-bold">{stats.published}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50">
+          <CardContent className="p-6">
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Under Review</p>
+              <p className="text-3xl font-bold">{stats.underReview}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50">
+          <CardContent className="p-6">
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Flagged</p>
+              <p className="text-3xl font-bold text-destructive">{stats.flagged}</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filters */}
       <Card className="border-border/50 mb-6">
-        <CardContent className="p-4">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input placeholder="Search posts by content or author..." className="pl-10" />
+        <CardContent className="p-4 md:p-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="md:col-span-2">
+              <label className="text-sm font-medium mb-2 block">Search</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  placeholder="Search posts..."
+                  className="pl-10 w-full"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="flex gap-2">
-              <Select defaultValue="all">
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Status" />
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">Status</label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger>
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="published">Published</SelectItem>
                   <SelectItem value="under_review">Under Review</SelectItem>
-                  <SelectItem value="removed">Removed</SelectItem>
+                  <SelectItem value="archived">Archived</SelectItem>
                 </SelectContent>
               </Select>
-              <Select defaultValue="all">
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Type" />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">Flagged</label>
+              <Select value={flaggedFilter} onValueChange={setFlaggedFilter}>
+                <SelectTrigger>
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="text">Text Only</SelectItem>
-                  <SelectItem value="image">With Images</SelectItem>
-                  <SelectItem value="video">With Video</SelectItem>
+                  <SelectItem value="all">All Posts</SelectItem>
+                  <SelectItem value="true">Flagged Only</SelectItem>
+                  <SelectItem value="false">Not Flagged</SelectItem>
                 </SelectContent>
               </Select>
-              <Button variant="outline" className="bg-transparent">
-                <Filter className="w-4 h-4 mr-2" />
-                Filters
-              </Button>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Bulk Actions */}
-      {selectedPosts.length > 0 && (
-        <div className="flex items-center gap-4 mb-4 p-4 bg-muted rounded-xl">
-          <span className="text-sm font-medium">{selectedPosts.length} selected</span>
-          <Button size="sm" variant="outline" className="bg-transparent">
-            <Star className="w-4 h-4 mr-2" />
-            Feature
-          </Button>
-          <Button size="sm" variant="outline" className="bg-transparent">
-            <Flag className="w-4 h-4 mr-2" />
-            Flag
-          </Button>
-          <Button size="sm" variant="destructive">
-            <Trash2 className="w-4 h-4 mr-2" />
-            Delete
-          </Button>
-        </div>
-      )}
+      {/* Posts Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="bg-muted/50 p-1 rounded-lg mb-6 grid grid-cols-3 w-full">
+          <TabsTrigger value="all" className="rounded">All</TabsTrigger>
+          <TabsTrigger value="published" className="rounded">Published</TabsTrigger>
+          <TabsTrigger value="under_review" className="rounded">Review</TabsTrigger>
+        </TabsList>
 
-      {/* Posts List */}
-      <Card className="border-border/50">
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="py-4 px-4 w-10">
-                    <Checkbox checked={selectedPosts.length === posts.length} onCheckedChange={toggleSelectAll} />
-                  </th>
-                  <th className="text-left py-4 px-4 font-medium text-muted-foreground">Post</th>
-                  <th className="text-left py-4 px-4 font-medium text-muted-foreground">Media</th>
-                  <th className="text-left py-4 px-4 font-medium text-muted-foreground">Engagement</th>
-                  <th className="text-left py-4 px-4 font-medium text-muted-foreground">Status</th>
-                  <th className="text-left py-4 px-4 font-medium text-muted-foreground">Date</th>
-                  <th className="text-right py-4 px-4 font-medium text-muted-foreground">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {posts.map((post) => (
-                  <tr
-                    key={post.id}
-                    className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
-                  >
-                    <td className="py-4 px-4">
-                      <Checkbox
-                        checked={selectedPosts.includes(post.id)}
-                        onCheckedChange={() => toggleSelect(post.id)}
-                      />
-                    </td>
-                    <td className="py-4 px-4 max-w-md">
-                      <div className="flex items-start gap-3">
-                        <Avatar className="w-10 h-10 flex-shrink-0">
-                          <AvatarImage src={post.author.avatar || "/placeholder.svg"} />
-                          <AvatarFallback>{post.author.name[0]}</AvatarFallback>
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : filteredPosts.length === 0 ? (
+          <Card className="border-border/50">
+            <CardContent className="p-12 text-center">
+              <p className="text-muted-foreground text-lg">No posts found</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <TabsContent value={activeTab} className="space-y-4">
+            {filteredPosts.map((post) => (
+              <Card key={post.id} className="border-border/50 hover:border-border/80 transition-colors">
+                <CardContent className="p-4 md:p-6">
+                  <div className="flex flex-col lg:flex-row gap-4">
+                    {/* Left Section */}
+                    <div className="flex-1 min-w-0">
+                      {/* Author */}
+                      <div className="flex items-center gap-3 mb-4">
+                        <Avatar className="w-10 h-10">
+                          <AvatarImage src={post.author.avatar_url} />
+                          <AvatarFallback>{post.author.full_name?.[0]}</AvatarFallback>
                         </Avatar>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium">{post.author.name}</span>
-                            {post.featured && (
-                              <Badge className="gradient-bg text-xs">
-                                <Star className="w-3 h-3 mr-1" />
-                                Featured
-                              </Badge>
+                            <p className="font-medium text-sm">{post.author.full_name}</p>
+                            {post.author.is_verified && (
+                              <Badge className="bg-blue-500 text-white text-xs">Verified</Badge>
                             )}
                           </div>
-                          <p className="text-sm text-muted-foreground truncate">{post.content}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(post.created_at).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </p>
                         </div>
                       </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      {post.media.length > 0 ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-12 h-12 rounded-lg overflow-hidden relative bg-muted">
-                            <Image
-                              src={post.media[0].url || "/placeholder.svg"}
-                              alt="Post media"
-                              fill
-                              className="object-cover"
-                            />
-                          </div>
-                          {post.media.length > 1 && <Badge variant="outline">+{post.media.length - 1}</Badge>}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">No media</span>
-                      )}
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-4 text-sm">
-                        <span className="flex items-center gap-1">
-                          <Heart className="w-4 h-4 text-primary" />
-                          {post.likes}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <MessageCircle className="w-4 h-4 text-muted-foreground" />
-                          {post.comments}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Eye className="w-4 h-4 text-muted-foreground" />
-                          {post.views}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant={post.status === "published" ? "default" : "secondary"}
-                          className={post.status === "published" ? "bg-green-500" : ""}
-                        >
-                          {post.status.replace("_", " ")}
+
+                      {/* Content */}
+                      <p className="text-foreground mb-3 line-clamp-3">{post.content}</p>
+
+                      {/* Badges */}
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        <Badge variant={post.status === "published" ? "default" : "secondary"}>
+                          {post.status?.replace(/_/g, " ")}
                         </Badge>
-                        {post.flagged && (
-                          <Badge variant="destructive">
-                            <Flag className="w-3 h-3 mr-1" />
-                            Flagged
-                          </Badge>
+                        {post.is_flagged && (
+                          <Badge className="bg-destructive text-white">Flagged</Badge>
+                        )}
+                        {post.is_featured && (
+                          <Badge className="bg-purple-500 text-white">Featured</Badge>
                         )}
                       </div>
-                    </td>
-                    <td className="py-4 px-4 text-muted-foreground">{post.createdAt}</td>
-                    <td className="py-4 px-4 text-right">
+
+                      {/* Engagement */}
+                      <div className="flex gap-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Heart className="w-4 h-4" />
+                          <span>{post.likes_count || 0} likes</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <MessageCircle className="w-4 h-4" />
+                          <span>{post.comments_count || 0} comments</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Eye className="w-4 h-4" />
+                          <span>{post.views_count || 0} views</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right Section - Actions */}
+                    <div className="flex flex-col gap-2 w-full lg:w-auto">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="rounded-full">
-                            <MoreHorizontal className="w-4 h-4" />
+                          <Button variant="outline" size="sm" className="w-full lg:w-auto">
+                            <MoreVertical className="w-4 h-4 mr-2" />
+                            <span className="hidden sm:inline">Actions</span>
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem>
                             <Eye className="w-4 h-4 mr-2" />
-                            View Post
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Star className="w-4 h-4 mr-2" />
-                            {post.featured ? "Unfeature" : "Feature"}
+                            Preview
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-orange-500">
-                            <Flag className="w-4 h-4 mr-2" />
-                            Flag for Review
+                          <DropdownMenuItem
+                            onClick={() => handleFeatureToggle(post.id, post.is_featured)}
+                          >
+                            {post.is_featured ? (
+                              <>
+                                <X className="w-4 h-4 mr-2" />
+                                Unfeature
+                              </>
+                            ) : (
+                              <>
+                                <Check className="w-4 h-4 mr-2" />
+                                Feature
+                              </>
+                            )}
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">
+                          <DropdownMenuItem
+                            onClick={() => handleFlagToggle(post.id, post.is_flagged)}
+                            className={post.is_flagged ? "text-destructive" : ""}
+                          >
+                            <Flag className="w-4 h-4 mr-2" />
+                            {post.is_flagged ? "Unflag" : "Flag"}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem asChild>
+                            <div onClick={(e) => e.stopPropagation()} className="w-full">
+                              <Select value={post.status} onValueChange={(val) => handleStatusChange(post.id, val)}>
+                                <SelectTrigger className="w-full border-0 p-0 h-auto">
+                                  <span className="text-sm">Change Status</span>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="published">Publish</SelectItem>
+                                  <SelectItem value="under_review">Under Review</SelectItem>
+                                  <SelectItem value="archived">Archive</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive cursor-pointer"
+                            onClick={() => setDeleteId(post.id)}
+                          >
                             <Trash2 className="w-4 h-4 mr-2" />
-                            Delete Post
+                            Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </TabsContent>
+        )}
+      </Tabs>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogTitle>Delete Post</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to delete this post? This action cannot be undone.
+          </AlertDialogDescription>
+          <div className="flex justify-end gap-3 mt-6">
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteId && handleDeletePost(deleteId)}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
           </div>
-        </CardContent>
-      </Card>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

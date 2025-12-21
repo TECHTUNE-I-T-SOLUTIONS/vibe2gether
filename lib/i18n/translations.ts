@@ -109,9 +109,10 @@ const baseTranslations = {
   blog: "Blog",
 
   // Hero
-  findYourPerfect: "Find Your Perfect",
-  matchToday: "Match Today",
-  heroDescription: "Connect with amazing people worldwide. Whether you're looking for love, friendship, or unique experiences — Vibe2Gether brings hearts together.",
+  findYourPerfect: "Vibe Together",
+  matchToday: "Start Connecting",
+  heroBadge: "Join 2M+ people — meet, sell, create events, post & trade",
+  heroDescription: "Discover people, create events, buy & sell, post content, earn coins, and boost recognition — Vibe2Gether is a social app for everyone.",
   startYourJourney: "Start Your Journey",
   watchHowItWorks: "Watch How It Works",
   activeUsers: "Active Users",
@@ -128,7 +129,13 @@ const baseTranslations = {
   discoverPeople: "Discover People",
   discoverPeopleDesc: "Explore millions of profiles from around the world. Filter by location, interests, and more.",
   marketplace: "Marketplace",
-  marketplaceDesc: "Shop unique items, services, and experiences. From gifts to exclusive date packages.",
+  marketplaceDesc: "Shop unique items, services, and experiences. From gifts to exclusive items.",
+  createEvents: "Create Events",
+  createEventsDesc: "Host and discover meetups, parties, and local experiences.",
+  boosts: "Boosts",
+  boostsDesc: "Increase your profile visibility with one-time boosts.",
+  buyCoins: "Buy Coins",
+  buyCoinsDesc: "Purchase coins to promote your posts and send gifts.",
   realTimeChat: "Real-time Chat",
   realTimeChatDesc: "Connect instantly with matches. Send messages, voice notes, GIFs, and more.",
   smartNotifications: "Smart Notifications",
@@ -151,8 +158,8 @@ const baseTranslations = {
   testimonialDescription: "Real connections, real stories. See what our members have to say about their Vibe2Gether experience.",
 
   // Auth Pages
-  loginDescription: "Sign in to continue your journey to finding love.",
-  joinCommunity: "Join 2 Million+ People Finding Love",
+  loginDescription: "Sign in to continue your journey to connecting with people.",
+  joinCommunity: "Join 2 Million+ People Connecting Together",
   signupDescription: "Create your free account and start your journey to meaningful connections.",
   language: "Language",
 

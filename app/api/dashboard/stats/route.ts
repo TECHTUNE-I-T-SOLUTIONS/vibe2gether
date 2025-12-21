@@ -115,11 +115,12 @@ export async function POST() {
 
     // Get matches - simplified query without complex joins
     let matchesRaw: any[] = []
+    let matchesCount = 0
+    let pendingMatchesCount = 0
     try {
       const { data, error: matchesError } = await supabase
         .from("matches")
         .select("id, user1_id, user2_id, status, compatibility_score")
-        .eq("status", "matched")
         .limit(10)
 
       if (matchesError) {
@@ -130,6 +131,23 @@ export async function POST() {
           (m) => m.user1_id === user.id || m.user2_id === user.id
         ).slice(0, 3)
       }
+
+      // Counts
+      const { count: matchedCount } = await supabase
+        .from('matches')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'matched')
+        .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+
+      matchesCount = matchedCount || 0
+
+      const { count: pendingCount } = await supabase
+        .from('matches')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending')
+        .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+
+      pendingMatchesCount = pendingCount || 0
     } catch (err) {
       console.error("Matches fetch error:", err)
     }
@@ -180,7 +198,7 @@ export async function POST() {
         actor:actor_id(id, display_name, full_name, profile_picture)
       `)
       .eq("user_id", user.id)
-      .in("type", ["like", "follow", "comment", "view", "message", "match"])
+      .in("type", ["like", "follow", "comment", "view", "message", "match", "save", "verification"])
       .order("created_at", { ascending: false })
       .limit(10)
 
@@ -208,6 +226,7 @@ export async function POST() {
           message: "message",
           match: "match",
           save: "save",
+          verification: "verification",
         }
 
         return {
@@ -242,6 +261,13 @@ export async function POST() {
         label: "followers",
         value: user.followers_count?.toString() || "0",
         trend: followersTrend,
+        coins: 0,
+      },
+      {
+        icon: "matches",
+        label: "yourMatches",
+        value: matchesCount.toString(),
+        trend: "+0%",
         coins: 0,
       },
       {

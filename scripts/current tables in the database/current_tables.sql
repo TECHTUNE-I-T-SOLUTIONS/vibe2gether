@@ -231,6 +231,7 @@ create table public.posts (
   id uuid not null default extensions.uuid_generate_v4 (),
   user_id uuid not null,
   content text null,
+  tags text[] null default '{}'::text[],
   media jsonb null default '[]'::jsonb,
   views_count integer null default 0,
   likes_count integer null default 0,
@@ -255,6 +256,8 @@ create index IF not exists idx_posts_created_at on public.posts using btree (cre
 create index IF not exists idx_posts_is_public on public.posts using btree (is_public) TABLESPACE pg_default;
 
 create index IF not exists idx_posts_views_count on public.posts using btree (views_count desc) TABLESPACE pg_default;
+
+create index IF not exists idx_posts_tags on public.posts using gin (tags) TABLESPACE pg_default;
 
 
 -- referal bonus
@@ -397,6 +400,59 @@ create index IF not exists idx_users_country on public.users using btree (countr
 create index IF not exists idx_users_is_active on public.users using btree (is_active) TABLESPACE pg_default;
 
 create index IF not exists idx_users_is_premium on public.users using btree (is_premium) TABLESPACE pg_default;
+
+-- user_verifications (added)
+create table IF NOT EXISTS public.user_verifications (
+  id uuid NOT NULL DEFAULT extensions.uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  id_type character varying(50) NOT NULL,
+  id_number character varying(100),
+  id_document_url character varying(500),
+  selfie_url character varying(500),
+  status character varying(50) NOT NULL DEFAULT 'pending',
+  decision_reason text NULL,
+  reviewed_by uuid NULL,
+  reviewed_at timestamp with time zone NULL,
+  created_at timestamp with time zone NULL DEFAULT now(),
+  updated_at timestamp with time zone NULL DEFAULT now(),
+  constraint user_verifications_pkey primary key (id),
+  constraint user_verifications_user_id_fkey foreign KEY (user_id) references users (id) on delete CASCADE
+) TABLESPACE pg_default;
+
+create index IF not exists idx_user_verifications_user_id on public.user_verifications using btree (user_id) TABLESPACE pg_default;
+create index IF not exists idx_user_verifications_status on public.user_verifications using btree (status) TABLESPACE pg_default;
+
+-- Trigger to create notifications for verification submissions and status changes
+CREATE OR REPLACE FUNCTION public.create_verification_notification()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF (TG_OP = 'INSERT') THEN
+    INSERT INTO notifications (user_id, type, title, message, actor_id, reference_id, reference_type, action_url, created_at)
+    VALUES (NEW.user_id, 'verification', 'Verification submitted', 'Your verification request has been received and is pending review.', NEW.user_id, NEW.id, 'verification', '/dashboard/verification', now());
+  ELSIF (TG_OP = 'UPDATE') THEN
+    IF (NEW.status IS DISTINCT FROM OLD.status) THEN
+      IF (NEW.status = 'verified') THEN
+        INSERT INTO notifications (user_id, type, title, message, actor_id, reference_id, reference_type, action_url, created_at)
+        VALUES (NEW.user_id, 'verification', 'Profile verified', 'Congratulations — your profile has been verified.', COALESCE(NEW.reviewed_by, NULL), NEW.id, 'verification', '/profile/' || NEW.user_id, now());
+      ELSIF (NEW.status = 'rejected') THEN
+        INSERT INTO notifications (user_id, type, title, message, actor_id, reference_id, reference_type, action_url, created_at)
+        VALUES (NEW.user_id, 'verification', 'Verification rejected', COALESCE(NEW.decision_reason, 'Your verification was not approved.'), COALESCE(NEW.reviewed_by, NULL), NEW.id, 'verification', '/dashboard/verification', now());
+      ELSE
+        INSERT INTO notifications (user_id, type, title, message, actor_id, reference_id, reference_type, action_url, created_at)
+        VALUES (NEW.user_id, 'verification', 'Verification updated', 'Your verification status is now: ' || NEW.status, COALESCE(NEW.reviewed_by, NULL), NEW.id, 'verification', '/dashboard/verification', now());
+      END IF;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS verification_notification_trigger ON public.user_verifications;
+CREATE TRIGGER verification_notification_trigger
+AFTER INSERT OR UPDATE ON public.user_verifications
+FOR EACH ROW
+EXECUTE FUNCTION public.create_verification_notification();
 
 create index IF not exists idx_users_created_at on public.users using btree (created_at) TABLESPACE pg_default;
 
@@ -1029,3 +1085,123 @@ create table if not exists public.follows (
 
 create index if not exists idx_follows_follower_id on public.follows using btree (follower_id) tablespace pg_default;
 create index if not exists idx_follows_following_id on public.follows using btree (following_id) tablespace pg_default;
+
+
+-- ADMIN MESSAGING SYSTEM
+-- ============================================================
+create table if not exists public.admin_messages_conversations (
+  id uuid not null default extensions.uuid_generate_v4 (),
+  user_id uuid not null,
+  admin_id uuid not null,
+  last_message text null,
+  last_message_time timestamp with time zone null default now(),
+  unread_count integer null default 0,
+  is_resolved boolean null default false,
+  created_at timestamp with time zone null default now(),
+  updated_at timestamp with time zone null default now(),
+  constraint admin_messages_conversations_pkey primary key (id),
+  constraint admin_messages_conversations_user_id_fkey foreign key (user_id) references users (id) on delete cascade,
+  constraint admin_messages_conversations_admin_id_fkey foreign key (admin_id) references admins (id) on delete cascade,
+  constraint admin_messages_conversations_unique unique (user_id, admin_id)
+) tablespace pg_default;
+
+create index if not exists idx_admin_messages_conversations_user_id on public.admin_messages_conversations using btree (user_id) tablespace pg_default;
+create index if not exists idx_admin_messages_conversations_admin_id on public.admin_messages_conversations using btree (admin_id) tablespace pg_default;
+create index if not exists idx_admin_messages_conversations_resolved on public.admin_messages_conversations using btree (is_resolved) tablespace pg_default;
+create index if not exists idx_admin_messages_conversations_last_message_time on public.admin_messages_conversations using btree (last_message_time desc) tablespace pg_default;
+
+
+create table if not exists public.admin_messages (
+  id uuid not null default extensions.uuid_generate_v4 (),
+  conversation_id uuid not null,
+  sender_id uuid not null,
+  sender_type character varying(50) not null,
+  content text not null,
+  attachment_url text null,
+  is_read boolean null default false,
+  created_at timestamp with time zone null default now(),
+  updated_at timestamp with time zone null default now(),
+  constraint admin_messages_pkey primary key (id),
+  constraint admin_messages_conversation_id_fkey foreign key (conversation_id) references admin_messages_conversations (id) on delete cascade,
+  constraint admin_messages_sender_type_check check ((sender_type in ('user', 'admin')))
+) tablespace pg_default;
+
+create index if not exists idx_admin_messages_conversation_id on public.admin_messages using btree (conversation_id) tablespace pg_default;
+create index if not exists idx_admin_messages_sender_id on public.admin_messages using btree (sender_id) tablespace pg_default;
+create index if not exists idx_admin_messages_created_at on public.admin_messages using btree (created_at desc) tablespace pg_default;
+
+
+-- FEATURED REQUESTS TABLE
+-- ============================================================
+-- Stores feature requests from users for products/services/events
+create table if not exists public.featured_requests (
+  id uuid not null default extensions.uuid_generate_v4 (),
+  title character varying(255) not null,
+  description text not null,
+  type character varying(50) not null,
+  image_url character varying(500),
+  status character varying(50) not null default 'pending',
+  user_id uuid not null,
+  views integer default 0,
+  rejection_reason text,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now(),
+  constraint featured_requests_pkey primary key (id),
+  constraint featured_requests_user_id_fkey foreign key (user_id) references users (id) on delete cascade
+) tablespace pg_default;
+
+create index if not exists idx_featured_requests_user_id on public.featured_requests using btree (user_id) tablespace pg_default;
+create index if not exists idx_featured_requests_status on public.featured_requests using btree (status) tablespace pg_default;
+create index if not exists idx_featured_requests_created_at on public.featured_requests using btree (created_at desc) tablespace pg_default;
+create index if not exists idx_featured_requests_type on public.featured_requests using btree (type) tablespace pg_default;
+
+
+-- ADMINS TABLE
+-- ============================================================
+create table if not exists public.admins (
+  id uuid not null default extensions.uuid_generate_v4 (),
+  email character varying(255) not null unique,
+  password_hash character varying(255) not null,
+  full_name character varying(255) not null,
+  profile_picture character varying(500),
+  cover_image character varying(500),
+  role character varying(50) not null default 'moderator',
+  permissions text[] default '{}'::text[],
+  is_active boolean not null default true,
+  two_factor_enabled boolean default false,
+  last_login_at timestamp with time zone,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  constraint admins_pkey primary key (id),
+  constraint admins_email_key unique (email)
+) tablespace pg_default;
+
+create index if not exists idx_admins_email on public.admins using btree (email) tablespace pg_default;
+create index if not exists idx_admins_is_active on public.admins using btree (is_active) tablespace pg_default;
+create index if not exists idx_admins_role on public.admins using btree (role) tablespace pg_default;
+create index if not exists idx_admins_created_at on public.admins using btree (created_at desc) tablespace pg_default;
+
+
+-- ADMIN NOTIFICATIONS TABLE
+-- ============================================================
+-- Stores notifications specific to admins (separate from user notifications)
+create table if not exists public.admin_notifications (
+  id uuid not null default extensions.uuid_generate_v4 (),
+  admin_id uuid not null,
+  type character varying(50) not null,
+  title character varying(255) not null,
+  message text,
+  related_type character varying(50),
+  related_id uuid,
+  action_url character varying(500),
+  is_read boolean default false,
+  read_at timestamp with time zone,
+  created_at timestamp with time zone default now(),
+  constraint admin_notifications_pkey primary key (id),
+  constraint admin_notifications_admin_id_fkey foreign key (admin_id) references admins (id) on delete cascade
+) tablespace pg_default;
+
+create index if not exists idx_admin_notifications_admin_id on public.admin_notifications using btree (admin_id) tablespace pg_default;
+create index if not exists idx_admin_notifications_is_read on public.admin_notifications using btree (is_read) tablespace pg_default;
+create index if not exists idx_admin_notifications_created_at on public.admin_notifications using btree (created_at desc) tablespace pg_default;
+create index if not exists idx_admin_notifications_admin_id_is_read on public.admin_notifications using btree (admin_id, is_read) tablespace pg_default;

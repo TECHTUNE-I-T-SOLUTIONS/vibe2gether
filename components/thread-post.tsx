@@ -61,6 +61,7 @@ interface ThreadPostProps {
   id: string
   author: PostAuthor
   content: string
+  tags?: string[]
   media: Media[]
   likes: number
   comments: number
@@ -83,6 +84,7 @@ export function ThreadPost({
   id,
   author,
   content,
+  tags = [],
   media,
   likes,
   comments,
@@ -382,6 +384,15 @@ export function ThreadPost({
 
             {/* Post Content */}
             <p className="mt-2 text-foreground whitespace-pre-wrap leading-relaxed">{content}</p>
+
+            {/* Tags */}
+            {tags && tags.length > 0 && (
+              <div className="mt-2 flex gap-2 flex-wrap">
+                {tags.map((t, i) => (
+                  <Badge key={i} variant="secondary">#{t}</Badge>
+                ))}
+              </div>
+            )
           </div>
 
           {/* More Options Menu */}

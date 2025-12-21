@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Plus, Edit2, Trash2, Eye, EyeOff, Loader2, Search, Calendar } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -20,14 +21,39 @@ import { Textarea } from "@/components/ui/textarea"
 import { getEvents, deleteEvent, updateEvent } from "@/lib/supabase/queries"
 
 export default function EventsAdminPage() {
+  const router = useRouter()
   const [events, setEvents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [authChecked, setAuthChecked] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [editingEvent, setEditingEvent] = useState<any>(null)
+  const [creatingEvent, setCreatingEvent] = useState(false)
+  const [newEvent, setNewEvent] = useState({
+    title: "",
+    description: "",
+    event_date: "",
+    location_name: "",
+    capacity: "",
+  })
 
   useEffect(() => {
-    fetchEvents()
+    checkAuth()
   }, [])
+
+  const checkAuth = async () => {
+    try {
+      const response = await fetch("/api/admin/auth/me")
+      if (!response.ok) {
+        router.push("/admin/login")
+        return
+      }
+      setAuthChecked(true)
+      fetchEvents()
+    } catch (error) {
+      console.error("Auth check failed:", error)
+      router.push("/auth/login")
+    }
+  }
 
   async function fetchEvents() {
     try {
@@ -40,6 +66,33 @@ export default function EventsAdminPage() {
       console.error("Failed to fetch events:", err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleCreateEvent() {
+    if (!newEvent.title || !newEvent.event_date || !newEvent.location_name) {
+      alert("Please fill in all required fields")
+      return
+    }
+
+    try {
+      const response = await fetch("/api/admin/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newEvent),
+      })
+
+      if (response.ok) {
+        const createdEvent = await response.json()
+        setEvents((prev) => [createdEvent, ...prev])
+        setNewEvent({ title: "", description: "", event_date: "", location_name: "", capacity: "" })
+        setCreatingEvent(false)
+      } else {
+        alert("Failed to create event")
+      }
+    } catch (err) {
+      console.error("Failed to create event:", err)
+      alert("Error creating event")
     }
   }
 
@@ -81,7 +134,7 @@ export default function EventsAdminPage() {
     })
   }
 
-  if (loading) {
+  if (!authChecked || loading) {
     return (
       <div className="flex items-center justify-center h-96">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -93,10 +146,69 @@ export default function EventsAdminPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Events Management</h1>
-        <Button className="gradient-bg gap-2">
-          <Plus className="w-4 h-4" />
-          Create Event
-        </Button>
+        <Dialog open={creatingEvent} onOpenChange={setCreatingEvent}>
+          <DialogTrigger asChild>
+            <Button className="gradient-bg gap-2">
+              <Plus className="w-4 h-4" />
+              Create Event
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create New Event</DialogTitle>
+              <DialogDescription>Add a new event to the platform</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Event Title *</Label>
+                <Input
+                  placeholder="Enter event title"
+                  value={newEvent.title}
+                  onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Description</Label>
+                <Textarea
+                  placeholder="Enter event description"
+                  value={newEvent.description}
+                  onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
+                  rows={3}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Event Date *</Label>
+                  <Input
+                    type="datetime-local"
+                    value={newEvent.event_date}
+                    onChange={(e) => setNewEvent({ ...newEvent, event_date: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Capacity</Label>
+                  <Input
+                    type="number"
+                    placeholder="Max attendees"
+                    value={newEvent.capacity}
+                    onChange={(e) => setNewEvent({ ...newEvent, capacity: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Location *</Label>
+                <Input
+                  placeholder="Enter event location"
+                  value={newEvent.location_name}
+                  onChange={(e) => setNewEvent({ ...newEvent, location_name: e.target.value })}
+                />
+              </div>
+              <Button className="w-full gradient-bg" onClick={handleCreateEvent}>
+                Create Event
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Search */}

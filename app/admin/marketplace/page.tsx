@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Plus, Edit2, Trash2, Eye, EyeOff, Loader2, Search } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -20,15 +21,39 @@ import { Textarea } from "@/components/ui/textarea"
 import { getMarketplaceProducts, deleteMarketplaceProduct, updateMarketplaceProduct } from "@/lib/supabase/queries"
 
 export default function MarketplaceAdminPage() {
+  const router = useRouter()
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [authChecked, setAuthChecked] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [editingProduct, setEditingProduct] = useState<any>(null)
-  const [formData, setFormData] = useState<any>({})
+  const [creatingProduct, setCreatingProduct] = useState(false)
+  const [newProduct, setNewProduct] = useState({
+    title: "",
+    description: "",
+    price: "",
+    category: "",
+    condition: "good",
+  })
 
   useEffect(() => {
-    fetchProducts()
+    checkAuth()
   }, [])
+
+  const checkAuth = async () => {
+    try {
+      const response = await fetch("/api/admin/auth/me")
+      if (!response.ok) {
+        router.push("/admin/login")
+        return
+      }
+      setAuthChecked(true)
+      fetchProducts()
+    } catch (error) {
+      console.error("Auth check failed:", error)
+      router.push("/auth/login")
+    }
+  }
 
   async function fetchProducts() {
     try {
@@ -41,6 +66,33 @@ export default function MarketplaceAdminPage() {
       console.error("Failed to fetch products:", err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleCreateProduct() {
+    if (!newProduct.title || !newProduct.price || !newProduct.category) {
+      alert("Please fill in all required fields")
+      return
+    }
+
+    try {
+      const response = await fetch("/api/admin/marketplace", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newProduct),
+      })
+
+      if (response.ok) {
+        const createdProduct = await response.json()
+        setProducts((prev) => [createdProduct, ...prev])
+        setNewProduct({ title: "", description: "", price: "", category: "", condition: "good" })
+        setCreatingProduct(false)
+      } else {
+        alert("Failed to create product")
+      }
+    } catch (err) {
+      console.error("Failed to create product:", err)
+      alert("Error creating product")
     }
   }
 
@@ -70,11 +122,7 @@ export default function MarketplaceAdminPage() {
     }
   }
 
-  const filteredProducts = products.filter((p) =>
-    p.title.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
-  if (loading) {
+  if (!authChecked || loading) {
     return (
       <div className="flex items-center justify-center h-96">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -82,14 +130,86 @@ export default function MarketplaceAdminPage() {
     )
   }
 
+  // Filter products based on search query
+  const filteredProducts = products.filter(
+    (product) =>
+      product.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      product.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      product.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Marketplace Management</h1>
-        <Button className="gradient-bg gap-2">
-          <Plus className="w-4 h-4" />
-          Add Product
-        </Button>
+        <Dialog open={creatingProduct} onOpenChange={setCreatingProduct}>
+          <DialogTrigger asChild>
+            <Button className="gradient-bg gap-2">
+              <Plus className="w-4 h-4" />
+              Add Product
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create New Product</DialogTitle>
+              <DialogDescription>Add a new product to the marketplace</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Product Title *</Label>
+                <Input
+                  placeholder="Enter product title"
+                  value={newProduct.title}
+                  onChange={(e) => setNewProduct({ ...newProduct, title: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Description</Label>
+                <Textarea
+                  placeholder="Enter product description"
+                  value={newProduct.description}
+                  onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
+                  rows={3}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Price *</Label>
+                  <Input
+                    type="number"
+                    placeholder="Product price"
+                    value={newProduct.price}
+                    onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Category *</Label>
+                  <Input
+                    placeholder="Product category"
+                    value={newProduct.category}
+                    onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Condition</Label>
+                <select
+                  value={newProduct.condition}
+                  onChange={(e) => setNewProduct({ ...newProduct, condition: e.target.value })}
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                >
+                  <option value="new">New</option>
+                  <option value="excellent">Excellent</option>
+                  <option value="good">Good</option>
+                  <option value="fair">Fair</option>
+                </select>
+              </div>
+              <Button className="w-full gradient-bg" onClick={handleCreateProduct}>
+                Create Product
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Search */}

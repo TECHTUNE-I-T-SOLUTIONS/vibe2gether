@@ -1,6 +1,6 @@
 "use client"
 
-import { Heart, Users, ShoppingBag, MessageCircle, Bell, Coins, Globe2, Shield } from "lucide-react"
+import { Heart, Users, ShoppingBag, MessageCircle, Bell, Coins, Globe2, Shield, Calendar, Sparkles } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { useLanguage } from "@/lib/i18n/context"
 
@@ -47,6 +47,18 @@ const features: Feature[] = [
     title: "earnRedeem",
     description: "earnRedeemDesc",
     gradient: "from-yellow-400 to-orange-500",
+  },
+  {
+    icon: Calendar,
+    title: "createEvents",
+    description: "createEventsDesc",
+    gradient: "from-emerald-400 to-green-500",
+  },
+  {
+    icon: Sparkles,
+    title: "boosts",
+    description: "boostsDesc",
+    gradient: "from-pink-400 to-rose-500",
   },
   {
     icon: Globe2,

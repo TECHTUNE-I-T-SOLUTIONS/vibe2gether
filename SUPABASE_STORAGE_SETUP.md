@@ -10,6 +10,7 @@ In Supabase Dashboard, create these public buckets:
 - `profile_pictures` - For user profile pictures
 - `cover_pictures` - For user cover/banner pictures
 - `posts` - For user post images/videos
+- `verifications` - For storing uploaded ID documents and selfies (used by the verification workflow)
 
 ### 2. Disable or Configure RLS Policies
 

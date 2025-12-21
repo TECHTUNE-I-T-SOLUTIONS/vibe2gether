@@ -75,7 +75,7 @@ export function HeroSection() {
             className="mb-6 px-4 py-2 text-sm font-medium rounded-full border border-border bg-background/50 backdrop-blur-sm dark:text-white text-black dark:bg-background/30 dark:border-border"
           >
             <Sparkles className="w-4 h-4 mr-2 text-black fill-black dark:text-white dark:fill-white" />
-            Join over 2 million people finding love
+            {t('heroBadge')}
           </Badge>
 
           {/* Heading */}
@@ -130,6 +130,30 @@ export function HeroSection() {
               <div className="text-2xl md:text-3xl font-bold gradient-text">4.9</div>
               <div className="text-sm text-foreground/70 dark:text-foreground/75">{t("appRating")}</div>
             </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="mt-8 flex flex-wrap gap-3 items-center justify-center max-w-3xl mx-auto">
+            <Link href="/events">
+              <Button variant="secondary" className="rounded-full px-4 py-2">
+                {t('events')}
+              </Button>
+            </Link>
+            <Link href="/marketplace">
+              <Button variant="secondary" className="rounded-full px-4 py-2">
+                {t('marketplace')}
+              </Button>
+            </Link>
+            <Link href="/dashboard/create-post">
+              <Button variant="secondary" className="rounded-full px-4 py-2">
+                {t('createPost')}
+              </Button>
+            </Link>
+            <Link href="/dashboard/wallet">
+              <Button variant="secondary" className="rounded-full px-4 py-2">
+                {t('buyCoins') || t('earnRedeem')}
+              </Button>
+            </Link>
           </div>
         </div>
       </div>

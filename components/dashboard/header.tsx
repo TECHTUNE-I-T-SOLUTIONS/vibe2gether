@@ -114,11 +114,11 @@ export function DashboardHeader() {
         {/* Mobile Menu Button */}
         <Sheet>
           <SheetTrigger asChild className="lg:hidden">
-            <Button variant="ghost" size="icon" className="rounded-full">
-              <Menu className="w-5 h-5" />
+            <Button variant="ghost" size="icon" className="rounded-2xl hover:bg-primary/10">
+              <Menu className="w-6 h-6" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="p-0 w-64 flex flex-col">
+          <SheetContent side="left" className="p-0 w-64 flex flex-col gap-0">
             <MobileSidebar />
           </SheetContent>
         </Sheet>

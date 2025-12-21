@@ -54,24 +54,31 @@ export function DashboardMobileBottomNav({ unreadNotifications = 0 }: { unreadNo
   ]
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 md:hidden h-16 bg-background border-t border-border z-40">
-      <div className="flex items-center justify-around h-full px-2">
+    <nav className="fixed bottom-0 left-0 right-0 md:hidden h-20 bg-background/95 backdrop-blur-md border-t border-border/50 z-40 safe-area-inset-bottom">
+      <div className="flex items-center justify-around h-full px-1">
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
 
           return (
-            <Link key={item.href} href={item.href}>
+            <Link key={item.href} href={item.href} className="flex-1">
               <Button
                 variant="ghost"
                 size="icon"
                 className={cn(
-                  "relative rounded-lg h-12 w-12",
-                  isActive && "bg-primary/10 text-primary"
+                  "relative rounded-2xl h-14 w-14 mx-auto flex flex-col items-center justify-center",
+                  isActive 
+                    ? "gradient-bg text-primary-foreground" 
+                    : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                {item.icon}
+                <span className={cn(
+                  "p-2 rounded-xl transition-all duration-200",
+                  isActive && "bg-white/20"
+                )}>
+                  {item.icon}
+                </span>
                 {item.badge && item.badge > 0 && (
-                  <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center gradient-bg text-xs text-white">
+                  <Badge className="absolute top-1 right-1 w-5 h-5 p-0 flex items-center justify-center gradient-bg text-xs text-white">
                     {item.badge > 9 ? "9+" : item.badge}
                   </Badge>
                 )}

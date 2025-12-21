@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
+import { useRouter } from "next/navigation"
 import Image from "next/image"
-import { Plus, Edit2, Trash2, Eye, EyeOff, Loader2, Search, Star } from "lucide-react"
+import { Plus, Edit2, Trash2, Eye, EyeOff, Loader2, Search, Star, Upload, X } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,17 +19,51 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getBlogPosts, deleteBlogPost, updateBlogPost } from "@/lib/supabase/queries"
+import { createClient } from "@/lib/supabase/client"
 
 export default function BlogAdminPage() {
+  const router = useRouter()
   const [posts, setPosts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [authChecked, setAuthChecked] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [editingPost, setEditingPost] = useState<any>(null)
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [formData, setFormData] = useState({
+    title: "",
+    excerpt: "",
+    content: "",
+    category: "tech",
+    thumbnail_url: "",
+    status: "draft",
+    is_featured: false,
+  })
+  const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string>("")
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    fetchPosts()
+    checkAuth()
   }, [])
+
+  const checkAuth = async () => {
+    try {
+      const response = await fetch("/api/admin/auth/me")
+      if (!response.ok) {
+        router.push("/auth/login")
+        return
+      }
+      setAuthChecked(true)
+      fetchPosts()
+    } catch (error) {
+      console.error("Auth check failed:", error)
+      router.push("/auth/login")
+    }
+  }
 
   async function fetchPosts() {
     try {
@@ -41,6 +76,90 @@ export default function BlogAdminPage() {
       console.error("Failed to fetch posts:", err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) {
+      setSelectedImage(file)
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        setPreviewUrl(event.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  async function uploadImage() {
+    if (!selectedImage) return
+
+    setUploading(true)
+    try {
+      const supabase = createClient()
+      const fileName = `${Date.now()}-${selectedImage.name}`
+
+      const { data, error } = await supabase.storage
+        .from("blog-images")
+        .upload(fileName, selectedImage, { cacheControl: "3600" })
+
+      if (error) throw error
+
+      const { data: urlData } = supabase.storage.from("blog-images").getPublicUrl(fileName)
+
+      setFormData({ ...formData, thumbnail_url: urlData.publicUrl })
+      setSelectedImage(null)
+      setPreviewUrl("")
+    } catch (error) {
+      console.error("Image upload error:", error)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function handleCreatePost() {
+    if (!formData.title || !formData.content) {
+      alert("Please fill in title and content")
+      return
+    }
+
+    setCreating(true)
+    try {
+      const supabase = createClient()
+
+      const { data, error } = await supabase
+        .from("blog_posts")
+        .insert([
+          {
+            title: formData.title,
+            excerpt: formData.excerpt,
+            content: formData.content,
+            category: formData.category,
+            thumbnail_url: formData.thumbnail_url,
+            status: formData.status,
+            is_featured: formData.is_featured,
+            published_at: formData.status === "published" ? new Date() : null,
+          },
+        ])
+        .select()
+
+      if (!error) {
+        await fetchPosts()
+        setCreateDialogOpen(false)
+        setFormData({
+          title: "",
+          excerpt: "",
+          content: "",
+          category: "tech",
+          thumbnail_url: "",
+          status: "draft",
+          is_featured: false,
+        })
+      }
+    } catch (err) {
+      console.error("Failed to create post:", err)
+    } finally {
+      setCreating(false)
     }
   }
 
@@ -61,9 +180,7 @@ export default function BlogAdminPage() {
         is_featured: !post.is_featured,
       })
       setPosts((prev) =>
-        prev.map((p) =>
-          p.id === post.id ? { ...p, is_featured: !p.is_featured } : p
-        )
+        prev.map((p) => (p.id === post.id ? { ...p, is_featured: !p.is_featured } : p))
       )
     } catch (err) {
       console.error("Failed to update post:", err)
@@ -82,7 +199,7 @@ export default function BlogAdminPage() {
     })
   }
 
-  if (loading) {
+  if (!authChecked || loading) {
     return (
       <div className="flex items-center justify-center h-96">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -94,10 +211,167 @@ export default function BlogAdminPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Blog Management</h1>
-        <Button className="gradient-bg gap-2">
-          <Plus className="w-4 h-4" />
-          Create Post
-        </Button>
+        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="gradient-bg gap-2">
+              <Plus className="w-4 h-4" />
+              Create Post
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Create New Blog Post</DialogTitle>
+              <DialogDescription>Add a new blog post with thumbnail image</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Title *</Label>
+                <Input
+                  placeholder="Post title"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  className="mt-2"
+                />
+              </div>
+
+              <div>
+                <Label>Category</Label>
+                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tech">Technology</SelectItem>
+                    <SelectItem value="lifestyle">Lifestyle</SelectItem>
+                    <SelectItem value="business">Business</SelectItem>
+                    <SelectItem value="entertainment">Entertainment</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Excerpt</Label>
+                <Textarea
+                  placeholder="Short summary of the post"
+                  value={formData.excerpt}
+                  onChange={(e) => setFormData({ ...formData, excerpt: e.target.value })}
+                  className="mt-2 h-20"
+                />
+              </div>
+
+              <div>
+                <Label>Content *</Label>
+                <Textarea
+                  placeholder="Full blog post content"
+                  value={formData.content}
+                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                  className="mt-2 h-40"
+                />
+              </div>
+
+              <div>
+                <Label>Thumbnail Image</Label>
+                <div className="mt-2 space-y-4">
+                  {previewUrl ? (
+                    <div className="relative w-full h-48 rounded-lg overflow-hidden bg-muted">
+                      <Image
+                        src={previewUrl}
+                        alt="Preview"
+                        fill
+                        className="object-cover"
+                      />
+                      <Button
+                        size="icon"
+                        variant="destructive"
+                        className="absolute top-2 right-2"
+                        onClick={() => {
+                          setPreviewUrl("")
+                          setSelectedImage(null)
+                        }}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => imageInputRef.current?.click()}
+                      className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:bg-muted/50 transition-colors"
+                    >
+                      <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                      <p className="text-sm font-medium">Click to upload or drag and drop</p>
+                      <p className="text-xs text-muted-foreground">PNG, JPG, GIF up to 10MB</p>
+                    </div>
+                  )}
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                  />
+                  {selectedImage && !uploading && (
+                    <Button
+                      onClick={uploadImage}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Upload Image
+                    </Button>
+                  )}
+                  {uploading && (
+                    <div className="flex items-center justify-center py-2">
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      Uploading...
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="featured"
+                  checked={formData.is_featured}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, is_featured: checked as boolean })
+                  }
+                />
+                <Label htmlFor="featured" className="cursor-pointer">
+                  Mark as Featured
+                </Label>
+              </div>
+
+              <div>
+                <Label>Status</Label>
+                <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="published">Published</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button
+                className="w-full gradient-bg"
+                onClick={handleCreatePost}
+                disabled={creating}
+              >
+                {creating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create Post"
+                )}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Search */}
@@ -129,7 +403,6 @@ export default function BlogAdminPage() {
                 <thead>
                   <tr className="border-b border-border/50">
                     <th className="text-left py-3 px-4">Post</th>
-                    <th className="text-left py-3 px-4">Author</th>
                     <th className="text-left py-3 px-4">Category</th>
                     <th className="text-left py-3 px-4">Status</th>
                     <th className="text-left py-3 px-4">Views</th>
@@ -157,9 +430,6 @@ export default function BlogAdminPage() {
                             <p className="text-xs text-muted-foreground">{formatDate(post.published_at)}</p>
                           </div>
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <p className="text-sm">{post.user?.display_name}</p>
                       </td>
                       <td className="py-3 px-4">
                         <Badge variant="secondary">{post.category}</Badge>
@@ -193,83 +463,6 @@ export default function BlogAdminPage() {
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm" onClick={() => setEditingPost(post)}>
-                                <Edit2 className="w-4 h-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-2xl">
-                              <DialogHeader>
-                                <DialogTitle>Edit Post</DialogTitle>
-                              </DialogHeader>
-                              <div className="space-y-4 max-h-96 overflow-y-auto">
-                                <div>
-                                  <Label>Title</Label>
-                                  <Input
-                                    value={editingPost?.title || ""}
-                                    onChange={(e) =>
-                                      setEditingPost({
-                                        ...editingPost,
-                                        title: e.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-                                <div>
-                                  <Label>Excerpt</Label>
-                                  <Textarea
-                                    value={editingPost?.excerpt || ""}
-                                    onChange={(e) =>
-                                      setEditingPost({
-                                        ...editingPost,
-                                        excerpt: e.target.value,
-                                      })
-                                    }
-                                    className="h-20"
-                                  />
-                                </div>
-                                <div>
-                                  <Label>Content</Label>
-                                  <Textarea
-                                    value={editingPost?.content || ""}
-                                    onChange={(e) =>
-                                      setEditingPost({
-                                        ...editingPost,
-                                        content: e.target.value,
-                                      })
-                                    }
-                                    className="h-40"
-                                  />
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Checkbox
-                                    id="featured"
-                                    checked={editingPost?.is_featured || false}
-                                    onCheckedChange={(checked) =>
-                                      setEditingPost({
-                                        ...editingPost,
-                                        is_featured: checked,
-                                      })
-                                    }
-                                  />
-                                  <Label htmlFor="featured" className="cursor-pointer">
-                                    Mark as Featured
-                                  </Label>
-                                </div>
-                                <Button
-                                  className="w-full gradient-bg"
-                                  onClick={async () => {
-                                    await updateBlogPost(editingPost.id, editingPost)
-                                    setEditingPost(null)
-                                    await fetchPosts()
-                                  }}
-                                >
-                                  Save Changes
-                                </Button>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
                           <Button
                             variant="ghost"
                             size="sm"

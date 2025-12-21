@@ -95,7 +95,7 @@ export default function SafetyPage() {
                 Your Safety is Our <span className="gradient-text">Priority</span>
               </h1>
               <p className="text-xl text-muted-foreground mb-8">
-                Learn how we protect our community and how you can stay safe while finding love.
+                Learn how we protect our community and how you can stay safe while connecting with others.
               </p>
               <Button size="lg" className="rounded-full gradient-bg">
                 <Flag className="w-5 h-5 mr-2" />

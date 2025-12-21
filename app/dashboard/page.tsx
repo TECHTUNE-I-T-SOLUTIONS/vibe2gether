@@ -341,6 +341,7 @@ export default function DashboardPage() {
                   heart: Heart,
                   users: Users,
                   coins: Coins,
+                  matches: Heart,
                 }
                 const Icon = iconMap[stat.icon] || Eye
                 return (
@@ -449,6 +450,7 @@ export default function DashboardPage() {
                           {activity.type === "follow" && "started following you"}
                           {activity.type === "view" && "viewed your profile"}
                           {activity.type === "message" && "sent you a message"}
+                          {activity.type === "verification" && activity.message && activity.message}
                         </p>
                         <p className="text-xs text-muted-foreground">{activity.time}</p>
                       </div>
@@ -463,6 +465,7 @@ export default function DashboardPage() {
                           {activity.type === "follow" && <Users className="w-4 h-4 text-secondary" />}
                           {activity.type === "view" && <Eye className="w-4 h-4 text-muted-foreground" />}
                           {activity.type === "message" && <MessageCircle className="w-4 h-4 text-accent" />}
+                          {activity.type === "verification" && <Verified className="w-4 h-4 text-blue-500" />}
                         </div>
                       </div>
                     </div>
@@ -565,7 +568,9 @@ export default function DashboardPage() {
               <p className="text-sm text-muted-foreground mb-4">
                 Get unlimited swipes, see who likes you, and boost your profile visibility.
               </p>
-              <Button className="w-full rounded-full gradient-bg">Upgrade Now</Button>
+              <Link href="/dashboard/premium" className="w-full block">
+                <Button className="w-full rounded-full gradient-bg">Upgrade Now</Button>
+              </Link>
             </CardContent>
           </Card>
         </div>

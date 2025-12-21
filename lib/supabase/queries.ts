@@ -11,6 +11,7 @@ export async function getPosts(limit = 20, offset = 0) {
     .select(`
       id,
       content,
+      tags,
       media,
       likes_count,
       comments_count,
@@ -43,6 +44,7 @@ export async function getUserPosts(userId: string, limit = 20, offset = 0) {
     .select(`
       id,
       content,
+      tags,
       media,
       likes_count,
       comments_count,
@@ -70,6 +72,7 @@ export async function createPost(
   userId: string,
   content: string,
   media: any[] = [],
+  tags: string[] = [],
   locationName?: string,
   latitude?: number,
   longitude?: number
@@ -80,6 +83,7 @@ export async function createPost(
     .insert({
       user_id: userId,
       content,
+      tags: tags || [],
       media: media || [],
       location_name: locationName,
       latitude,

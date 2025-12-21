@@ -1,29 +1,62 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Users, Eye, Heart, MessageCircle, Globe, Smartphone, ArrowUp, ArrowDown, Download } from "lucide-react"
-import {
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  PieChart,
-  Pie,
-  Cell,
-  BarChart,
-  Bar,
-} from "recharts"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
+import { Users, Zap, MessageCircle, TrendingUp, ArrowUp, ArrowDown, Loader } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
+
+interface AnalyticsData {
+  totalUsers: number
+  activeUsers: number
+  totalPosts: number
+  totalComments: number
+  totalCoinsSpent: number
+  topCountries: Array<{ country: string; count: number }>
+}
+
+function StatCard({
+  title,
+  value,
+  change,
+  icon: Icon,
+  isPositive = true,
+}: {
+  title: string
+  value: string
+  change: string
+  icon: React.ComponentType<{ className?: string }>
+  isPositive?: boolean
+}) {
+  return (
+    <Card className="border-border/50">
+      <CardContent className="p-6">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground mb-2">{title}</p>
+            <p className="text-3xl font-bold">{value}</p>
+            <div className="flex items-center gap-1 mt-2">
+              {isPositive ? (
+                <ArrowUp className="w-4 h-4 text-green-500" />
+              ) : (
+                <ArrowDown className="w-4 h-4 text-red-500" />
+              )}
+              <span className={`text-sm ${isPositive ? "text-green-500" : "text-red-500"}`}>{change}</span>
+            </div>
+          </div>
+          <Icon className="w-10 h-10 text-muted-foreground opacity-50" />
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
 
 const overviewStats = [
   { label: "Total Users", value: "24,521", change: "+12.5%", up: true, icon: Users },
-  { label: "Daily Active Users", value: "8,432", change: "+5.2%", up: true, icon: Eye },
-  { label: "New Matches Today", value: "1,234", change: "+18.3%", up: true, icon: Heart },
-  { label: "Messages Sent", value: "45,678", change: "-2.1%", up: false, icon: MessageCircle },
+  { label: "Daily Active Users", value: "8,432", change: "+5.2%", up: true, icon: Zap },
+  { label: "Total Posts", value: "1,234", change: "+18.3%", up: true, icon: MessageCircle },
+  { label: "Revenue", value: "₦45.6k", change: "+22.1%", up: true, icon: TrendingUp },
 ]
 
 const userGrowthData = [
@@ -70,203 +103,259 @@ const ageData = [
 ]
 
 export default function AdminAnalyticsPage() {
+  const [analytics, setAnalytics] = useState<AnalyticsData>({
+    totalUsers: 0,
+    activeUsers: 0,
+    totalPosts: 0,
+    totalComments: 0,
+    totalCoinsSpent: 0,
+    topCountries: [],
+  })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchAnalytics() {
+      try {
+        const supabase = createClient()
+
+        // Fetch counts
+        const [usersRes, postsRes, commentsRes] = await Promise.all([
+          supabase.from("users").select("*", { count: "exact", head: true }),
+          supabase.from("posts").select("*", { count: "exact", head: true }),
+          supabase.from("comments").select("*", { count: "exact", head: true }),
+        ])
+
+        // Fetch active users (last 7 days)
+        const sevenDaysAgo = new Date()
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+
+        const { data: activeUsersData } = await supabase
+          .from("users")
+          .select("id", { count: "exact" })
+          .gte("last_sign_in_at", sevenDaysAgo.toISOString())
+
+        // Fetch top countries
+        const { data: countriesData } = await supabase.from("users").select("country")
+
+        const countryMap = new Map<string, number>()
+        countriesData?.forEach((p: any) => {
+          if (p.country) {
+            countryMap.set(p.country, (countryMap.get(p.country) || 0) + 1)
+          }
+        })
+
+        const topCountries = Array.from(countryMap.entries())
+          .map(([country, count]) => ({ country, count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 5)
+
+        // Fetch coins spent
+        const { data: transactions } = await supabase
+          .from("transactions")
+          .select("amount")
+          .eq("status", "completed")
+
+        const totalCoinsSpent = transactions?.reduce((sum: number, t: any) => sum + (t.amount || 0), 0) || 0
+
+        setAnalytics({
+          totalUsers: usersRes.count || 0,
+          activeUsers: activeUsersData?.length || 0,
+          totalPosts: postsRes.count || 0,
+          totalComments: commentsRes.count || 0,
+          totalCoinsSpent,
+          topCountries,
+        })
+      } catch (error) {
+        console.error("Error fetching analytics:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchAnalytics()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="p-4 md:p-6 lg:p-8">
+        <div className="flex items-center justify-center min-h-[500px]">
+          <Loader className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="p-4 md:p-6 lg:p-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold mb-2">Analytics Dashboard</h1>
-          <p className="text-muted-foreground">Comprehensive platform insights and metrics</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Select defaultValue="7d">
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Period" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="24h">Last 24 hours</SelectItem>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-              <SelectItem value="90d">Last 90 days</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" className="bg-transparent">
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
-        </div>
+      <div className="mb-8">
+        <h1 className="text-2xl md:text-3xl font-bold mb-2">Analytics & Insights</h1>
+        <p className="text-muted-foreground">Platform performance and user engagement metrics</p>
       </div>
 
-      {/* Overview Stats */}
+      {/* Main Stats */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {overviewStats.map((stat, i) => {
-          const Icon = stat.icon
-          return (
-            <Card key={i} className="border-border/50">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl gradient-bg flex items-center justify-center">
-                    <Icon className="w-6 h-6 text-white" />
-                  </div>
-                  <div className={`flex items-center gap-1 text-sm ${stat.up ? "text-green-500" : "text-red-500"}`}>
-                    {stat.up ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
-                    {stat.change}
-                  </div>
-                </div>
-                <p className="text-3xl font-bold">{stat.value}</p>
-                <p className="text-sm text-muted-foreground">{stat.label}</p>
-              </CardContent>
-            </Card>
-          )
-        })}
+        <StatCard
+          title="Total Users"
+          value={analytics.totalUsers.toLocaleString()}
+          change="12% from last month"
+          icon={Users}
+          isPositive={true}
+        />
+        <StatCard
+          title="Active Users (7d)"
+          value={analytics.activeUsers.toLocaleString()}
+          change="5% increase"
+          icon={Zap}
+          isPositive={true}
+        />
+        <StatCard
+          title="Total Posts"
+          value={analytics.totalPosts.toLocaleString()}
+          change="8% growth"
+          icon={MessageCircle}
+          isPositive={true}
+        />
+        <StatCard
+          title="Revenue"
+          value={`₦${(analytics.totalCoinsSpent / 1000).toFixed(1)}k`}
+          change="18% increase"
+          icon={TrendingUp}
+          isPositive={true}
+        />
       </div>
 
-      {/* Charts Row 1 */}
-      <div className="grid lg:grid-cols-2 gap-6 mb-6">
-        {/* User Growth */}
-        <Card className="border-border/50 overflow-hidden">
-          <CardHeader>
-            <CardTitle>User Growth</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="w-full p-6" style={{ height: "288px" }}>
-              <ResponsiveContainer width="100%" height={288}>
-                <AreaChart data={userGrowthData}>
-                  <defs>
-                    <linearGradient id="colorGrowth" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ff477e" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#ff477e" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
-                  <XAxis dataKey="month" stroke="#888" />
-                  <YAxis stroke="#888" />
-                  <Tooltip />
-                  <Area type="monotone" dataKey="users" stroke="#ff477e" fill="url(#colorGrowth)" strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Detailed Analytics */}
+      <Tabs defaultValue="overview" className="mb-8">
+        <TabsList className="bg-muted/50 p-1 rounded-full mb-6">
+          <TabsTrigger value="overview" className="rounded-full">
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="geography" className="rounded-full">
+            Geography
+          </TabsTrigger>
+          <TabsTrigger value="engagement" className="rounded-full">
+            Engagement
+          </TabsTrigger>
+        </TabsList>
 
-        {/* Engagement */}
-        <Card className="border-border/50 overflow-hidden">
-          <CardHeader>
-            <CardTitle>Weekly Engagement</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="w-full p-6" style={{ height: "288px" }}>
-              <ResponsiveContainer width="100%" height={288}>
-                <BarChart data={engagementData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
-                  <XAxis dataKey="day" stroke="#888" />
-                  <YAxis stroke="#888" />
-                  <Tooltip />
-                  <Bar dataKey="likes" fill="#ff477e" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="comments" fill="#ffaa42" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="shares" fill="#6a4cff" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Charts Row 2 */}
-      <div className="grid lg:grid-cols-3 gap-6 mb-6">
-        {/* Device Distribution */}
-        <Card className="border-border/50 overflow-hidden">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Smartphone className="w-5 h-5" />
-              Device Distribution
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="w-full p-6" style={{ height: "192px" }}>
-              <ResponsiveContainer width="100%" height={192}>
-                <PieChart>
-                  <Pie
-                    data={deviceData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {deviceData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex justify-center gap-4 mt-4">
-              {deviceData.map((item) => (
-                <div key={item.name} className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                  <span className="text-sm">
-                    {item.name}: {item.value}%
-                  </span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Demographics */}
-        <Card className="border-border/50 lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Age Demographics</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div style={{ height: "256px" }}>
-              <ResponsiveContainer width="100%" height={256}>
-                <BarChart data={ageData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
-                  <XAxis type="number" stroke="#888" />
-                  <YAxis dataKey="age" type="category" stroke="#888" />
-                  <Tooltip />
-                  <Bar dataKey="female" fill="#ff477e" radius={[0, 4, 4, 0]} name="Female" />
-                  <Bar dataKey="male" fill="#6a4cff" radius={[0, 4, 4, 0]} name="Male" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Geographic Distribution */}
-      <Card className="border-border/50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Globe className="w-5 h-5" />
-            Geographic Distribution
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {countryData.map((country) => (
-              <div key={country.country} className="flex items-center gap-4">
-                <div className="w-32 font-medium">{country.country}</div>
-                <div className="flex-1">
-                  <div className="h-4 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className="h-full gradient-bg rounded-full transition-all duration-500"
-                      style={{ width: `${country.percentage}%` }}
-                    />
+        <TabsContent value="overview" className="space-y-4">
+          <Card className="border-border/50">
+            <CardHeader>
+              <CardTitle>Key Metrics Summary</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between pb-4 border-b border-border">
+                  <div>
+                    <p className="font-medium">User Engagement Rate</p>
+                    <p className="text-sm text-muted-foreground">Active users vs total users</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold">
+                      {analytics.totalUsers > 0
+                        ? ((analytics.activeUsers / analytics.totalUsers) * 100).toFixed(1)
+                        : 0}
+                      %
+                    </p>
                   </div>
                 </div>
-                <div className="w-24 text-right">
-                  <span className="font-medium">{country.users.toLocaleString()}</span>
-                  <span className="text-muted-foreground ml-2">({country.percentage}%)</span>
+
+                <div className="flex items-center justify-between pb-4 border-b border-border">
+                  <div>
+                    <p className="font-medium">Avg Posts per User</p>
+                    <p className="text-sm text-muted-foreground">Total posts divided by users</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold">
+                      {analytics.totalUsers > 0 ? (analytics.totalPosts / analytics.totalUsers).toFixed(1) : 0}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Total Comments</p>
+                    <p className="text-sm text-muted-foreground">User interactions</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold">{analytics.totalComments.toLocaleString()}</p>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="geography">
+          <Card className="border-border/50">
+            <CardHeader>
+              <CardTitle>Top Countries</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {analytics.topCountries.length === 0 ? (
+                <p className="text-muted-foreground">No location data available</p>
+              ) : (
+                <div className="space-y-4">
+                  {analytics.topCountries.map((country, index) => (
+                    <div key={index} className="flex items-center justify-between pb-4 border-b border-border last:border-0">
+                      <div>
+                        <Badge variant="secondary">{index + 1}</Badge>
+                        <span className="ml-3 font-medium">{country.country}</span>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold">{country.count} users</p>
+                        <p className="text-sm text-muted-foreground">
+                          {((country.count / analytics.totalUsers) * 100).toFixed(1)}% of total
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="engagement">
+          <Card className="border-border/50">
+            <CardHeader>
+              <CardTitle>Engagement Metrics</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between pb-4 border-b border-border">
+                  <div>
+                    <p className="font-medium">Content Creation Rate</p>
+                    <p className="text-sm text-muted-foreground">Posts per active user</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold">
+                      {analytics.activeUsers > 0 ? (analytics.totalPosts / analytics.activeUsers).toFixed(2) : 0}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Platform Health Score</p>
+                    <p className="text-sm text-muted-foreground">Based on activity metrics</p>
+                  </div>
+                  <div className="text-right">
+                    <Badge className="bg-green-500">
+                      {(
+                        (analytics.activeUsers / analytics.totalUsers) *
+                        100 +
+                        (analytics.totalPosts / Math.max(analytics.totalUsers, 1)) * 10
+                      ).toFixed(1)}
+                      /100
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

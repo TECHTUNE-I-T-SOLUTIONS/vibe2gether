@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter, usePathname } from "next/navigation"
 import { signOut } from "next-auth/react"
 import { Loader2 } from "lucide-react"
 import {
@@ -17,14 +18,34 @@ import {
 interface LogoutConfirmationDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  isAdminLogout?: boolean
 }
 
-export function LogoutConfirmationDialog({ open, onOpenChange }: LogoutConfirmationDialogProps) {
+export function LogoutConfirmationDialog({ open, onOpenChange, isAdminLogout = false }: LogoutConfirmationDialogProps) {
   const [isLoading, setIsLoading] = useState(false)
+  const router = useRouter()
+  const pathname = usePathname()
 
   const handleLogout = async () => {
     setIsLoading(true)
-    await signOut({ callbackUrl: "/" })
+    
+    try {
+      if (isAdminLogout || pathname?.includes("/admin")) {
+        // Admin logout
+        const response = await fetch("/api/admin/auth/logout", { method: "POST" })
+        if (response.ok) {
+          router.push("/auth/login")
+        } else {
+          setIsLoading(false)
+        }
+      } else {
+        // Regular user logout (NextAuth)
+        await signOut({ callbackUrl: "/" })
+      }
+    } catch (error) {
+      console.error("Logout error:", error)
+      setIsLoading(false)
+    }
   }
 
   return (
