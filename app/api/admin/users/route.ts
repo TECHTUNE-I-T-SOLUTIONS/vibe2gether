@@ -63,10 +63,20 @@ export async function GET(request: NextRequest) {
       .select("user_id")
     const premiumUserIds = new Set(premiumSubs?.map((s: any) => s.user_id) ?? [])
 
-    // Enrich users with premium status
+    // Fetch user verifications
+    const { data: verifications } = await supabase
+      .from("user_verifications")
+      .select("user_id, status")
+    const verificationMap = new Map(
+      verifications?.map((v: any) => [v.user_id, v.status]) ?? []
+    )
+
+    // Enrich users with premium status and verification details
     const enrichedUsers = (users || []).map((user: any) => ({
       ...user,
       is_premium: premiumUserIds.has(user.id),
+      is_verified: verificationMap.get(user.id) === "approved",
+      verification_status: verificationMap.get(user.id) || null,
     }))
 
     // Get stats

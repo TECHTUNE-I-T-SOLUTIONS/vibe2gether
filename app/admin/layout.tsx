@@ -1,11 +1,11 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
 import { AdminSidebar } from "@/components/admin/sidebar"
 import { AdminHeader } from "@/components/admin/header"
-import { AdminMobileSidebar } from "@/components/admin/mobile-sidebar"
+import { AdminMobileBottomNav } from "@/components/admin/mobile-bottom-nav"
 import { LogoutConfirmationDialog } from "@/components/logout-confirmation-dialog"
 
 export default function AdminLayout({
@@ -17,10 +17,51 @@ export default function AdminLayout({
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
+  const [badges, setBadges] = useState({
+    reports: 0,
+    featured: 0,
+    notifications: 0,
+  })
 
   useEffect(() => {
     checkAdminAuth()
+    fetchBadges()
   }, [])
+
+  const fetchBadges = async () => {
+    try {
+      const [reportsRes, featuredRes, notificationsRes] = await Promise.all([
+        fetch("/api/admin/reports?limit=1"),
+        fetch("/api/admin/featured-requests?limit=1"),
+        fetch("/api/admin/notifications?limit=1"),
+      ])
+
+      const newBadges = {
+        reports: 0,
+        featured: 0,
+        notifications: 0,
+      }
+
+      if (reportsRes.ok) {
+        const data = await reportsRes.json()
+        newBadges.reports = data.count || 0
+      }
+
+      if (featuredRes.ok) {
+        const data = await featuredRes.json()
+        newBadges.featured = data.count || 0
+      }
+
+      if (notificationsRes.ok) {
+        const data = await notificationsRes.json()
+        newBadges.notifications = data.unreadCount || 0
+      }
+
+      setBadges(newBadges)
+    } catch (error) {
+      console.error("Failed to fetch badge counts:", error)
+    }
+  }
 
   const checkAdminAuth = async () => {
     try {
@@ -68,14 +109,17 @@ export default function AdminLayout({
           {/* Main content area */}
           <div className="flex-1 lg:ml-64 flex flex-col min-h-screen">
             <AdminHeader onLogoutClick={() => setShowLogoutDialog(true)} />
-            <main className="flex-1 pt-20 px-4 md:px-6 overflow-y-auto">{children}</main>
+            <main className="flex-1 pt-20 px-4 md:px-6 overflow-y-auto pb-24 lg:pb-0">{children}</main>
           </div>
         </div>
 
-        {/* Mobile Sidebar Footer - only visible on mobile */}
-        <div className="lg:hidden">
-          <AdminMobileSidebar />
-        </div>
+        {/* Mobile Bottom Navigation */}
+        <AdminMobileBottomNav
+          reportsBadge={badges.reports}
+          featuredBadge={badges.featured}
+          notificationsBadge={badges.notifications}
+        />
+
       </div>
 
       {/* Logout Confirmation Modal */}

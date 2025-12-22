@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { LanguageSwitcher } from "@/components/language-switcher"
 import { AdminSidebar } from "./sidebar"
+import { AdminMobileSidebar } from "./mobile-sidebar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -184,8 +185,8 @@ export function AdminHeader({ onLogoutClick }: AdminHeaderProps) {
               <Menu className="w-5 h-5" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="p-0 w-72">
-            <AdminSidebar />
+          <SheetContent side="left" className="p-0 w-72 flex flex-col gap-0">
+            <AdminMobileSidebar onLogoutClick={onLogoutClick} />
           </SheetContent>
         </Sheet>
 

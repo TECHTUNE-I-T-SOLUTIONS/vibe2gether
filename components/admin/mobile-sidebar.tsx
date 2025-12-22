@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { usePathname } from "next/navigation"
 import Link from "next/link"
+import Image from "next/image"
+import { usePathname } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n/context"
 import {
@@ -20,8 +21,13 @@ import {
   Shield,
   Settings,
   Bell,
+  LogOut,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { useState, useEffect } from "react"
+import { SheetClose } from "@/components/ui/sheet"
+import { LogoutConfirmationDialog } from "@/components/logout-confirmation-dialog"
 
 interface NavItem {
   icon: React.ElementType
@@ -30,7 +36,11 @@ interface NavItem {
   badge?: number
 }
 
-export function AdminMobileSidebar() {
+interface AdminMobileSidebarProps {
+  onLogoutClick?: () => void
+}
+
+export function AdminMobileSidebar({ onLogoutClick }: AdminMobileSidebarProps) {
   const pathname = usePathname()
   const { t } = useI18n()
   const [counts, setCounts] = useState<Record<string, number>>({
@@ -38,6 +48,7 @@ export function AdminMobileSidebar() {
     featured: 0,
     notifications: 0,
   })
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false)
 
   useEffect(() => {
     fetchCounts()
@@ -96,51 +107,97 @@ export function AdminMobileSidebar() {
     { icon: Bell, label: "notifications", href: "/admin/notifications", badge: counts.notifications },
   ]
 
+  const bottomItems: NavItem[] = [
+    { icon: Shield, label: "moderation", href: "/admin/moderation" },
+    { icon: Settings, label: "settings", href: "/admin/settings" },
+  ]
+
   const renderNavItem = (item: NavItem) => {
     const Icon = item.icon
-    const isActive = pathname === item.href
+    // Fixed: Only exact path or exact start match for /admin to avoid false positives
+    const isActive = pathname === item.href || (pathname.startsWith(item.href + "/") && item.href !== "/admin")
     const badge = item.badge || 0
 
     return (
-      <Link
-        key={item.href}
-        href={item.href}
-        className={cn(
-          "flex flex-col items-center justify-center gap-1 py-2 px-2 text-xs font-medium transition-colors whitespace-nowrap min-w-max relative",
-          isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
-        )}
-      >
-        <div className="relative">
-          <Icon className="w-5 h-5" />
+      <SheetClose asChild key={item.href}>
+        <Link
+          href={item.href}
+          className={cn(
+            "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
+            isActive
+              ? "text-sidebar-foreground bg-sidebar-accent"
+              : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50",
+          )}
+        >
+          <Icon className="w-5 h-5 flex-shrink-0" />
+          <span className="flex-1">{t(item.label)}</span>
           {badge > 0 && (
-            <Badge className="absolute -top-2 -right-2 h-5 min-w-5 flex items-center justify-center bg-destructive text-white text-xs p-0">
+            <Badge className="gradient-bg text-xs px-1.5 ml-auto">
               {badge > 99 ? "99+" : badge}
             </Badge>
           )}
-        </div>
-        <span>{t(item.label)}</span>
-      </Link>
+        </Link>
+      </SheetClose>
     )
   }
 
+  const handleLogout = () => {
+    setShowLogoutDialog(true)
+    if (onLogoutClick) {
+      onLogoutClick()
+    }
+  }
+
   return (
-    <nav className="bg-card border-t border-border p-0 overflow-x-auto">
-      <div className="flex gap-0 min-w-full">
-        {/* Main items */}
-        {mainItems.map(renderNavItem)}
-
-        {/* Divider */}
-        <div className="w-px bg-border mx-2" />
-
-        {/* Secondary items */}
-        {secondaryItems.map(renderNavItem)}
-
-        {/* Bottom items */}
-        {[
-          { icon: Shield, label: "moderation", href: "/admin/moderation" },
-          { icon: Settings, label: "settings", href: "/admin/settings" },
-        ].map(renderNavItem)}
+    <div className="flex flex-col h-full w-full bg-sidebar">
+      {/* Header with Logo and Close Button */}
+      <div className="p-4 border-b border-sidebar-border sticky top-0 bg-sidebar z-10">
+        <div className="flex items-center justify-between">
+          <Link href="/admin" className="flex items-center gap-2 flex-1">
+            <div className="relative w-10 h-10 rounded-full overflow-hidden">
+              <Image src="/v2g-logo.png" alt="Vibe2Gether Admin" fill className="object-cover" />
+            </div>
+            <div className="flex-1">
+              <span className="text-sm font-bold gradient-text">Admin Panel</span>
+            </div>
+          </Link>
+          <SheetClose asChild>
+            <Button size="icon" variant="ghost" className="rounded-full">
+              <span className="text-xl">&times;</span>
+            </Button>
+          </SheetClose>
+        </div>
       </div>
-    </nav>
+
+      {/* Navigation Sections */}
+      <nav className="flex-1 overflow-y-auto p-3 space-y-4">
+        {/* Main Items */}
+        <div className="space-y-1">
+          {mainItems.map(renderNavItem)}
+        </div>
+
+        {/* Secondary Items */}
+        <div className="space-y-1 border-t border-sidebar-border pt-3">
+          {secondaryItems.map(renderNavItem)}
+        </div>
+      </nav>
+
+      {/* Bottom Section - Sticky to bottom */}
+      <div className="p-3 border-t border-sidebar-border space-y-1 sticky bottom-0 bg-sidebar">
+        {bottomItems.map(renderNavItem)}
+
+        {/* Logout Button */}
+        <Button
+          variant="ghost"
+          className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
+          onClick={handleLogout}
+        >
+          <LogOut className="w-5 h-5 mr-3" />
+          {t("signOut")}
+        </Button>
+
+        <LogoutConfirmationDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog} isAdminLogout={true} />
+      </div>
+    </div>
   )
 }
