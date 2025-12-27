@@ -7,8 +7,17 @@ import { awardCoins } from "@/lib/coins"
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
+    console.log("Session user ID:", session?.user?.id, "Type:", typeof session?.user?.id)
+    
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // Validate that user_id is a valid UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(session.user.id)) {
+      console.error("Invalid user ID format:", session.user.id)
+      return NextResponse.json({ error: "Invalid user session" }, { status: 401 })
     }
 
     const { postId, content, parentId } = await request.json()
@@ -19,7 +28,7 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
 
     // Create comment
-    const { data: comment, error } = await supabase
+    const { data: comments, error: commentError } = await supabase
       .from("comments")
       .insert({
         user_id: session.user.id,
@@ -29,22 +38,42 @@ export async function POST(request: NextRequest) {
       })
       .select(
         `
-        *,
+        id,
+        content,
+        created_at,
         user:users(id, display_name, full_name, profile_picture)
       `,
       )
-      .single()
+      .limit(1)
 
-    if (error) {
-      throw error
+    if (commentError) {
+      console.error("Comment creation error:", commentError)
+      throw commentError
     }
 
-    // Increment comments count
-    await supabase.rpc("increment_comments", { post_id: postId })
+    const comment = comments?.[0]
+    if (!comment) {
+      throw new Error("Failed to create comment")
+    }
+
+    // Wait a moment for trigger to fire, then fetch actual count from posts table
+    await new Promise(resolve => setTimeout(resolve, 100))
+    const { data: postData, error: postDataError } = await supabase
+      .from("posts")
+      .select("comments_count")
+      .eq("id", postId)
+      .limit(1)
+
+    const commentsCount = postData?.[0]?.comments_count || 0
 
     // Get post owner and award coins
-    const { data: post } = await supabase.from("posts").select("user_id").eq("id", postId).single()
+    const { data: posts, error: postError } = await supabase
+      .from("posts")
+      .select("user_id")
+      .eq("id", postId)
+      .limit(1)
 
+    const post = posts?.[0]
     if (post && post.user_id !== session.user.id) {
       await awardCoins(post.user_id, "comment_received", postId, "post")
 
@@ -61,7 +90,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    return NextResponse.json({ comment })
+    return NextResponse.json({ comment, commentsCount: commentsCount || 0 })
   } catch (error) {
     console.error("Comment error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

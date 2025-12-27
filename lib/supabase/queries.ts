@@ -23,6 +23,8 @@ export async function getPosts(limit = 20, offset = 0) {
       is_public,
       allow_comments,
       location_name,
+      latitude,
+      longitude,
       user:users(
         id,
         display_name,
@@ -55,10 +57,14 @@ export async function getUserPosts(userId: string, limit = 20, offset = 0) {
       user_id,
       is_public,
       allow_comments,
+      location_name,
+      latitude,
+      longitude,
       user:users(
         id,
         display_name,
-        profile_picture
+        profile_picture,
+        bio
       )
     `)
     .eq('user_id', userId)
@@ -75,7 +81,9 @@ export async function createPost(
   tags: string[] = [],
   locationName?: string,
   latitude?: number,
-  longitude?: number
+  longitude?: number,
+  isPublic: boolean = true,
+  allowComments: boolean = true
 ) {
   const supabase = createClient()
   const { data, error } = await supabase
@@ -88,10 +96,20 @@ export async function createPost(
       location_name: locationName,
       latitude,
       longitude,
-      is_public: true,
-      allow_comments: true,
+      is_public: isPublic,
+      allow_comments: allowComments,
     })
     .select()
+
+  return { data, error }
+}
+
+export async function deletePost(postId: string) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('posts')
+    .delete()
+    .eq('id', postId)
 
   return { data, error }
 }
@@ -1369,6 +1387,179 @@ export async function updatePrivacySettings(userId: string, settings: any) {
     .upsert({ user_id: userId, ...settings, updated_at: new Date().toISOString() })
     .select()
     .single()
+
+  return { data, error }
+}
+
+// ============================================================
+// POST INTERACTIONS - LIKES, COMMENTS, SAVES
+// ============================================================
+
+export async function getPostComments(postId: string, limit = 10, offset = 0) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('comments')
+    .select(`
+      id,
+      content,
+      created_at,
+      user:users(
+        id,
+        display_name,
+        profile_picture,
+        full_name
+      )
+    `)
+    .eq('post_id', postId)
+    .is('parent_id', null)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1)
+
+  return { data, error }
+}
+
+export async function createComment(postId: string, userId: string, content: string) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('comments')
+    .insert({
+      post_id: postId,
+      user_id: userId,
+      content,
+    })
+    .select(`
+      id,
+      content,
+      created_at,
+      user:users(
+        id,
+        display_name,
+        profile_picture,
+        full_name
+      )
+    `)
+    .limit(1)
+
+  if (error) return { data: null, error }
+  
+  return { data: data?.[0] || null, error: null }
+}
+
+export async function likePost(userId: string, postId: string) {
+  const supabase = createClient()
+  
+  // Check if already liked
+  const { data: existing, error: checkError } = await supabase
+    .from('likes')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('post_id', postId)
+    .limit(1)
+
+  if (checkError && checkError.code !== 'PGRST116') {
+    return { liked: false, error: checkError }
+  }
+
+  if (existing && existing.length > 0) {
+    // Unlike
+    const { error } = await supabase
+      .from('likes')
+      .delete()
+      .eq('user_id', userId)
+      .eq('post_id', postId)
+    return { liked: false, error }
+  } else {
+    // Like
+    const { error } = await supabase
+      .from('likes')
+      .insert({ user_id: userId, post_id: postId })
+    return { liked: true, error }
+  }
+}
+
+export async function checkIfUserLikedPost(userId: string, postId: string) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('likes')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('post_id', postId)
+    .limit(1)
+
+  if (error && error.code !== 'PGRST116') {
+    return { liked: false, error }
+  }
+  
+  return { liked: data && data.length > 0, error: null }
+}
+
+export async function checkIfUserSavedPost(userId: string, postId: string) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('saved_posts')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('post_id', postId)
+    .limit(1)
+
+  if (error && error.code !== 'PGRST116') {
+    return { saved: false, error }
+  }
+  
+  return { saved: data && data.length > 0, error: null }
+}
+
+export async function getLikesCount(postId: string) {
+  const supabase = createClient()
+  const { count, error } = await supabase
+    .from('likes')
+    .select('id', { count: 'exact', head: true })
+    .eq('post_id', postId)
+
+  return { count: count || 0, error }
+}
+
+export async function getCommentsCount(postId: string) {
+  const supabase = createClient()
+  const { count, error } = await supabase
+    .from('comments')
+    .select('id', { count: 'exact', head: true })
+    .eq('post_id', postId)
+    .eq('parent_id', null)
+
+  return { count: count || 0, error }
+}
+
+export async function getSavesCount(postId: string) {
+  const supabase = createClient()
+  const { count, error } = await supabase
+    .from('saved_posts')
+    .select('id', { count: 'exact', head: true })
+    .eq('post_id', postId)
+
+  return { count: count || 0, error }
+}
+
+export async function getViewsCount(postId: string) {
+  const supabase = createClient()
+  const { count, error } = await supabase
+    .from('post_views')
+    .select('id', { count: 'exact', head: true })
+    .eq('post_id', postId)
+
+  return { count: count || 0, error }
+}
+
+export async function recordPostView(postId: string, userId?: string, viewerIp?: string) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('post_views')
+    .insert({
+      post_id: postId,
+      user_id: userId,
+      viewer_ip: viewerIp,
+    })
+    .select()
 
   return { data, error }
 }

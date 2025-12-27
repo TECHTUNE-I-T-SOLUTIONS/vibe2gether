@@ -53,87 +53,99 @@ export async function uploadCoverPicture(userId: string, file: File) {
 }
 
 export async function uploadPostMedia(userId: string, file: File) {
-  const supabase = createClient()
-  const fileExt = file.name.split('.').pop()
-  const fileName = `${userId}-post-${Date.now()}.${fileExt}`
+  try {
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("userId", userId)
+    formData.append("bucket", "posts")
 
-  const { data, error } = await supabase.storage
-    .from('post-media')
-    .upload(`public/${userId}/${fileName}`, file, {
-      cacheControl: '3600',
+    const response = await fetch("/api/upload-file", {
+      method: "POST",
+      body: formData,
     })
 
-  if (error) return { url: null, error }
+    const data = await response.json()
 
-  // Get public URL
-  const { data: publicData } = supabase.storage
-    .from('post-media')
-    .getPublicUrl(`public/${userId}/${fileName}`)
+    if (!response.ok) {
+      return { url: null, error: data.error || "Upload failed" }
+    }
 
-  return { url: publicData.publicUrl, error: null }
+    return { url: data.url, error: null }
+  } catch (error) {
+    return { url: null, error: error instanceof Error ? error.message : "Upload failed" }
+  }
 }
 
 export async function uploadMarketplaceMedia(userId: string, file: File) {
-  const supabase = createClient()
-  const fileExt = file.name.split('.').pop()
-  const fileName = `${userId}-marketplace-${Date.now()}.${fileExt}`
+  try {
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("userId", userId)
+    formData.append("bucket", "marketplace-images")
 
-  const { data, error } = await supabase.storage
-    .from('marketplace-media')
-    .upload(`public/${userId}/${fileName}`, file, {
-      cacheControl: '3600',
+    const response = await fetch("/api/upload-file", {
+      method: "POST",
+      body: formData,
     })
 
-  if (error) return { url: null, error }
+    const data = await response.json()
 
-  // Get public URL
-  const { data: publicData } = supabase.storage
-    .from('marketplace-media')
-    .getPublicUrl(`public/${userId}/${fileName}`)
+    if (!response.ok) {
+      return { url: null, error: data.error || "Upload failed" }
+    }
 
-  return { url: publicData.publicUrl, error: null }
+    return { url: data.url, error: null }
+  } catch (error) {
+    return { url: null, error: error instanceof Error ? error.message : "Upload failed" }
+  }
 }
 
 export async function uploadEventMedia(userId: string, file: File) {
-  const supabase = createClient()
-  const fileExt = file.name.split('.').pop()
-  const fileName = `${userId}-event-${Date.now()}.${fileExt}`
+  try {
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("userId", userId)
+    formData.append("bucket", "event-images")
 
-  const { data, error } = await supabase.storage
-    .from('event-media')
-    .upload(`public/${userId}/${fileName}`, file, {
-      cacheControl: '3600',
+    const response = await fetch("/api/upload-file", {
+      method: "POST",
+      body: formData,
     })
 
-  if (error) return { url: null, error }
+    const data = await response.json()
 
-  // Get public URL
-  const { data: publicData } = supabase.storage
-    .from('event-media')
-    .getPublicUrl(`public/${userId}/${fileName}`)
+    if (!response.ok) {
+      return { url: null, error: data.error || "Upload failed" }
+    }
 
-  return { url: publicData.publicUrl, error: null }
+    return { url: data.url, error: null }
+  } catch (error) {
+    return { url: null, error: error instanceof Error ? error.message : "Upload failed" }
+  }
 }
 
 export async function uploadBlogThumbnail(userId: string, file: File) {
-  const supabase = createClient()
-  const fileExt = file.name.split('.').pop()
-  const fileName = `${userId}-blog-thumbnail-${Date.now()}.${fileExt}`
+  try {
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("userId", userId)
+    formData.append("bucket", "blog-images")
 
-  const { data, error } = await supabase.storage
-    .from('blog-thumbnails')
-    .upload(`public/${userId}/${fileName}`, file, {
-      cacheControl: '3600',
+    const response = await fetch("/api/upload-file", {
+      method: "POST",
+      body: formData,
     })
 
-  if (error) return { url: null, error }
+    const data = await response.json()
 
-  // Get public URL
-  const { data: publicData } = supabase.storage
-    .from('blog-thumbnails')
-    .getPublicUrl(`public/${userId}/${fileName}`)
+    if (!response.ok) {
+      return { url: null, error: data.error || "Upload failed" }
+    }
 
-  return { url: publicData.publicUrl, error: null }
+    return { url: data.url, error: null }
+  } catch (error) {
+    return { url: null, error: error instanceof Error ? error.message : "Upload failed" }
+  }
 }
 
 export async function deleteFile(bucket: string, path: string) {

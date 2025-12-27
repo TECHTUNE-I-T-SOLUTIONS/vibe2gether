@@ -94,33 +94,62 @@ export const authOptions: NextAuthOptions = {
 
         if (!existingUser) {
           // Create new user
-          const { error } = await supabase.from("users").insert({
-            email: user.email?.toLowerCase(),
-            full_name: user.name || "",
-            display_name: user.name || "",
-            profile_picture: user.image || "",
-            is_verified: true,
-            email_verified_at: new Date().toISOString(),
-            last_login_at: new Date().toISOString(),
-            password_hash: await bcrypt.hash(Math.random().toString(36), 10), // Random password for OAuth users
-            coins_balance: 50, // Welcome bonus
-            total_coins_earned: 50,
-          })
+          const { data: newUsers, error } = await supabase
+            .from("users")
+            .insert({
+              email: user.email?.toLowerCase(),
+              full_name: user.name || "",
+              display_name: user.name || "",
+              profile_picture: user.image || "",
+              is_verified: true,
+              email_verified_at: new Date().toISOString(),
+              last_login_at: new Date().toISOString(),
+              password_hash: await bcrypt.hash(Math.random().toString(36), 10), // Random password for OAuth users
+              coins_balance: 50, // Welcome bonus
+              total_coins_earned: 50,
+            })
+            .select()
 
           if (error) {
             console.error("Error creating OAuth user:", error)
             return false
           }
+
+          // Store the database UUID in the user object for session
+          if (newUsers && newUsers.length > 0) {
+            user.id = newUsers[0].id
+          }
         } else {
-          // Update last login for existing user
+          // Update last login and store database UUID
           await supabase.from("users").update({ last_login_at: new Date().toISOString() }).eq("id", existingUser.id)
+          user.id = existingUser.id
         }
       }
       return true
     },
     async jwt({ token, user, trigger, session }) {
+      // When user first logs in (credentials or OAuth)
       if (user) {
-        token.id = user.id
+        // If user.id looks like a Google ID (all numbers), query database for UUID
+        if (/^\d+$/.test(user.id as string)) {
+          const supabase = await createClient()
+          const { data: dbUsers, error } = await supabase
+            .from("users")
+            .select("id")
+            .eq("email", user.email)
+            .limit(1)
+
+          if (!error && dbUsers?.[0]) {
+            token.id = dbUsers[0].id
+          } else {
+            token.id = user.id
+          }
+        } else {
+          // Already a UUID, use it directly
+          token.id = user.id
+        }
+
+        token.email = user.email
         token.isVerified = user.isVerified
         token.isPremium = user.isPremium
         token.isAdmin = user.isAdmin

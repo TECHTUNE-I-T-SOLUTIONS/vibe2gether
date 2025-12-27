@@ -32,7 +32,7 @@ export function CreatePost() {
     <div className="border-b border-border p-4 bg-card">
       <div className="flex gap-3">
         <Avatar className="w-10 h-10 ring-2 ring-primary/20">
-          <AvatarImage src="/diverse-user-avatars.png" />
+          <AvatarImage src="/man-avatar-happy.jpg" />
           <AvatarFallback>U</AvatarFallback>
         </Avatar>
 

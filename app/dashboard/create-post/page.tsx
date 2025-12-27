@@ -6,10 +6,13 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import { uploadPostMedia } from "@/lib/supabase/storage"
 import { createPost } from "@/lib/supabase/queries"
 import { Card, CardContent } from "@/components/ui/card"
 import { useUserProfile } from "@/hooks/use-user-profile"
+import { LocationPicker } from "@/components/location-picker"
 
 export default function CreatePostPage() {
   const { user } = useUserProfile()
@@ -18,6 +21,13 @@ export default function CreatePostPage() {
   const [files, setFiles] = useState<File[]>([])
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState("")
+  const [location, setLocation] = useState<{
+    name: string
+    latitude: number
+    longitude: number
+  } | null>(null)
+  const [isPublic, setIsPublic] = useState(true)
+  const [allowComments, setAllowComments] = useState(true)
   const [loading, setLoading] = useState(false)
 
   const handleAddTag = () => {
@@ -35,6 +45,7 @@ export default function CreatePostPage() {
 
   const handleSubmit = async () => {
     if (!user) return alert('Please sign in to post')
+    if (!content.trim()) return alert('Please add some content')
     setLoading(true)
     try {
       const mediaUrls: any[] = []
@@ -44,7 +55,17 @@ export default function CreatePostPage() {
         mediaUrls.push({ url })
       }
 
-      const { data, error } = await createPost(user.id, content, mediaUrls, tags)
+      const { data, error } = await createPost(
+        user.id,
+        content,
+        mediaUrls,
+        tags,
+        location?.name,
+        location?.latitude,
+        location?.longitude,
+        isPublic,
+        allowComments
+      )
       if (error) throw error
 
       router.push('/dashboard/feed')
@@ -57,44 +78,134 @@ export default function CreatePostPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto">
+    <div className="p-4 md:p-6 max-w-3xl mx-auto">
       <Card className="border-border/50 mb-6">
-        <CardContent>
-          <div>
-            <Label>What's on your mind?</Label>
-            <textarea value={content} onChange={(e) => setContent(e.target.value)} className="w-full min-h-[120px] mt-1 p-3 rounded-md border" />
+        <CardContent className="pt-6">
+          {/* Content Section */}
+          <div className="space-y-4 mb-6">
+            <div>
+              <Label htmlFor="content" className="text-base font-semibold">What's on your mind?</Label>
+              <Textarea
+                id="content"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="Share your thoughts, experiences, or stories..."
+                className="w-full min-h-[120px] mt-2 rounded-lg border border-border/50"
+              />
+              <p className="text-xs text-muted-foreground mt-1">{content.length} characters</p>
+            </div>
           </div>
 
-          <div className="mt-4">
-            <Label>Media</Label>
-            <input type="file" accept="image/*,video/*" multiple onChange={handleFiles} className="mt-1" />
-            <div className="mt-3 flex gap-2 flex-wrap">
-              {files.map((f, i) => (
-                <div key={i} className="relative w-24 h-24 rounded-md overflow-hidden bg-muted">
-                  <Image src={URL.createObjectURL(f)} alt={f.name} fill className="object-cover" />
+          {/* Media Section */}
+          <div className="space-y-4 mb-6">
+            <div>
+              <Label htmlFor="media" className="text-base font-semibold">Media (up to 6 files)</Label>
+              <input
+                id="media"
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                onChange={handleFiles}
+                className="mt-2 w-full p-2 border border-border/50 rounded-lg cursor-pointer"
+              />
+              {files.length > 0 && (
+                <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {files.map((f, i) => (
+                    <div key={i} className="relative w-full aspect-square rounded-lg overflow-hidden bg-muted border border-border/50">
+                      <Image src={URL.createObjectURL(f)} alt={f.name} fill className="object-cover" />
+                      <button
+                        onClick={() => setFiles(prev => prev.filter((_, idx) => idx !== i))}
+                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
-          <div className="mt-4">
-            <Label>Tags</Label>
-            <div className="flex gap-2 mt-2">
-              <Input value={tagInput} onChange={(e) => setTagInput(e.target.value)} placeholder="Add tag and press Enter" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag() } }} />
-              <Button onClick={handleAddTag}>Add</Button>
-            </div>
-            <div className="mt-2 flex gap-2 flex-wrap">
-              {tags.map((t, i) => (
-                <span key={i} className="px-3 py-1 rounded-full bg-muted text-sm">#{t}</span>
-              ))}
+          {/* Location Section */}
+          <div className="space-y-4 mb-6">
+            <LocationPicker
+              currentLocation={location}
+              onLocationSelect={(selectedLocation) => setLocation(selectedLocation)}
+            />
+          </div>
+
+          {/* Tags Section */}
+          <div className="space-y-4 mb-6">
+            <div>
+              <Label htmlFor="tags" className="text-base font-semibold">Tags</Label>
+              <div className="flex gap-2 mt-2">
+                <Input
+                  id="tags"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  placeholder="Add tag and press Enter"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleAddTag()
+                    }
+                  }}
+                />
+                <Button onClick={handleAddTag} variant="outline">Add</Button>
+              </div>
+              {tags.length > 0 && (
+                <div className="mt-3 flex gap-2 flex-wrap">
+                  {tags.map((t, i) => (
+                    <div key={i} className="px-3 py-1 rounded-full bg-muted text-sm flex items-center gap-2">
+                      #{t}
+                      <button
+                        onClick={() => setTags(prev => prev.filter((_, idx) => idx !== i))}
+                        className="text-xs hover:text-red-500"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="mt-6 flex items-center gap-3">
-            <Button className="rounded-full gradient-bg" onClick={handleSubmit} disabled={loading}>
+          {/* Settings Section */}
+          <div className="space-y-4 mb-6 p-4 rounded-lg bg-muted/30 border border-border/50">
+            <Label className="text-base font-semibold">Post Settings</Label>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="isPublic"
+                  checked={isPublic}
+                  onCheckedChange={(checked) => setIsPublic(checked as boolean)}
+                />
+                <Label htmlFor="isPublic" className="text-sm cursor-pointer">Make this post public</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="allowComments"
+                  checked={allowComments}
+                  onCheckedChange={(checked) => setAllowComments(checked as boolean)}
+                />
+                <Label htmlFor="allowComments" className="text-sm cursor-pointer">Allow comments on this post</Label>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3 pt-4 border-t border-border/50">
+            <Button
+              className="rounded-full gradient-bg"
+              onClick={handleSubmit}
+              disabled={loading || !content.trim()}
+            >
               {loading ? 'Posting...' : 'Post'}
             </Button>
-            <Button variant="outline" onClick={() => router.push('/dashboard/feed')}>Cancel</Button>
+            <Button variant="outline" onClick={() => router.push('/dashboard/feed')}>
+              Cancel
+            </Button>
           </div>
         </CardContent>
       </Card>

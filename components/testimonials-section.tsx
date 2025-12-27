@@ -72,7 +72,7 @@ export function TestimonialsSection() {
         {/* Header */}
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
-            {t("loveStories")} <span className="gradient-text">{t("ourCommunity")}</span>
+            {t("Stories from")} <span className="gradient-text">{t("ourCommunity")}</span>
           </h2>
           <p className="text-lg text-foreground/70 dark:text-foreground/75 max-w-2xl mx-auto">
             {t("testimonialDescription")}

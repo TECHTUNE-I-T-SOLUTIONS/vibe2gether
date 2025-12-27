@@ -224,7 +224,7 @@ export function DashboardHeader() {
           {/* Profile */}
           <Link href="/dashboard/profile">
             <Avatar className="w-9 h-9 ring-2 ring-primary/20 cursor-pointer hover:ring-primary transition-all">
-              <AvatarImage src={user?.profile_picture || "/diverse-user-avatars.png"} />
+              <AvatarImage src={user?.profile_picture || "/man-avatar-happy.jpg"} />
               <AvatarFallback>{user?.display_name?.substring(0, 2).toUpperCase() || "U"}</AvatarFallback>
             </Avatar>
           </Link>
