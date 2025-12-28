@@ -48,8 +48,8 @@ const mainItems: SidebarItem[] = [
 
 const secondaryItems: SidebarItem[] = [
   { icon: Wallet, label: "wallet", href: "/dashboard/wallet" },
-  { icon: ShoppingBag, label: "marketplace", href: "/marketplace" },
-  { icon: Calendar, label: "events", href: "/events" },
+  { icon: ShoppingBag, label: "marketplace", href: "/dashboard/marketplace/manage" },
+  { icon: Calendar, label: "events", href: "/dashboard/events/manage" },
   { icon: Bookmark, label: "saved", href: "/dashboard/saved" },
 ]
 
@@ -164,7 +164,10 @@ export function MobileSidebar() {
         <div className="space-y-1">
           {mainItems.map((item) => {
             const Icon = item.icon
-            const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+            // For dashboard, only match exact path or direct children
+            const isActive = item.href === "/dashboard" 
+              ? pathname === "/dashboard"
+              : pathname === item.href || pathname.startsWith(item.href + "/")
             // Add dynamic badges
             const badge = 
               item.href === "/dashboard/messages" ? messageBadge :

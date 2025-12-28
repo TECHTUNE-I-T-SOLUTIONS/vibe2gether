@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -36,6 +38,8 @@ import {
 
 export default function DashboardPage() {
   const { t } = useI18n()
+  const { data: session } = useSession()
+  const router = useRouter()
   const { user: profileUser, loading: profileLoading, refetch } = useUserProfile()
   const [stats, setStats] = useState([])
   const [recentActivity, setRecentActivity] = useState([])
@@ -53,7 +57,23 @@ export default function DashboardPage() {
   const coverPictureInputRef = useRef<HTMLInputElement>(null)
   const profilePictureInputRef = useRef<HTMLInputElement>(null)
 
+  // Check authentication
   useEffect(() => {
+    if (session === undefined) {
+      // Session is still loading
+      return
+    }
+
+    if (!session?.user?.id) {
+      // Not logged in, redirect to login
+      router.push("/login")
+      return
+    }
+  }, [session, router])
+
+  useEffect(() => {
+    if (!session?.user?.id) return
+
     async function fetchDashboardData() {
       try {
         setLoading(true)

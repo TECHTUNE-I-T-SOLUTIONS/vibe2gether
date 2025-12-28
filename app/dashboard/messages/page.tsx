@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { Search, Phone, Video, MoreVertical, Send, Smile, ImagePlus, Mic, Loader2, MessageCircle, UserPlus, MessageSquare, MapPin, Users, Plus, X, ChevronLeft, ChevronRight, ArrowLeft, Flag, User, Pause, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,7 +16,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useToast } from "@/hooks/use-toast"
 import { createClient } from "@/lib/supabase/client"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 
 const EMOJIS = [
   "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣",
@@ -69,6 +70,7 @@ interface User {
 }
 
 export default function MessagesPage() {
+  const { data: session } = useSession()
   const router = useRouter()
   const { t } = useI18n()
   const { toast } = useToast()
@@ -97,6 +99,16 @@ export default function MessagesPage() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
+
+  // Check authentication
+  useEffect(() => {
+    if (session === undefined) return
+    if (!session?.user?.id) {
+      router.push("/login")
+    } else {
+      setCurrentUserId(session.user.id)
+    }
+  }, [session, router])
   const [audioPreview, setAudioPreview] = useState<string | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)

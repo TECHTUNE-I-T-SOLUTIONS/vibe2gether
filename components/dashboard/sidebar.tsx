@@ -51,8 +51,8 @@ const mainItems: SidebarItem[] = [
 
 const secondaryItems: SidebarItem[] = [
   { icon: Wallet, label: "wallet", href: "/dashboard/wallet" },
-  { icon: ShoppingBag, label: "marketplace", href: "/marketplace" },
-  { icon: Calendar, label: "events", href: "/events" },
+  { icon: ShoppingBag, label: "marketplace", href: "/dashboard/marketplace/manage" },
+  { icon: Calendar, label: "events", href: "/dashboard/events/manage" },
   { icon: Bookmark, label: "saved", href: "/dashboard/saved" },
 ]
 
@@ -172,7 +172,11 @@ function SidebarContent() {
         <div className="space-y-1">
           {mainItems.map((item) => {
             const Icon = item.icon
-            const isActive = pathname === item.href
+            // For dashboard home, only match exact path
+            // For other routes, match exact or sub-routes
+            const isActive = item.href === "/dashboard" 
+              ? pathname === "/dashboard"
+              : pathname === item.href || pathname.startsWith(item.href + "/")
             // Add dynamic badges
             const badge = 
               item.href === "/dashboard/messages" ? messageBadge :
@@ -206,7 +210,8 @@ function SidebarContent() {
         <div className="pt-4 mt-4 border-t border-sidebar-border space-y-1">
           {secondaryItems.map((item) => {
             const Icon = item.icon
-            const isActive = pathname === item.href
+            // For secondary items, check for exact or sub-route match
+            const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
             return (
               <Link
                 key={item.href}

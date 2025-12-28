@@ -1,0 +1,841 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Checkbox } from "@/components/ui/checkbox"
+import { useToast } from "@/hooks/use-toast"
+import Image from "next/image"
+import { Loader2, Plus, Upload, Calendar, Clock, MapPin, Users, Trash2, LogOut } from "lucide-react"
+import { useUserProfile } from "@/hooks/use-user-profile"
+import { createClient } from "@/lib/supabase/client"
+
+const CATEGORIES = [
+  "Entertainment",
+  "Music & Concerts",
+  "Sports",
+  "Food & Drink",
+  "Networking",
+  "Educational",
+  "Conference",
+  "Art & Culture",
+  "Other",
+]
+
+export default function DashboardEventsManagePage() {
+  const { data: session } = useSession()
+  const router = useRouter()
+  const { user } = useUserProfile()
+  const { toast } = useToast()
+  const [activeTab, setActiveTab] = useState<"my-events" | "registered" | "all">("my-events")
+  const [events, setEvents] = useState<any[]>([])
+  const [registrations, setRegistrations] = useState<any[]>([])
+  const [allEvents, setAllEvents] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    category: "",
+    eventDate: "",
+    eventEndDate: "",
+    location: "",
+    capacity: "",
+    isFree: true,
+    ticketPrice: "",
+    organizerName: "",
+    organizerContact: "",
+    tags: "",
+  })
+  const [thumbnail, setThumbnail] = useState<File | null>(null)
+
+  const supabase = createClient()
+  const isAdmin = user?.is_admin === true
+
+  // Check authentication and redirect if not logged in
+  useEffect(() => {
+    if (session === undefined) {
+      // Session is still loading
+      return
+    }
+
+    if (!session?.user?.id) {
+      // Not logged in, redirect to login
+      router.push("/login")
+      return
+    }
+
+    // User is authenticated, proceed with fetching data
+    fetchUserEvents()
+  }, [session])
+
+  // Fetch based on active tab
+  useEffect(() => {
+    if (!session?.user?.id) return
+
+    if (activeTab === "registered") {
+      fetchRegisteredEvents()
+    } else if (activeTab === "all") {
+      fetchAllEvents()
+    }
+  }, [activeTab, session?.user?.id])
+
+  async function fetchUserEvents() {
+    try {
+      setLoading(true)
+      if (!session?.user?.id) {
+        setEvents([])
+        return
+      }
+      const { data, error } = await supabase
+        .from("events")
+        .select("*")
+        .eq("created_by", session.user.id)
+        .order("event_date", { ascending: true })
+
+      if (error) {
+        console.error("Error fetching events:", error.message || error)
+        throw error
+      }
+      setEvents(data || [])
+    } catch (error: any) {
+      console.error("Error fetching events:", error?.message || JSON.stringify(error) || "Unknown error")
+      toast({ title: "Error", description: "Failed to load events", variant: "destructive" })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function fetchRegisteredEvents() {
+    try {
+      if (!session?.user?.id) {
+        setRegistrations([])
+        return
+      }
+      const { data, error } = await supabase
+        .from("event_registrations")
+        .select(`
+          *,
+          event:events(*)
+        `)
+        .eq("user_id", session.user.id)
+        .order("registered_at", { ascending: false })
+
+      if (error) {
+        console.error("Error fetching registrations:", error.message || error)
+        throw error
+      }
+      setRegistrations(data || [])
+    } catch (error: any) {
+      console.error("Error fetching registrations:", error?.message || JSON.stringify(error) || "Unknown error")
+      toast({ title: "Error", description: "Failed to load registrations", variant: "destructive" })
+    }
+  }
+
+  async function fetchAllEvents() {
+    try {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from("events")
+        .select("*, users:created_by(display_name, profile_picture, id)")
+        .eq("status", "upcoming")
+        .order("event_date", { ascending: true })
+
+      if (error) {
+        console.error("Error fetching all events:", error.message || error)
+        throw error
+      }
+      setAllEvents(data || [])
+    } catch (error: any) {
+      console.error("Error fetching all events:", error?.message || JSON.stringify(error) || "Unknown error")
+      toast({ title: "Error", description: "Failed to load events", variant: "destructive" })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleThumbnailUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast({ title: "Error", description: "File size must be less than 5MB", variant: "destructive" })
+        return
+      }
+      setThumbnail(file)
+    }
+  }
+
+  async function uploadThumbnail(eventId: string): Promise<string | null> {
+    if (!thumbnail) return null
+
+    try {
+      const fileExt = thumbnail.name.split(".").pop()
+      const fileName = `${eventId}/thumbnail.${fileExt}`
+
+      const { error: uploadError } = await supabase.storage
+        .from("event-images")
+        .upload(fileName, thumbnail)
+
+      if (uploadError) throw uploadError
+
+      const { data } = supabase.storage.from("event-images").getPublicUrl(fileName)
+      return data.publicUrl
+    } catch (error) {
+      console.error("Error uploading thumbnail:", error)
+      toast({ title: "Error", description: "Failed to upload thumbnail", variant: "destructive" })
+      return null
+    }
+  }
+
+  async function handleCreateEvent(e: React.FormEvent) {
+    e.preventDefault()
+
+    if (!formData.title || !formData.category || !formData.eventDate) {
+      toast({ title: "Error", description: "Please fill in all required fields", variant: "destructive" })
+      return
+    }
+
+    if (!session?.user?.id) {
+      toast({ title: "Error", description: "You must be logged in", variant: "destructive" })
+      return
+    }
+
+    try {
+      setUploading(true)
+
+      // Create event
+      const { data: newEvent, error: createError } = await supabase
+        .from("events")
+        .insert({
+          created_by: session.user.id,
+          title: formData.title,
+          description: formData.description,
+          category: formData.category,
+          event_date: new Date(formData.eventDate).toISOString(),
+          event_end_date: formData.eventEndDate ? new Date(formData.eventEndDate).toISOString() : null,
+          location_name: formData.location,
+          capacity: formData.capacity ? parseInt(formData.capacity) : null,
+          is_free: formData.isFree,
+          ticket_price: !formData.isFree ? parseFloat(formData.ticketPrice) : null,
+          organizer_name: formData.organizerName,
+          organizer_contact: formData.organizerContact,
+          tags: formData.tags.split(",").map(t => t.trim()).filter(Boolean),
+          status: isAdmin ? "upcoming" : "pending", // Users start with pending (needs approval)
+          thumbnail: null,
+          media: [],
+        })
+        .select()
+        .single()
+
+      if (createError) throw createError
+
+      // Upload thumbnail if provided
+      if (thumbnail) {
+        const thumbnailUrl = await uploadThumbnail(newEvent.id)
+        if (thumbnailUrl) {
+          const { error: updateError } = await supabase
+            .from("events")
+            .update({ thumbnail: thumbnailUrl })
+            .eq("id", newEvent.id)
+
+          if (updateError) throw updateError
+        }
+      }
+
+      toast({
+        title: "Success",
+        description: isAdmin
+          ? "Event created successfully"
+          : "Event created! Awaiting admin approval.",
+      })
+
+      // Reset form
+      setFormData({
+        title: "",
+        description: "",
+        category: "",
+        eventDate: "",
+        eventEndDate: "",
+        location: "",
+        capacity: "",
+        isFree: true,
+        ticketPrice: "",
+        organizerName: "",
+        organizerContact: "",
+        tags: "",
+      })
+      setThumbnail(null)
+      setShowCreateDialog(false)
+      fetchUserEvents()
+    } catch (error) {
+      console.error("Error creating event:", error)
+      toast({ title: "Error", description: "Failed to create event", variant: "destructive" })
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function handleDeleteEvent(eventId: string) {
+    if (!confirm("Are you sure you want to delete this event?")) return
+
+    try {
+      const { error } = await supabase.from("events").delete().eq("id", eventId)
+
+      if (error) throw error
+
+      toast({ title: "Success", description: "Event deleted" })
+      fetchUserEvents()
+    } catch (error) {
+      console.error("Error deleting event:", error)
+      toast({ title: "Error", description: "Failed to delete event", variant: "destructive" })
+    }
+  }
+
+  async function handleUnregister(registrationId: string) {
+    if (!confirm("Are you sure you want to unregister from this event?")) return
+
+    try {
+      const { error } = await supabase
+        .from("event_registrations")
+        .delete()
+        .eq("id", registrationId)
+
+      if (error) throw error
+
+      toast({ title: "Success", description: "Unregistered from event" })
+      fetchRegisteredEvents()
+    } catch (error) {
+      console.error("Error unregistering:", error)
+      toast({ title: "Error", description: "Failed to unregister", variant: "destructive" })
+    }
+  }
+
+  return (
+    <div className="min-h-screen w-full">
+      {/* Main Content Area with proper padding */}
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+            <div>
+              <h1 className="text-3xl sm:text-4xl font-bold">Events</h1>
+              <p className="text-muted-foreground mt-1">Create and manage your events</p>
+            </div>
+            <Button onClick={() => setShowCreateDialog(true)} className="gap-2 w-full sm:w-auto">
+              <Plus className="w-4 h-4" />
+              Create Event
+            </Button>
+          </div>
+
+          {/* Tabs */}
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="my-events">My Events</TabsTrigger>
+              <TabsTrigger value="all">All Events</TabsTrigger>
+              <TabsTrigger value="registered">Registered</TabsTrigger>
+            </TabsList>
+
+            {/* My Events Tab */}
+            <TabsContent value="my-events" className="space-y-6 mt-6">
+              {loading ? (
+                <div className="flex justify-center items-center py-16">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : events.length === 0 ? (
+                <Card className="border-dashed">
+                  <CardContent className="flex flex-col items-center justify-center py-16 px-4">
+                    <Calendar className="w-12 h-12 text-muted-foreground mb-4" />
+                    <h3 className="font-semibold text-lg mb-2">No events yet</h3>
+                    <p className="text-muted-foreground text-center mb-6 max-w-sm">
+                      Start by creating your first event
+                    </p>
+                    <Button onClick={() => setShowCreateDialog(true)} className="gap-2">
+                      <Plus className="w-4 h-4" />
+                      Create Your First Event
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {events.map((event) => (
+                    <Card key={event.id} className="overflow-hidden hover:shadow-lg transition-shadow flex flex-col">
+                      {/* Event Thumbnail */}
+                      <div className="relative w-full h-48 bg-muted">
+                        {event.thumbnail ? (
+                          <Image
+                            src={event.thumbnail}
+                            alt={event.title}
+                            fill
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Calendar className="w-8 h-8 text-muted-foreground" />
+                          </div>
+                        )}
+                      </div>
+
+                      <CardContent className="p-4 flex-1 flex flex-col">
+                        <div className="space-y-3 flex-1">
+                          <div>
+                            <h3 className="font-semibold line-clamp-2 text-sm md:text-base">{event.title}</h3>
+                            <p className="text-xs md:text-sm text-muted-foreground line-clamp-2 mt-1">
+                              {event.description || "No description"}
+                            </p>
+                          </div>
+
+                          {/* Event Details */}
+                          <div className="space-y-2 text-xs md:text-sm">
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <Calendar className="w-4 h-4" />
+                              {new Date(event.event_date).toLocaleDateString()}
+                            </div>
+                            {event.location_name && (
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                <MapPin className="w-4 h-4" />
+                                <span className="truncate">{event.location_name}</span>
+                              </div>
+                            )}
+                            <div className="flex items-center justify-between">
+                              <span className="flex items-center gap-2 text-muted-foreground">
+                                <Users className="w-4 h-4" />
+                                {event.registered_count || 0}
+                                {event.capacity && `/${event.capacity}`}
+                              </span>
+                              {event.is_free ? (
+                                <Badge variant="outline" className="text-xs">Free</Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs">${event.ticket_price || "0"}</Badge>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <Badge 
+                              variant={event.status === "upcoming" ? "default" : "secondary"} 
+                              className="text-xs"
+                            >
+                              {event.status === "upcoming" ? "Upcoming" : "Pending"}
+                            </Badge>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeleteEvent(event.id)}
+                          className="w-full gap-1 text-xs mt-3"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Delete
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Registered Events Tab */}
+            <TabsContent value="registered" className="space-y-4 mt-6">
+              {loading ? (
+                <div className="flex justify-center items-center py-16">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : registrations.length === 0 ? (
+                <Card className="border-dashed">
+                  <CardContent className="flex flex-col items-center justify-center py-16 px-4">
+                    <Users className="w-12 h-12 text-muted-foreground mb-4" />
+                    <h3 className="font-semibold text-lg">No registered events</h3>
+                    <p className="text-muted-foreground text-center mt-2">
+                      Find and register for events
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-4">
+                  {registrations.map((reg) => (
+                    <Card key={reg.id} className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-4 sm:p-6">
+                        <div className="space-y-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-sm md:text-base">{reg.event?.title}</h3>
+                              <p className="text-xs md:text-sm text-muted-foreground mt-1 line-clamp-2">
+                                {reg.event?.description}
+                              </p>
+                            </div>
+                            <Badge variant="outline" className="text-xs whitespace-nowrap">
+                              {reg.status}
+                            </Badge>
+                          </div>
+
+                          {/* Event Info */}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs md:text-sm text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4" />
+                              {new Date(reg.event?.event_date).toLocaleDateString()}
+                            </div>
+                            {reg.event?.location_name && (
+                              <div className="flex items-center gap-2">
+                                <MapPin className="w-4 h-4" />
+                                <span className="truncate">{reg.event.location_name}</span>
+                              </div>
+                            )}
+                            {reg.event?.is_free ? (
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">Free</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">${reg.event?.ticket_price || "0"}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="text-xs text-muted-foreground">
+                            Registered: {new Date(reg.registered_at).toLocaleDateString()}
+                          </div>
+
+                          {/* Unregister Button */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleUnregister(reg.id)}
+                            className="w-full gap-1 text-xs"
+                          >
+                            <LogOut className="w-3 h-3" />
+                            Unregister
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* All Events Tab */}
+            <TabsContent value="all" className="space-y-6 mt-6">
+              {loading ? (
+                <div className="flex justify-center items-center py-16">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : allEvents.length === 0 ? (
+                <Card className="border-dashed">
+                  <CardContent className="flex flex-col items-center justify-center py-16 px-4">
+                    <Calendar className="w-12 h-12 text-muted-foreground mb-4" />
+                    <h3 className="font-semibold text-lg mb-2">No events available</h3>
+                    <p className="text-muted-foreground text-center max-w-sm">
+                      There are no upcoming events at the moment
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {allEvents.map((event) => {
+                    const isOwnEvent = event.created_by === session?.user?.id
+                    return (
+                      <Card key={event.id} className="overflow-hidden hover:shadow-lg transition-shadow flex flex-col">
+                        {/* Event Thumbnail */}
+                        <div className="relative w-full h-48 bg-muted">
+                          {event.thumbnail ? (
+                            <Image
+                              src={event.thumbnail}
+                              alt={event.title}
+                              fill
+                              className="object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Calendar className="w-8 h-8 text-muted-foreground" />
+                            </div>
+                          )}
+                        </div>
+
+                        <CardContent className="p-4 flex-1 flex flex-col">
+                          <div className="space-y-3 flex-1">
+                            <div>
+                              <h3 className="font-semibold line-clamp-2 text-sm md:text-base">{event.title}</h3>
+                              <p className="text-xs md:text-sm text-muted-foreground line-clamp-2 mt-1">
+                                {event.description || "No description"}
+                              </p>
+                              <p className="text-xs md:text-sm text-muted-foreground mt-2">
+                                By: {event.users?.display_name || "Unknown Organizer"}
+                              </p>
+                            </div>
+
+                            {/* Event Details */}
+                            <div className="space-y-2 text-xs md:text-sm">
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                <Calendar className="w-4 h-4" />
+                                {new Date(event.event_date).toLocaleDateString()}
+                              </div>
+                              {event.location_name && (
+                                <div className="flex items-center gap-2 text-muted-foreground">
+                                  <MapPin className="w-4 h-4" />
+                                  <span className="truncate">{event.location_name}</span>
+                                </div>
+                              )}
+                              <div className="flex items-center justify-between">
+                                <span className="flex items-center gap-2 text-muted-foreground">
+                                  <Users className="w-4 h-4" />
+                                  {event.registered_count || 0}
+                                  {event.capacity && `/${event.capacity}`}
+                                </span>
+                                {event.is_free ? (
+                                  <Badge variant="outline" className="text-xs">Free</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-xs">${event.ticket_price || "0"}</Badge>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          {isOwnEvent ? (
+                            <Button disabled className="w-full gap-1 text-xs mt-3 opacity-50">
+                              Your Event
+                            </Button>
+                          ) : (
+                            <Button className="w-full gap-1 text-xs mt-3">
+                              <Users className="w-3 h-3" />
+                              Register
+                            </Button>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
+
+      {/* Create Event Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="w-full max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle>Create New Event</DialogTitle>
+            <DialogDescription>
+              {isAdmin ? "Your event will be listed immediately." : "Your event will be pending admin approval before being visible."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <ScrollArea className="h-[calc(90vh-200px)]">
+            <form onSubmit={handleCreateEvent} className="space-y-4 pr-4">
+              {/* Basic Info */}
+              <div className="space-y-2">
+                <Label htmlFor="title">Event Title *</Label>
+                <Input
+                  id="title"
+                  placeholder="e.g., Summer Music Festival"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Describe your event in detail..."
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  rows={3}
+                />
+              </div>
+
+              {/* Category */}
+              <div className="space-y-2">
+                <Label htmlFor="category">Category *</Label>
+                <Select value={formData.category} onValueChange={(v) => setFormData({ ...formData, category: v })}>
+                  <SelectTrigger id="category" className="text-sm">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {cat}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Date & Time */}
+              <div className="space-y-2">
+                <Label htmlFor="eventDate">Start Date & Time *</Label>
+                <Input
+                  id="eventDate"
+                  type="datetime-local"
+                  value={formData.eventDate}
+                  onChange={(e) => setFormData({ ...formData, eventDate: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="eventEndDate">End Date & Time</Label>
+                <Input
+                  id="eventEndDate"
+                  type="datetime-local"
+                  value={formData.eventEndDate}
+                  onChange={(e) => setFormData({ ...formData, eventEndDate: e.target.value })}
+                />
+              </div>
+
+              {/* Location */}
+              <div className="space-y-2">
+                <Label htmlFor="location">Location</Label>
+                <Input
+                  id="location"
+                  placeholder="Event location"
+                  value={formData.location}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                />
+              </div>
+
+              {/* Capacity */}
+              <div className="space-y-2">
+                <Label htmlFor="capacity">Capacity (Leave empty for unlimited)</Label>
+                <Input
+                  id="capacity"
+                  type="number"
+                  min="1"
+                  placeholder="e.g., 100"
+                  value={formData.capacity}
+                  onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
+                />
+              </div>
+
+              {/* Pricing */}
+              <div className="space-y-3 p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="isFree"
+                    checked={formData.isFree}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, isFree: checked as boolean })
+                    }
+                  />
+                  <Label htmlFor="isFree" className="font-medium cursor-pointer">
+                    Free Event
+                  </Label>
+                </div>
+
+                {!formData.isFree && (
+                  <div className="space-y-2">
+                    <Label htmlFor="ticketPrice">Ticket Price *</Label>
+                    <Input
+                      id="ticketPrice"
+                      type="number"
+                      placeholder="0.00"
+                      step="0.01"
+                      min="0"
+                      value={formData.ticketPrice}
+                      onChange={(e) => setFormData({ ...formData, ticketPrice: e.target.value })}
+                      required={!formData.isFree}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Organizer Info */}
+              <div className="space-y-2">
+                <Label htmlFor="organizerName">Organizer Name</Label>
+                <Input
+                  id="organizerName"
+                  placeholder="Your name or organization"
+                  value={formData.organizerName}
+                  onChange={(e) => setFormData({ ...formData, organizerName: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="organizerContact">Contact Information</Label>
+                <Input
+                  id="organizerContact"
+                  placeholder="Email or phone number"
+                  value={formData.organizerContact}
+                  onChange={(e) => setFormData({ ...formData, organizerContact: e.target.value })}
+                />
+              </div>
+
+              {/* Tags */}
+              <div className="space-y-2">
+                <Label htmlFor="tags">Tags (comma-separated)</Label>
+                <Input
+                  id="tags"
+                  placeholder="e.g., music, festival, summer"
+                  value={formData.tags}
+                  onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+                />
+              </div>
+
+              {/* Thumbnail */}
+              <div className="space-y-2">
+                <Label>Event Thumbnail</Label>
+                <div className="border-2 border-dashed rounded-lg p-6 text-center hover:bg-muted/50 transition-colors">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setThumbnail(e.target.files?.[0] || null)}
+                    className="hidden"
+                    id="thumbnail-upload"
+                  />
+                  <label htmlFor="thumbnail-upload" className="cursor-pointer block">
+                    <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-sm font-medium">Click to upload thumbnail</p>
+                    <p className="text-xs text-muted-foreground">PNG, JPG, GIF up to 10MB</p>
+                  </label>
+                </div>
+                {thumbnail && (
+                  <p className="text-sm text-muted-foreground text-center">
+                    ✓ {thumbnail.name}
+                  </p>
+                )}
+              </div>
+            </form>
+          </ScrollArea>
+
+          <DialogFooter className="pt-4 gap-2">
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateEvent} disabled={uploading}>
+              {uploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Event
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}

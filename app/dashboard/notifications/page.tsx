@@ -1,5 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { Heart, MessageCircle, Users, Eye, Coins, Star, Gift, Calendar, CheckCheck, Bell, Trash2, Loader2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -77,12 +79,21 @@ const getIcon = (type: string) => {
 }
 
 export default function NotificationsPage() {
+  const { data: session } = useSession()
+  const router = useRouter()
   const { t } = useI18n()
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Check authentication
   useEffect(() => {
+    if (session === undefined) return
+    if (!session?.user?.id) {
+      router.push("/login")
+      return
+    }
+
     async function fetchNotifications() {
       try {
         setLoading(true)
@@ -98,7 +109,7 @@ export default function NotificationsPage() {
       }
     }
     fetchNotifications()
-  }, [])
+  }, [session, router])
 
   const unreadCount = notifications.filter((n) => !n.read).length
 

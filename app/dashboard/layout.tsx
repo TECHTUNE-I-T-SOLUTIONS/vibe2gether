@@ -15,7 +15,7 @@ export default function DashboardLayout({
         <DashboardHeader />
         <main className="pt-16 md:pt-20 lg:pt-16 pb-24 md:pb-8">{children}</main>
       </div>
-      <DashboardMobileBottomNav unreadNotifications={0} />
+      <DashboardMobileBottomNav />
     </div>
   )
 }

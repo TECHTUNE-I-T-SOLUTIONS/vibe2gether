@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { Bookmark, Heart, MessageCircle, Loader2, MapPin, X } from "lucide-react"
@@ -12,9 +14,18 @@ import { getSavedPosts, unsavePost } from "@/lib/supabase/queries"
 import { cn } from "@/lib/utils"
 
 export default function SavedPage() {
+  const { data: session } = useSession()
+  const router = useRouter()
   const { user } = useUserProfile()
   const [savedPosts, setSavedPosts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (session === undefined) return
+    if (!session?.user?.id) {
+      router.push("/login")
+    }
+  }, [session, router])
 
   useEffect(() => {
     async function fetchSavedPosts() {

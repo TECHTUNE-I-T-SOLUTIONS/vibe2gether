@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
   User,
@@ -36,6 +38,8 @@ const settingsSections = [
 ]
 
 export default function SettingsPage() {
+  const { data: session } = useSession()
+  const router = useRouter()
   const { t, locale, setLocale } = useI18n()
   const { theme, setTheme } = useTheme()
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
@@ -46,6 +50,14 @@ export default function SettingsPage() {
     comments: false,
     marketing: false,
   })
+
+  // Check authentication
+  useEffect(() => {
+    if (session === undefined) return
+    if (!session?.user?.id) {
+      router.push("/login")
+    }
+  }, [session, router])
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-4xl mx-auto">
