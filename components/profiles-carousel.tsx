@@ -52,10 +52,10 @@ export function ProfilesCarousel() {
   }, [])
 
 
-  // Fallback mock data function
+  // Fallback mock data function when API fails
   const getMockProfiles = (): Profile[] => [
     {
-      id: 1,
+      id: "1",
       name: "Emma Watson",
       age: 28,
       location: "New York, USA",
@@ -65,7 +65,7 @@ export function ProfilesCarousel() {
       interests: ["Travel", "Art", "Music"],
     },
     {
-      id: 2,
+      id: "2",
       name: "James Chen",
       age: 32,
       location: "London, UK",
@@ -75,7 +75,7 @@ export function ProfilesCarousel() {
       interests: ["Fitness", "Tech", "Food"],
     },
     {
-      id: 3,
+      id: "3",
       name: "Sofia Garcia",
       age: 26,
       location: "Barcelona, Spain",
@@ -83,36 +83,6 @@ export function ProfilesCarousel() {
       verified: true,
       vibeScore: 98,
       interests: ["Dance", "Photography", "Movies"],
-    },
-    {
-      id: 4,
-      name: "Marcus Johnson",
-      age: 30,
-      location: "Toronto, Canada",
-      image: "/placeholder-user.jpg",
-      verified: false,
-      vibeScore: 88,
-      interests: ["Sports", "Gaming", "Travel"],
-    },
-    {
-      id: 5,
-      name: "Yuki Tanaka",
-      age: 27,
-      location: "Tokyo, Japan",
-      image: "/placeholder-user.jpg",
-      verified: true,
-      vibeScore: 96,
-      interests: ["Anime", "Cooking", "Fashion"],
-    },
-    {
-      id: 6,
-      name: "Alessandro Rossi",
-      age: 34,
-      location: "Milan, Italy",
-      image: "/placeholder-user.jpg",
-      verified: true,
-      vibeScore: 91,
-      interests: ["Fashion", "Wine", "Art"],
     },
   ]
 

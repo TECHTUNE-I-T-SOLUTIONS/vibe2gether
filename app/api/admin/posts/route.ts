@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("posts")
-      .select("*, author:user_id(id, full_name, avatar_url, is_verified)", { count: "exact" });
+      .select("*, author_id", { count: "exact" });
 
     // Apply filters
     if (status !== "all") {
@@ -54,8 +54,9 @@ export async function GET(request: NextRequest) {
       .range((page - 1) * limit, page * limit - 1);
 
     if (error) {
+      console.error("Query error details:", error);
       return NextResponse.json(
-        { error: `Failed to fetch posts: ${error.message}` },
+        { error: `Failed to fetch posts: ${error.message}`, details: error },
         { status: 400 }
       );
     }

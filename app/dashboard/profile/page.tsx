@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import {
   Edit,
@@ -15,12 +15,10 @@ import {
   Check,
   X,
   Users,
+  Shield,
   Share2,
   Copy,
   Loader2,
-  Camera,
-  Upload,
-  Shield,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -29,19 +27,10 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { useI18n } from "@/lib/i18n/context"
-import Link from "next/link"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { uploadProfilePicture, uploadCoverPicture } from "@/lib/supabase/storage"
 import { updateUserProfile } from "@/lib/supabase/queries"
-
-const interestsList = [
-  { icon: Music, label: "Music" },
-  { icon: Film, label: "Movies" },
-  { icon: Utensils, label: "Cooking" },
-  { icon: Plane, label: "Travel" },
-  { icon: BookOpen, label: "Reading" },
-  { icon: Heart, label: "Fitness" },
-]
+import { VerificationModal } from "@/components/verification-modal"
 
 export default function ProfilePage() {
   const { t } = useI18n()
@@ -51,6 +40,8 @@ export default function ProfilePage() {
   const [referralLink, setReferralLink] = useState("")
   const [copiedReferral, setCopiedReferral] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [verificationModalOpen, setVerificationModalOpen] = useState(false)
+  const [verificationStatus, setVerificationStatus] = useState<any>(null)
   const [formData, setFormData] = useState({
     displayName: "",
     bio: "",
@@ -60,8 +51,8 @@ export default function ProfilePage() {
     gender: "",
     looking_for: "",
   })
-  const profilePictureInputRef = useRef<HTMLInputElement>(null)
-  const coverPictureInputRef = useRef<HTMLInputElement>(null)
+  // const profilePictureInputRef = useRef<HTMLInputElement>(null)
+  // const coverPictureInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (user) {
@@ -91,6 +82,21 @@ export default function ProfilePage() {
       }
     }
     fetchReferralLink()
+  }, [])
+
+  useEffect(() => {
+    async function fetchVerificationStatus() {
+      try {
+        const response = await fetch("/api/user/verification-status")
+        if (response.ok) {
+          const data = await response.json()
+          setVerificationStatus(data.verification)
+        }
+      } catch (err) {
+        console.error("Failed to fetch verification status:", err)
+      }
+    }
+    fetchVerificationStatus()
   }, [])
 
   const toggleInterest = (interest: string) => {
@@ -234,8 +240,16 @@ export default function ProfilePage() {
             </div>
           )}
           <div className="pt-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl md:text-3xl font-bold">{user.display_name || user.full_name}</h1>
+              {user.is_premium && (
+                <span className="inline-flex items-center gap-1 bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-700 px-3 py-1 rounded-full text-sm font-semibold">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                  </svg>
+                  Premium
+                </span>
+              )}
               {user.is_verified && (
                 <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-sm">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -256,31 +270,29 @@ export default function ProfilePage() {
         </div>
 
         {isEditing ? (
-          <div className="flex gap-2">
-            <Button variant="outline" className="rounded-full" onClick={() => setIsEditing(false)}>
-              <X className="w-4 h-4 mr-2" />
-              Cancel
+          <div className="flex gap-1.5">
+            <Button size="sm" variant="outline" className="rounded-full" onClick={() => setIsEditing(false)}>
+              <X className="w-3.5 h-3.5" />
             </Button>
-            <Button className="rounded-full gradient-bg" onClick={() => setIsEditing(false)}>
-              <Check className="w-4 h-4 mr-2" />
+            <Button size="sm" className="rounded-full gradient-bg" onClick={() => setIsEditing(false)}>
+              <Check className="w-3.5 h-3.5 mr-1" />
               Save
             </Button>
           </div>
         ) : (
-          <div className="flex gap-2">
-            <Button className="rounded-full gradient-bg" onClick={() => setIsEditing(true)}>
-              <Edit className="w-4 h-4 mr-2" />
+          <div className="flex gap-1.5 flex-wrap justify-end">
+            <Button size="sm" className="rounded-full gradient-bg" onClick={() => setIsEditing(true)}>
+              <Edit className="w-3.5 h-3.5 mr-1" />
               {t("editProfile")}
             </Button>
             {!user.is_verified && (
-              <Link href="/dashboard/verification">
-                <Button variant="outline" className="rounded-full">
-                  <Shield className="w-4 h-4 mr-2" />
-                  Get Verified
-                </Button>
-              </Link>
+              <Button size="sm" variant="outline" className="rounded-full" onClick={() => setVerificationModalOpen(true)}>
+                <Shield className="w-3.5 h-3.5 mr-1" />
+                Verify
+              </Button>
             )}
             <Button
+              size="sm"
               variant="outline"
               className="rounded-full"
               onClick={async () => {
@@ -302,12 +314,22 @@ export default function ProfilePage() {
                 }
               }}
             >
-              <Share2 className="w-4 h-4 mr-2" />
-              Share
+              <Share2 className="w-3.5 h-3.5" />
             </Button>
           </div>
         )}
       </div>
+
+      {/* Verification Modal */}
+      <VerificationModal
+        open={verificationModalOpen}
+        onOpenChange={setVerificationModalOpen}
+        verificationStatus={verificationStatus}
+        onVerificationSubmitted={() => {
+          setVerificationModalOpen(false)
+          refetch()
+        }}
+      />
 
       {/* Referral Code Card */}
       {user?.referral_code && (
@@ -324,9 +346,11 @@ export default function ProfilePage() {
                   variant="secondary"
                   className="bg-white/20 text-white hover:bg-white/30 border-0 rounded-full"
                   onClick={() => {
-                    navigator.clipboard.writeText(user.referral_code)
-                    setCopiedReferral(true)
-                    setTimeout(() => setCopiedReferral(false), 2000)
+                    if (user.referral_code) {
+                      navigator.clipboard.writeText(user.referral_code)
+                      setCopiedReferral(true)
+                      setTimeout(() => setCopiedReferral(false), 2000)
+                    }
                   }}
                 >
                   <Copy className="w-4 h-4 mr-1" />

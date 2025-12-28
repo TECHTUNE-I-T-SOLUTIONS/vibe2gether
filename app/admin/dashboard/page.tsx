@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useAdminAuth } from "@/hooks/use-admin-auth";
 import { useRouter } from "next/navigation";
 import { PremiumTiersManager } from "@/components/admin/premium-tiers-manager";
+import { AdminUsersManager } from "@/components/admin/users-manager";
+import { AdminTransactionsManager } from "@/components/admin/transactions-manager";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LogOut, Loader2 } from "lucide-react";
@@ -83,15 +85,11 @@ export default function AdminDashboard() {
           </TabsContent>
 
           <TabsContent value="users" className="space-y-6">
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">User management coming soon</p>
-            </div>
+            <AdminUsersManager />
           </TabsContent>
 
           <TabsContent value="transactions" className="space-y-6">
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">Transaction tracking coming soon</p>
-            </div>
+            <AdminTransactionsManager />
           </TabsContent>
 
           <TabsContent value="products" className="space-y-6">
@@ -108,13 +106,13 @@ export default function AdminDashboard() {
 
           <TabsContent value="blog" className="space-y-6">
             <div className="text-center py-12">
-              <p className="text-muted-foreground">Blog moderation coming soon</p>
+              <p className="text-muted-foreground">Blog management coming soon</p>
             </div>
           </TabsContent>
 
           <TabsContent value="analytics" className="space-y-6">
             <div className="text-center py-12">
-              <p className="text-muted-foreground">Analytics dashboard coming soon</p>
+              <p className="text-muted-foreground">Analytics coming soon</p>
             </div>
           </TabsContent>
         </Tabs>

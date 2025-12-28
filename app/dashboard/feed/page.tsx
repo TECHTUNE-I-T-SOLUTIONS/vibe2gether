@@ -19,7 +19,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { useToast } from "@/hooks/use-toast"
 import {
-  getPosts,
   getPostComments,
   deletePost,
 } from "@/lib/supabase/queries"
@@ -49,61 +48,70 @@ export default function FeedPage() {
 
   const fetchPosts = useCallback(async (newOffset: number) => {
     try {
-      const { data, error } = await getPosts(20, newOffset)
-      if (!error && data) {
-        setPosts((prev) => (newOffset === 0 ? data : [...prev, ...data]))
-        setHasMore(data.length === 20)
-        setOffset(newOffset + 20)
+      const page = Math.floor(newOffset / 20) + 1
+      console.log(`[Feed] Fetching posts - page: ${page}`)
 
-        // Initialize like/save maps
-        if (user && newOffset === 0) {
-          const likesMap = new Map<string, boolean>()
-          const savesMap = new Map<string, boolean>()
-          const likesCountMap = new Map<string, number>()
-          const commentsCountMap = new Map<string, number>()
-          const savesCountMap = new Map<string, number>()
-          const viewsCountMap = new Map<string, number>()
+      const response = await fetch(`/api/posts/get-feed?page=${page}&limit=20`)
+      if (!response.ok) {
+        throw new Error("Failed to fetch posts")
+      }
 
-          for (const post of data) {
-            likesCountMap.set(post.id, post.likes_count || 0)
-            commentsCountMap.set(post.id, post.comments_count || 0)
-            savesCountMap.set(post.id, post.saves_count || 0)
-            viewsCountMap.set(post.id, post.views_count || 0)
+      const { data: posts } = await response.json()
+      
+      if (!posts || posts.length === 0) {
+        setHasMore(false)
+        return
+      }
 
-            // Check user interactions via API
-            try {
-              const response = await fetch("/api/posts/check-interaction", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ postId: post.id }),
-              })
+      console.log(`[Feed] Fetched ${posts.length} posts with counts`)
 
-              if (response.ok) {
-                const { liked, saved } = await response.json()
-                likesMap.set(post.id, liked)
-                savesMap.set(post.id, saved)
-              }
-            } catch (err) {
-              console.error("Failed to check interactions:", err)
-              likesMap.set(post.id, false)
-              savesMap.set(post.id, false)
-            }
-          }
+      setPosts((prev) => (newOffset === 0 ? posts : [...prev, ...posts]))
+      setHasMore(posts.length === 20)
+      setOffset(newOffset + 20)
 
-          setLikedPosts(likesMap)
-          setSavedPosts(savesMap)
-          setLikeCounts(likesCountMap)
-          setCommentCounts(commentsCountMap)
-          setSaveCounts(savesCountMap)
-          setViewCounts(viewsCountMap)
-        }
+      // Initialize count maps for all posts (API returns them directly)
+      const likesCountMap = new Map<string, number>()
+      const commentsCountMap = new Map<string, number>()
+      const savesCountMap = new Map<string, number>()
+      const viewsCountMap = new Map<string, number>()
+      const likesMap = new Map<string, boolean>()
+      const savesMap = new Map<string, boolean>()
+
+      for (const post of posts) {
+        likesCountMap.set(post.id, post.likes_count || 0)
+        commentsCountMap.set(post.id, post.comments_count || 0)
+        savesCountMap.set(post.id, post.saves_count || 0)
+        viewsCountMap.set(post.id, post.views_count || 0)
+        likesMap.set(post.id, post.userLiked || false)
+        savesMap.set(post.id, post.userSaved || false)
+
+        console.log(
+          `[Feed] Post ${post.id} - likes: ${post.likes_count}, saves: ${post.saves_count}, views: ${post.views_count}`
+        )
+      }
+
+      // Update all states
+      if (newOffset === 0) {
+        setLikedPosts(likesMap)
+        setSavedPosts(savesMap)
+        setLikeCounts(likesCountMap)
+        setCommentCounts(commentsCountMap)
+        setSaveCounts(savesCountMap)
+        setViewCounts(viewsCountMap)
+      } else {
+        setLikedPosts((prev) => new Map([...prev, ...likesMap]))
+        setSavedPosts((prev) => new Map([...prev, ...savesMap]))
+        setLikeCounts((prev) => new Map([...prev, ...likesCountMap]))
+        setCommentCounts((prev) => new Map([...prev, ...commentsCountMap]))
+        setSaveCounts((prev) => new Map([...prev, ...savesCountMap]))
+        setViewCounts((prev) => new Map([...prev, ...viewsCountMap]))
       }
     } catch (err) {
-      console.error("Failed to fetch posts:", err)
+      console.error("[Feed] Failed to fetch posts:", err)
     } finally {
       setLoading(false)
     }
-  }, [user])
+  }, [])
 
   useEffect(() => {
     fetchPosts(0)
@@ -140,6 +148,8 @@ export default function FeedPage() {
     setLikeCounts((prev) => new Map(prev).set(postId, wasLiked ? currentCount - 1 : currentCount + 1))
 
     try {
+      console.log(`[Feed] Toggling like for post ${postId}`)
+
       const response = await fetch("/api/posts/like", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -153,6 +163,7 @@ export default function FeedPage() {
       const { liked, likesCount } = await response.json()
       
       // Update with actual counts from server
+      console.log(`[Feed] Like toggled - liked: ${liked}, count: ${likesCount}`)
       setLikedPosts((prev) => new Map(prev).set(postId, liked))
       setLikeCounts((prev) => new Map(prev).set(postId, likesCount))
 
@@ -162,6 +173,7 @@ export default function FeedPage() {
       })
     } catch (err) {
       // Revert on error
+      console.error(`[Feed] Error toggling like:`, err)
       setLikedPosts((prev) => new Map(prev).set(postId, wasLiked))
       setLikeCounts((prev) => new Map(prev).set(postId, currentCount))
       toast({
@@ -186,6 +198,8 @@ export default function FeedPage() {
     setSaveCounts((prev) => new Map(prev).set(postId, wasSaved ? currentSaveCount - 1 : currentSaveCount + 1))
 
     try {
+      console.log(`[Feed] Toggling save for post ${postId}`)
+
       const response = await fetch("/api/posts/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -199,6 +213,7 @@ export default function FeedPage() {
       const { saved, savesCount } = await response.json()
       
       // Update with actual counts from server
+      console.log(`[Feed] Save toggled - saved: ${saved}, count: ${savesCount}`)
       setSavedPosts((prev) => new Map(prev).set(postId, saved))
       setSaveCounts((prev) => new Map(prev).set(postId, savesCount))
 
@@ -208,6 +223,7 @@ export default function FeedPage() {
       })
     } catch (err) {
       // Revert on error
+      console.error(`[Feed] Error toggling save:`, err)
       setSavedPosts((prev) => new Map(prev).set(postId, wasSaved))
       setSaveCounts((prev) => new Map(prev).set(postId, currentSaveCount))
       toast({

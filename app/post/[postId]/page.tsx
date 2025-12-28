@@ -12,9 +12,7 @@ import { Heart, MessageCircle, Bookmark, MapPin, Loader2, ArrowLeft, Share2, Eye
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { useToast } from "@/hooks/use-toast"
 import {
-  getUserPosts,
   getPostComments,
-  recordPostView,
 } from "@/lib/supabase/queries"
 import { cn } from "@/lib/utils"
 import { Textarea } from "@/components/ui/textarea"
@@ -45,13 +43,17 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
   async function fetchPost() {
     try {
       setLoading(true)
-      // For now, we'll fetch all posts and filter by ID
-      // In production, you might want a dedicated endpoint
-      const { data: allPosts } = await getUserPosts("", 100, 0)
-      const foundPost = allPosts?.find((p: any) => p.id === unwrappedParams.postId)
+      console.log(`[Post Detail] Fetching post ${unwrappedParams.postId}`)
 
-      if (!foundPost) {
-        // Try to find in all posts
+      // Fetch post from API endpoint
+      const response = await fetch(`/api/posts/get-post/${unwrappedParams.postId}`)
+      if (!response.ok) {
+        throw new Error("Post not found")
+      }
+
+      const { data: post } = await response.json()
+
+      if (!post) {
         toast({
           title: "Post not found",
           description: "This post may have been deleted",
@@ -60,39 +62,50 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
         return
       }
 
-      setPost(foundPost)
-      setLikeCount(foundPost.likes_count || 0)
-      setSaveCount(foundPost.saves_count || 0)
-      setViewCount(foundPost.views_count || 0)
-      setCommentCount(foundPost.comments_count || 0)
+      console.log(
+        `[Post Detail] Post loaded - likes: ${post.likes_count}, saves: ${post.saves_count}, views: ${post.views_count}`
+      )
 
-      // Check if user has liked or saved
-      if (currentUser) {
-        try {
-          const response = await fetch("/api/posts/check-interaction", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ postId: unwrappedParams.postId }),
-          })
+      setPost(post)
+      setLikeCount(post.likes_count || 0)
+      setSaveCount(post.saves_count || 0)
+      setViewCount(post.views_count || 0)
+      setCommentCount(post.comments_count || 0)
+      setIsLiked(post.userLiked || false)
+      setIsSaved(post.userSaved || false)
 
-          if (response.ok) {
-            const { liked, saved } = await response.json()
-            setIsLiked(liked)
-            setIsSaved(saved)
+      // Record view (IP-gated, one count per IP per 24 hours)
+      try {
+        console.log(`[Post Detail] Recording view for post ${unwrappedParams.postId}`)
+        const viewResponse = await fetch("/api/posts/record-view", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ postId: unwrappedParams.postId }),
+        })
+
+        if (viewResponse.ok) {
+          const { viewsCount, alreadyViewed } = await viewResponse.json()
+          if (alreadyViewed) {
+            console.log(`[Post Detail] View already recorded from this IP within 24 hours - count: ${viewsCount}`)
+          } else {
+            console.log(`[Post Detail] View recorded - new count: ${viewsCount}`)
           }
-        } catch (err) {
-          console.error("Failed to check interactions:", err)
+          setViewCount(viewsCount)
         }
-
-        // Record view
-        await recordPostView(unwrappedParams.postId, currentUser.id)
+      } catch (err) {
+        console.error("[Post Detail] Failed to record view:", err)
       }
 
       // Fetch comments
       const { data: postComments } = await getPostComments(unwrappedParams.postId, 50)
       setComments(postComments || [])
     } catch (err) {
-      console.error("Failed to fetch post:", err)
+      console.error("[Post Detail] Failed to fetch post:", err)
+      toast({
+        title: "Error",
+        description: "Failed to load post",
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
@@ -112,6 +125,8 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
     setLikeCount(wasLiked ? currentCount - 1 : currentCount + 1)
 
     try {
+      console.log(`[Post Detail] Toggling like for post ${unwrappedParams.postId}`)
+
       const response = await fetch("/api/posts/like", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -124,6 +139,7 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
 
       const { liked, likesCount } = await response.json()
       
+      console.log(`[Post Detail] Like toggled - liked: ${liked}, count: ${likesCount}`)
       setIsLiked(liked)
       setLikeCount(likesCount)
       
@@ -133,6 +149,7 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
       })
     } catch (err) {
       // Revert
+      console.error(`[Post Detail] Error toggling like:`, err)
       setIsLiked(wasLiked)
       setLikeCount(currentCount)
       toast({
@@ -157,6 +174,8 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
     setSaveCount(wasSaved ? currentCount - 1 : currentCount + 1)
 
     try {
+      console.log(`[Post Detail] Toggling save for post ${unwrappedParams.postId}`)
+
       const response = await fetch("/api/posts/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -169,6 +188,7 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
 
       const { saved, savesCount } = await response.json()
       
+      console.log(`[Post Detail] Save toggled - saved: ${saved}, count: ${savesCount}`)
       setIsSaved(saved)
       setSaveCount(savesCount)
       
@@ -178,6 +198,7 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
       })
     } catch (err) {
       // Revert
+      console.error(`[Post Detail] Error toggling save:`, err)
       setIsSaved(wasSaved)
       setSaveCount(currentCount)
       toast({

@@ -74,6 +74,40 @@ export async function getUserPosts(userId: string, limit = 20, offset = 0) {
   return { data, error }
 }
 
+export async function getPostById(postId: string) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('posts')
+    .select(`
+      id,
+      content,
+      tags,
+      media,
+      likes_count,
+      comments_count,
+      saves_count,
+      views_count,
+      created_at,
+      updated_at,
+      user_id,
+      is_public,
+      allow_comments,
+      location_name,
+      latitude,
+      longitude,
+      user:users(
+        id,
+        display_name,
+        profile_picture,
+        bio
+      )
+    `)
+    .eq('id', postId)
+    .single()
+
+  return { data, error }
+}
+
 export async function createPost(
   userId: string,
   content: string,

@@ -89,20 +89,18 @@ export default function AdminTransactionsPage() {
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState("all")
   const [typeFilter, setTypeFilter] = useState("all")
+  const [activeTab, setActiveTab] = useState("all")
 
   useEffect(() => {
     async function fetchData() {
       try {
         const supabase = createClient()
 
-        // Fetch transactions
-        let query = supabase.from("transactions").select("*, users(full_name, profile_picture)")
-
-        if (statusFilter !== "all") {
-          query = query.eq("status", statusFilter)
-        }
-
-        const { data: transactionData, error } = await query.order("created_at", { ascending: false })
+        // Fetch all transactions (no status filter here)
+        const { data: transactionData, error } = await supabase
+          .from("transactions")
+          .select("*, users(full_name, profile_picture)")
+          .order("created_at", { ascending: false })
 
         if (error) throw error
 
@@ -138,7 +136,7 @@ export default function AdminTransactionsPage() {
     }
 
     fetchData()
-  }, [statusFilter])
+  }, [])
 
   const filteredTransactions = transactions.filter((tx: any) => {
     const matchesSearch =
@@ -149,7 +147,16 @@ export default function AdminTransactionsPage() {
 
     const matchesType = typeFilter === "all" || tx.type === typeFilter
 
-    return matchesSearch && matchesType
+    // Filter by active tab
+    let matchesStatus = true
+    if (activeTab === "completed") {
+      matchesStatus = tx.status === "completed"
+    } else if (activeTab === "pending") {
+      matchesStatus = tx.status === "pending"
+    }
+    // For "all" tab, show all statuses
+
+    return matchesSearch && matchesType && matchesStatus
   })
 
   const statItems = [
@@ -233,7 +240,7 @@ export default function AdminTransactionsPage() {
       </Card>
 
       {/* Transactions Table */}
-      <Tabs defaultValue="all">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="bg-muted/50 p-1 rounded-full mb-6">
           <TabsTrigger value="all" className="rounded-full">
             All ({transactions.length})
@@ -287,7 +294,7 @@ export default function AdminTransactionsPage() {
                           <td className="py-4 px-6">
                             <div className="flex items-center gap-1">
                               <TrendingUp className="w-4 h-4 text-green-500" />
-                              <span className="font-semibold">{formatCurrency(tx.amount)}</span>
+                              <span className="font-semibold">{formatCurrency(tx.amount / 100)}</span>
                             </div>
                           </td>
                           <td className="py-4 px-6">
@@ -331,6 +338,171 @@ export default function AdminTransactionsPage() {
                                     </DropdownMenuItem>
                                   </>
                                 )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="completed">
+          <Card className="border-border/50">
+            <CardContent className="p-0">
+              {filteredTransactions.length === 0 ? (
+                <div className="flex items-center justify-center py-8 text-muted-foreground">
+                  No completed transactions found
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30">
+                        <th className="text-left py-4 px-6 font-medium text-muted-foreground">User</th>
+                        <th className="text-left py-4 px-6 font-medium text-muted-foreground">Amount</th>
+                        <th className="text-left py-4 px-6 font-medium text-muted-foreground">Type</th>
+                        <th className="text-left py-4 px-6 font-medium text-muted-foreground">Status</th>
+                        <th className="text-left py-4 px-6 font-medium text-muted-foreground">Date</th>
+                        <th className="text-right py-4 px-6 font-medium text-muted-foreground">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredTransactions.slice(0, 100).map((tx: any) => (
+                        <tr
+                          key={tx.id}
+                          className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
+                        >
+                          <td className="py-4 px-6">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="w-10 h-10">
+                                <AvatarImage src={tx.user?.avatar_url || "/placeholder.svg"} />
+                                <AvatarFallback>{tx.user?.full_name?.[0] || "U"}</AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-medium text-sm">{tx.user?.full_name}</p>
+                                <p className="text-xs text-muted-foreground">{tx.id}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="flex items-center gap-1">
+                              <TrendingUp className="w-4 h-4 text-green-500" />
+                              <span className="font-semibold">{formatCurrency(tx.amount / 100)}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <Badge variant="secondary" className="text-xs">
+                              {tx.type?.replace("_", " ")}
+                            </Badge>
+                          </td>
+                          <td className="py-4 px-6">
+                            <Badge className={`${getStatusColor(tx.status)} text-white text-xs`}>
+                              {tx.status}
+                            </Badge>
+                          </td>
+                          <td className="py-4 px-6 text-sm text-muted-foreground">
+                            {formatDate(tx.created_at)}
+                          </td>
+                          <td className="py-4 px-6 text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="rounded-full">
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem>View Details</DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="pending">
+          <Card className="border-border/50">
+            <CardContent className="p-0">
+              {filteredTransactions.length === 0 ? (
+                <div className="flex items-center justify-center py-8 text-muted-foreground">
+                  No pending transactions found
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30">
+                        <th className="text-left py-4 px-6 font-medium text-muted-foreground">User</th>
+                        <th className="text-left py-4 px-6 font-medium text-muted-foreground">Amount</th>
+                        <th className="text-left py-4 px-6 font-medium text-muted-foreground">Type</th>
+                        <th className="text-left py-4 px-6 font-medium text-muted-foreground">Status</th>
+                        <th className="text-left py-4 px-6 font-medium text-muted-foreground">Date</th>
+                        <th className="text-right py-4 px-6 font-medium text-muted-foreground">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredTransactions.slice(0, 100).map((tx: any) => (
+                        <tr
+                          key={tx.id}
+                          className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
+                        >
+                          <td className="py-4 px-6">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="w-10 h-10">
+                                <AvatarImage src={tx.user?.avatar_url || "/placeholder.svg"} />
+                                <AvatarFallback>{tx.user?.full_name?.[0] || "U"}</AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-medium text-sm">{tx.user?.full_name}</p>
+                                <p className="text-xs text-muted-foreground">{tx.id}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="flex items-center gap-1">
+                              <TrendingUp className="w-4 h-4 text-green-500" />
+                              <span className="font-semibold">{formatCurrency(tx.amount / 100)}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <Badge variant="secondary" className="text-xs">
+                              {tx.type?.replace("_", " ")}
+                            </Badge>
+                          </td>
+                          <td className="py-4 px-6">
+                            <Badge className={`${getStatusColor(tx.status)} text-white text-xs`}>
+                              {tx.status}
+                            </Badge>
+                          </td>
+                          <td className="py-4 px-6 text-sm text-muted-foreground">
+                            {formatDate(tx.created_at)}
+                          </td>
+                          <td className="py-4 px-6 text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="rounded-full">
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem>View Details</DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-green-600">
+                                  Mark as Completed
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-red-600">
+                                  Mark as Failed
+                                </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </td>

@@ -1,0 +1,225 @@
+import { createClient } from "@supabase/supabase-js"
+import { NextRequest, NextResponse } from "next/server"
+import crypto from "crypto"
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+)
+
+const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY || ""
+
+/**
+ * Verify Paystack webhook signature
+ */
+function verifyPaystackSignature(request: any, signature: string): boolean {
+  try {
+    const hash = crypto
+      .createHmac("sha512", PAYSTACK_SECRET)
+      .update(JSON.stringify(request))
+      .digest("hex")
+    return hash === signature
+  } catch (error) {
+    console.error("[Paystack] Signature verification error:", error)
+    return false
+  }
+}
+
+/**
+ * Handle Paystack webhook events
+ * Paystack sends events like charge.success, charge.failed, etc.
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const signature = request.headers.get("x-paystack-signature") || ""
+    const body = await request.json()
+
+    // Verify signature
+    if (!verifyPaystackSignature(body, signature)) {
+      console.error("[Paystack] Invalid webhook signature")
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
+    }
+
+    const { event, data } = body
+
+    if (!event) {
+      return NextResponse.json({ error: "No event provided" }, { status: 400 })
+    }
+
+    console.log(`[Paystack] Received webhook event: ${event}`)
+
+    // Handle charge.success event
+    if (event === "charge.success") {
+      const reference = data.reference
+      const status = data.status // "success"
+      const amount = data.amount / 100 // Paystack returns amount in kobo (1/100 of Naira)
+      const authorization = data.authorization
+      const customer = data.customer
+
+      console.log(`[Paystack] Processing successful payment: ${reference}`)
+
+      // Update transaction status
+      const { data: transaction, error: txError } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("payment_reference", reference)
+        .single()
+
+      if (txError || !transaction) {
+        console.error(`[Paystack] Transaction not found for reference: ${reference}`)
+        return NextResponse.json({ error: "Transaction not found" }, { status: 404 })
+      }
+
+      // Update transaction to completed
+      const { error: updateError } = await supabase
+        .from("transactions")
+        .update({
+          status: "completed",
+          metadata: {
+            ...transaction.metadata,
+            paystack_payment_id: data.id,
+            paystack_authorization: authorization,
+            paystack_customer: customer,
+            completed_at: new Date().toISOString(),
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", transaction.id)
+
+      if (updateError) {
+        console.error("[Paystack] Failed to update transaction:", updateError)
+        return NextResponse.json({ error: "Failed to update transaction" }, { status: 500 })
+      }
+
+      // Create notification for user
+      if (transaction.user_id) {
+        await supabase.from("notifications").insert({
+          user_id: transaction.user_id,
+          title: "Payment Successful",
+          message: `Your payment of ₦${amount.toFixed(2)} has been received and confirmed.`,
+          type: "payment",
+          related_type: transaction.type,
+          related_id: transaction.id,
+          is_read: false,
+          created_at: new Date().toISOString(),
+        })
+      }
+
+      // Handle different transaction types
+      if (transaction.type === "marketplace_purchase") {
+        // For marketplace purchases, the transaction itself serves as the order record
+        // Seller can see transactions to know they have a purchase
+        console.log(`[Paystack] Marketplace purchase confirmed for transaction: ${transaction.id}`)
+      } else if (transaction.type === "event_registration") {
+        // Update event registration status
+        const { error: regError } = await supabase
+          .from("event_registrations")
+          .update({
+            status: "confirmed",
+            payment_status: "completed",
+            payment_id: transaction.id,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", transaction.metadata?.registration_id)
+
+        if (regError) {
+          console.error("[Paystack] Failed to update event registration:", regError)
+        } else {
+          console.log(`[Paystack] Event registration confirmed: ${transaction.metadata?.registration_id}`)
+        }
+      } else if (transaction.type === "premium_subscription") {
+        // Update premium subscription
+        const { error: subError } = await supabase
+          .from("premium_subscriptions")
+          .update({
+            status: "active",
+            payment_status: "completed",
+            payment_id: transaction.id,
+            started_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", transaction.metadata?.subscription_id)
+
+        if (subError) {
+          console.error("[Paystack] Failed to update premium subscription:", subError)
+        } else {
+          console.log(`[Paystack] Premium subscription activated: ${transaction.metadata?.subscription_id}`)
+        }
+      }
+
+      return NextResponse.json({ status: "ok" })
+    }
+
+    // Handle charge.failed event
+    if (event === "charge.failed") {
+      const reference = data.reference
+      const failureMessage = data.failure_message || "Payment failed"
+
+      console.log(`[Paystack] Processing failed payment: ${reference}`)
+
+      // Update transaction status to failed
+      const { data: transaction, error: txError } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("payment_reference", reference)
+        .single()
+
+      if (txError || !transaction) {
+        console.error(`[Paystack] Transaction not found for reference: ${reference}`)
+        return NextResponse.json({ error: "Transaction not found" }, { status: 404 })
+      }
+
+      const { error: updateError } = await supabase
+        .from("transactions")
+        .update({
+          status: "failed",
+          metadata: {
+            ...transaction.metadata,
+            failure_reason: failureMessage,
+            failed_at: new Date().toISOString(),
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", transaction.id)
+
+      if (updateError) {
+        console.error("[Paystack] Failed to update transaction:", updateError)
+        return NextResponse.json({ error: "Failed to update transaction" }, { status: 500 })
+      }
+
+      // Create notification for user
+      if (transaction.user_id) {
+        await supabase.from("notifications").insert({
+          user_id: transaction.user_id,
+          title: "Payment Failed",
+          message: `Your payment could not be processed. ${failureMessage}`,
+          type: "error",
+          related_type: transaction.type,
+          related_id: transaction.id,
+          is_read: false,
+          created_at: new Date().toISOString(),
+        })
+      }
+
+      return NextResponse.json({ status: "ok" })
+    }
+
+    // Handle other events (log and acknowledge)
+    console.log(`[Paystack] Unhandled webhook event: ${event}`)
+    return NextResponse.json({ status: "ok" })
+  } catch (error) {
+    console.error("[Paystack] Webhook processing error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
+/**
+ * GET endpoint for webhook health check
+ */
+export async function GET(request: NextRequest) {
+  return NextResponse.json({
+    status: "ok",
+    message: "Paystack webhook endpoint is active",
+    url: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/webhooks/paystack`,
+  })
+}

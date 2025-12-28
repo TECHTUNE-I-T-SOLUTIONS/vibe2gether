@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server"
 
 export const COIN_RATES = {
-  view_received: 1,
-  like_received: 5,
-  follow_received: 10,
-  comment_received: 3,
+  view_received: 0.1, // 10 views = 1 coin
+  like_received: 1,   // Like = 1 coin
+  follow_received: 1, // Follow = 1 coin
+  comment_received: 1, // Comment = 1 coin
   share_received: 8,
   daily_login: 5,
   profile_complete: 50,

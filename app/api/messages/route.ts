@@ -105,7 +105,6 @@ export async function GET(request: Request) {
         user2:user2_id(id, display_name, full_name, profile_picture)
       `)
       .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
-      .eq("status", "matched")
       .order("last_message_at", { ascending: false })
 
     if (matchesError) {
@@ -120,7 +119,7 @@ export async function GET(request: Request) {
 
         const { data: lastMessage } = await supabase
           .from("messages")
-          .select("id, content, sender_id, created_at, is_read")
+          .select("id, content, sender_id, created_at, is_read, message_type, media_url")
           .eq("match_id", match.id)
           .order("created_at", { ascending: false })
           .limit(1)
@@ -133,20 +132,27 @@ export async function GET(request: Request) {
           .eq("sender_id", otherUser.id)
           .eq("is_read", false)
 
+        // Format last message text
+        let lastMessageText = ""
+        if (lastMessage) {
+          if (lastMessage.message_type === "image") {
+            lastMessageText = "📷 Image"
+          } else if (lastMessage.message_type === "audio") {
+            lastMessageText = "🎤 Audio"
+          } else {
+            lastMessageText = lastMessage.content || ""
+          }
+        }
+
         return {
           id: match.id,
-          otherUser: {
-            id: otherUser.id,
-            name: otherUser.display_name || otherUser.full_name,
-            avatar: otherUser.profile_picture,
-          },
-          lastMessage: lastMessage ? {
-            content: lastMessage.content,
-            senderId: lastMessage.sender_id,
-            createdAt: lastMessage.created_at,
-          } : null,
+          name: otherUser.display_name || otherUser.full_name,
+          avatar: otherUser.profile_picture,
+          lastMessage: lastMessageText,
+          lastMessageTime: lastMessage ? new Date(lastMessage.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "",
           unreadCount: unreadCount || 0,
-          compatibilityScore: match.compatibility_score,
+          online: false,
+          userId: otherUser.id,
         }
       })
     )
@@ -177,9 +183,19 @@ export async function POST(request: Request) {
 
     const { matchId, content, messageType = "text", mediaUrl } = await request.json()
 
-    if (!matchId || !content) {
+    // Content is optional for media-only messages, but matchId is required
+    if (!matchId) {
       return Response.json(
-        { error: "Missing required fields" },
+        { error: "Missing required fields: matchId" },
+        { status: 400 }
+      )
+    }
+
+    // For text-only messages, content is required
+    // For media messages, content is optional (can be empty caption)
+    if (!content && !mediaUrl) {
+      return Response.json(
+        { error: "Missing required fields: content or mediaUrl" },
         { status: 400 }
       )
     }

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { MapPin, Link as LinkIcon, Calendar, Loader2, ArrowLeft, Heart, MessageCircle, Bookmark } from "lucide-react"
+import { MapPin, Link as LinkIcon, Calendar, Loader2, ArrowLeft, Heart, MessageCircle, Bookmark, Sparkles, Verified } from "lucide-react"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { useToast } from "@/hooks/use-toast"
 import { getUserPosts, deletePost } from "@/lib/supabase/queries"
@@ -24,24 +24,96 @@ export default function UserProfilePage({ params }: { params: Promise<{ userId: 
   const [posts, setPosts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isFollowing, setIsFollowing] = useState(false)
+  const [isVerified, setIsVerified] = useState(false)
+  const [hasPremium, setHasPremium] = useState(false)
 
   useEffect(() => {
     fetchUserProfile()
-  }, [unwrappedParams.userId])
+    if (currentUser?.id === unwrappedParams.userId) {
+      checkVerificationStatus()
+      checkPremiumStatus()
+    }
+  }, [unwrappedParams.userId, currentUser?.id])
+
+  async function checkVerificationStatus() {
+    try {
+      const response = await fetch("/api/user/verification-status")
+      if (response.ok) {
+        const data = await response.json()
+        setIsVerified(data.verified)
+      }
+    } catch (err) {
+      console.error("Failed to check verification status:", err)
+    }
+  }
+
+  async function checkPremiumStatus() {
+    try {
+      const response = await fetch("/api/user/premium-status")
+      if (response.ok) {
+        const data = await response.json()
+        setHasPremium(data.hasPremium)
+      }
+    } catch (err) {
+      console.error("Failed to check premium status:", err)
+    }
+  }
 
   async function fetchUserProfile() {
     try {
       setLoading(true)
-      const { data: posts } = await getUserPosts(unwrappedParams.userId, 10, 0)
+      // Fetch user data directly
+      const userResponse = await fetch(`/api/user/${unwrappedParams.userId}`)
+      if (userResponse.ok) {
+        const userData = await userResponse.json()
+        setUser(userData.user)
+        setIsFollowing(userData.isFollowing || false)
+      }
       
-      if (posts && posts.length > 0) {
-        setUser(posts[0].user)
+      // Fetch user's posts
+      const { data: posts } = await getUserPosts(unwrappedParams.userId, 10, 0)
+      if (posts) {
         setPosts(posts)
       }
     } catch (err) {
       console.error("Failed to fetch user profile:", err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleFollow = async () => {
+    try {
+      const response = await fetch("/api/users/follow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: unwrappedParams.userId }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setIsFollowing(data.following)
+        
+        // Update follower count
+        if (user) {
+          setUser({
+            ...user,
+            followers_count: data.following ? (user.followers_count || 0) + 1 : (user.followers_count || 1) - 1,
+          })
+        }
+
+        toast({
+          title: "Success",
+          description: data.following ? "Following user" : "Unfollowed user",
+        })
+      }
+    } catch (err) {
+      console.error("Failed to follow/unfollow:", err)
+      toast({
+        title: "Error",
+        description: "Failed to update follow status",
+        variant: "destructive",
+      })
     }
   }
 
@@ -110,24 +182,50 @@ export default function UserProfilePage({ params }: { params: Promise<{ userId: 
             {/* User Info */}
             <div className="flex-1">
               <div className="flex items-start justify-between mb-4">
-                <div>
+                <div className="flex items-center gap-2">
                   <h1 className="text-2xl font-bold">{user.display_name}</h1>
-                  {user.email && (
-                    <p className="text-muted-foreground">@{user.email.split("@")[0]}</p>
+                  {isVerified && (
+                    <Verified className="w-5 h-5 text-blue-500 fill-blue-500" />
+                  )}
+                  {hasPremium && (
+                    <Sparkles className="w-5 h-5 text-yellow-500" />
                   )}
                 </div>
-                {currentUser?.id !== user.id && (
-                  <Button
-                    variant={isFollowing ? "outline" : "default"}
-                    onClick={() => setIsFollowing(!isFollowing)}
-                  >
-                    {isFollowing ? "Following" : "Follow"}
-                  </Button>
-                )}
+                <div className="flex gap-2">
+                  {currentUser?.id !== user.id && (
+                    <>
+                      {hasPremium && (
+                        <Badge className="bg-yellow-500/20 text-yellow-700 border-yellow-300 gap-2">
+                          <Sparkles className="w-3 h-3" />
+                          Premium
+                        </Badge>
+                      )}
+                      <Button
+                        variant={isFollowing ? "outline" : "default"}
+                        onClick={handleFollow}
+                      >
+                        {isFollowing ? "Following" : "Follow"}
+                      </Button>
+                    </>
+                  )}
+                  {currentUser?.id === user.id && !hasPremium && (
+                    <Button
+                      onClick={() => router.push("/premium")}
+                      className="gap-2"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      Upgrade to Premium
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {user.bio && (
                 <p className="text-sm text-foreground mb-4">{user.bio}</p>
+              )}
+
+              {user.email && (
+                <p className="text-sm text-muted-foreground mb-4">@{user.email.split("@")[0]}</p>
               )}
 
               {/* User Meta */}

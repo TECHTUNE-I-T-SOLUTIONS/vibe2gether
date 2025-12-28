@@ -223,10 +223,19 @@ export function DashboardHeader() {
 
           {/* Profile */}
           <Link href="/dashboard/profile">
-            <Avatar className="w-9 h-9 ring-2 ring-primary/20 cursor-pointer hover:ring-primary transition-all">
-              <AvatarImage src={user?.profile_picture || "/man-avatar-happy.jpg"} />
-              <AvatarFallback>{user?.display_name?.substring(0, 2).toUpperCase() || "U"}</AvatarFallback>
-            </Avatar>
+            <div className="relative">
+              <Avatar className="w-9 h-9 ring-2 ring-primary/20 cursor-pointer hover:ring-primary transition-all">
+                <AvatarImage src={user?.profile_picture || "/man-avatar-happy.jpg"} />
+                <AvatarFallback>{user?.display_name?.substring(0, 2).toUpperCase() || "U"}</AvatarFallback>
+              </Avatar>
+              {user?.is_premium && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-amber-400 to-yellow-400 rounded-full flex items-center justify-center shadow-sm">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                  </svg>
+                </span>
+              )}
+            </div>
           </Link>
         </div>
       </div>
