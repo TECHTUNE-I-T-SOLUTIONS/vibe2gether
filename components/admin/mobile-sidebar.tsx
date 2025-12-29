@@ -11,7 +11,6 @@ import {
   Users,
   FileText,
   Flag,
-  Star,
   ShoppingBag,
   Calendar,
   BookOpen,
@@ -45,7 +44,6 @@ export function AdminMobileSidebar({ onLogoutClick }: AdminMobileSidebarProps) {
   const { t } = useI18n()
   const [counts, setCounts] = useState<Record<string, number>>({
     reports: 0,
-    featured: 0,
     notifications: 0,
   })
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
@@ -56,26 +54,19 @@ export function AdminMobileSidebar({ onLogoutClick }: AdminMobileSidebarProps) {
 
   const fetchCounts = async () => {
     try {
-      const [reportsRes, featuredRes, notificationsRes] = await Promise.all([
+      const [reportsRes, notificationsRes] = await Promise.all([
         fetch("/api/admin/reports?limit=1"),
-        fetch("/api/admin/featured-requests?limit=1"),
         fetch("/api/admin/notifications?limit=1"),
       ])
 
       const newCounts: Record<string, number> = {
         reports: 0,
-        featured: 0,
         notifications: 0,
       }
 
       if (reportsRes.ok) {
         const data = await reportsRes.json()
         newCounts.reports = data.count || 0
-      }
-
-      if (featuredRes.ok) {
-        const data = await featuredRes.json()
-        newCounts.featured = data.count || 0
       }
 
       if (notificationsRes.ok) {
@@ -94,7 +85,6 @@ export function AdminMobileSidebar({ onLogoutClick }: AdminMobileSidebarProps) {
     { icon: Users, label: "users", href: "/admin/users" },
     { icon: FileText, label: "posts", href: "/admin/posts" },
     { icon: Flag, label: "reports", href: "/admin/reports", badge: counts.reports },
-    { icon: Star, label: "featured", href: "/admin/featured", badge: counts.featured },
   ]
 
   const secondaryItems: NavItem[] = [

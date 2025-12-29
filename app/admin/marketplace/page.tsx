@@ -33,17 +33,17 @@ export default function MarketplaceAdminPage() {
   const [adminProducts, setAdminProducts] = useState<any[]>([])
   const [pendingProducts, setPendingProducts] = useState<any[]>([])
   const [allProducts, setAllProducts] = useState<any[]>([])
-  const [users, setUsers] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [creatingProduct, setCreatingProduct] = useState(false)
+  const [creatingProductLoading, setCreatingProductLoading] = useState(false)
   const [editingProduct, setEditingProduct] = useState<any>(null)
+  const [editingProductLoading, setEditingProductLoading] = useState(false)
   const [statusDialogOpen, setStatusDialogOpen] = useState(false)
   const [statusProduct, setStatusProduct] = useState<any>(null)
   const [newStatus, setNewStatus] = useState("active")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [newProduct, setNewProduct] = useState({
-    user_id: "",
     title: "",
     description: "",
     price: "",
@@ -65,22 +65,8 @@ export default function MarketplaceAdminPage() {
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
       fetchAllData()
-      fetchUsers()
     }
   }, [authLoading, isAuthenticated])
-
-  async function fetchUsers() {
-    try {
-      const { data } = await supabase
-        .from("users")
-        .select("id, email, full_name")
-        .order("full_name", { ascending: true })
-      
-      setUsers(data || [])
-    } catch (error: any) {
-      console.error("Error fetching users:", error?.message || JSON.stringify(error))
-    }
-  }
 
   async function fetchAllData() {
     try {
@@ -88,7 +74,7 @@ export default function MarketplaceAdminPage() {
       const { data: adminProductsData } = await supabase
         .from("marketplace_products")
         .select("*")
-        .eq("user_id", admin?.id)
+        .eq("admin_id", admin?.id)
         .eq("status", "active")
         .order("created_at", { ascending: false })
 
@@ -143,7 +129,7 @@ export default function MarketplaceAdminPage() {
   }
 
   async function uploadImages(productId: string, files: File[]) {
-    const uploadedUrls = []
+    const uploadedMedia = []
     for (const file of files) {
       const fileExt = file.name.split(".").pop()
       const fileName = `${productId}-${Date.now()}.${fileExt}`
@@ -151,9 +137,12 @@ export default function MarketplaceAdminPage() {
 
       if (error) throw error
       const { data: publicUrl } = supabase.storage.from("marketplace-images").getPublicUrl(fileName)
-      uploadedUrls.push(publicUrl.publicUrl)
+      uploadedMedia.push({
+        url: publicUrl.publicUrl,
+        type: file.type.startsWith("image/") ? "image" : "file"
+      })
     }
-    return uploadedUrls
+    return uploadedMedia
   }
 
   async function handleCreateProduct() {
@@ -167,20 +156,12 @@ export default function MarketplaceAdminPage() {
     }
 
     try {
-      if (!newProduct.user_id) {
-        toast({
-          title: "Error",
-          description: "Please select a user for this product",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // Insert product
+      setCreatingProductLoading(true)
+      // Insert product with admin as owner
       const { data: product, error: insertError } = await supabase
         .from("marketplace_products")
         .insert({
-          user_id: newProduct.user_id,
+          admin_id: admin?.id,
           title: newProduct.title,
           description: newProduct.description,
           price: parseFloat(newProduct.price),
@@ -198,10 +179,10 @@ export default function MarketplaceAdminPage() {
 
       // Upload images if any
       if (newProduct.images.length > 0) {
-        const urls = await uploadImages(product.id, newProduct.images)
+        const media = await uploadImages(product.id, newProduct.images)
         await supabase
           .from("marketplace_products")
-          .update({ images: urls })
+          .update({ media })
           .eq("id", product.id)
       }
 
@@ -211,7 +192,6 @@ export default function MarketplaceAdminPage() {
       })
 
       setNewProduct({
-        user_id: "",
         title: "",
         description: "",
         price: "",
@@ -232,6 +212,8 @@ export default function MarketplaceAdminPage() {
         description: "Failed to create product",
         variant: "destructive",
       })
+    } finally {
+      setCreatingProductLoading(false)
     }
   }
 
@@ -245,15 +227,16 @@ export default function MarketplaceAdminPage() {
       return
     }
 
+    setEditingProductLoading(true)
     try {
       // Upload new images if any
-      let imageUrls = editingProduct.images || []
+      let media = editingProduct.media || []
       if (editingProduct.newImages && editingProduct.newImages.length > 0) {
-        const urls = await uploadImages(editingProduct.id, editingProduct.newImages)
-        imageUrls = [...imageUrls, ...urls]
+        const newMedia = await uploadImages(editingProduct.id, editingProduct.newImages)
+        media = [...media, ...newMedia]
       }
 
-      await supabase
+      const { error } = await supabase
         .from("marketplace_products")
         .update({
           title: editingProduct.title,
@@ -263,10 +246,12 @@ export default function MarketplaceAdminPage() {
           category: editingProduct.category,
           condition: editingProduct.condition,
           location_name: editingProduct.location,
-          tags: editingProduct.tags.split(",").map((t) => t.trim()),
-          images: imageUrls,
+          tags: Array.isArray(editingProduct?.tags) ? editingProduct.tags : editingProduct.tags.split(",").map((t) => t.trim()),
+          media,
         })
         .eq("id", editingProduct.id)
+
+      if (error) throw error
 
       toast({
         title: "Success",
@@ -282,6 +267,8 @@ export default function MarketplaceAdminPage() {
         description: "Failed to update product",
         variant: "destructive",
       })
+    } finally {
+      setEditingProductLoading(false)
     }
   }
 
@@ -398,9 +385,9 @@ export default function MarketplaceAdminPage() {
         </div>
         <p className="text-xs text-muted-foreground mb-4">Condition: {product.condition}</p>
         <div className="flex gap-2">
-          <Dialog open={editingProduct?.id === product.id} onOpenChange={() => setEditingProduct(null)}>
+          <Dialog open={editingProduct?.id === product.id} onOpenChange={(open) => { if (!open) setEditingProduct(null) }}>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="flex-1" onClick={() => setEditingProduct(product)}>
+              <Button variant="outline" size="sm" className="flex-1" onClick={() => setEditingProduct({ ...product, location: product.location_name, newImages: [], imagePreviews: [] })}>
                 <Edit2 className="w-4 h-4 mr-2" />
                 Edit
               </Button>
@@ -494,16 +481,23 @@ export default function MarketplaceAdminPage() {
                 <div>
                   <Label>Tags (comma separated)</Label>
                   <Input
-                    value={editingProduct?.tags?.join(", ") || ""}
+                    value={Array.isArray(editingProduct?.tags) ? editingProduct.tags.join(", ") : (editingProduct?.tags || "")}
                     onChange={(e) => setEditingProduct({ ...editingProduct, tags: e.target.value })}
                   />
                 </div>
                 <div>
                   <Label>Images</Label>
-                  <div className="grid grid-cols-3 gap-2 mb-2">
-                    {editingProduct?.images?.map((url: string, idx: number) => (
-                      <div key={idx} className="relative">
-                        <Image src={url} alt={`Preview ${idx}`} width={100} height={100} className="w-full h-20 object-cover rounded" />
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    {editingProduct?.media?.map((img: any, idx: number) => (
+                      <div key={`existing-${idx}`} className="relative">
+                        <Image src={img.url || img} alt={`Preview ${idx}`} width={100} height={100} className="w-full h-20 object-cover rounded" />
+                        <p className="text-xs text-muted-foreground mt-1 text-center">Existing</p>
+                      </div>
+                    ))}
+                    {editingProduct?.imagePreviews?.map((preview: string, idx: number) => (
+                      <div key={`new-${idx}`} className="relative">
+                        <img src={preview} alt={`New ${idx}`} className="w-full h-20 object-cover rounded" />
+                        <p className="text-xs text-green-600 mt-1 text-center">New</p>
                       </div>
                     ))}
                   </div>
@@ -538,8 +532,19 @@ export default function MarketplaceAdminPage() {
                     }}
                   />
                 </div>
-                <Button className="w-full gradient-bg" onClick={handleEditProduct}>
-                  Save Changes
+                <Button 
+                  className="w-full gradient-bg" 
+                  onClick={handleEditProduct}
+                  disabled={editingProductLoading}
+                >
+                  {editingProductLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save Changes"
+                  )}
                 </Button>
               </div>
             </DialogContent>
@@ -624,21 +629,6 @@ export default function MarketplaceAdminPage() {
               <DialogDescription>Admin products are directly published as active</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <div>
-                <Label>User *</Label>
-                <select
-                  value={newProduct.user_id}
-                  onChange={(e) => setNewProduct({ ...newProduct, user_id: e.target.value })}
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background"
-                >
-                  <option value="">Select a user to own this product</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.full_name || user.email} ({user.id.slice(0, 8)}...)
-                    </option>
-                  ))}
-                </select>
-              </div>
               <div>
                 <Label>Title *</Label>
                 <Input
@@ -772,8 +762,15 @@ export default function MarketplaceAdminPage() {
                   onChange={handleImageSelect}
                 />
               </div>
-              <Button className="w-full gradient-bg" onClick={handleCreateProduct}>
-                Create Product
+              <Button className="w-full gradient-bg" onClick={handleCreateProduct} disabled={creatingProductLoading}>
+                {creatingProductLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create Product"
+                )}
               </Button>
             </div>
           </DialogContent>

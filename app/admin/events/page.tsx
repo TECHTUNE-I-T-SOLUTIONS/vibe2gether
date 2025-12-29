@@ -35,6 +35,8 @@ export default function EventsAdminPage() {
   const [allEvents, setAllEvents] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [creatingEvent, setCreatingEvent] = useState(false)
+  const [creatingEventLoading, setCreatingEventLoading] = useState(false)
+  const [editingEventLoading, setEditingEventLoading] = useState(false)
   const [editingEvent, setEditingEvent] = useState<any>(null)
   const [statusDialogOpen, setStatusDialogOpen] = useState(false)
   const [statusEvent, setStatusEvent] = useState<any>(null)
@@ -143,6 +145,7 @@ export default function EventsAdminPage() {
     }
 
     try {
+      setCreatingEventLoading(true)
       const { data: event, error: insertError } = await supabase
         .from("events")
         .insert({
@@ -205,6 +208,8 @@ export default function EventsAdminPage() {
         description: "Failed to create event",
         variant: "destructive",
       })
+    } finally {
+      setCreatingEventLoading(false)
     }
   }
 
@@ -218,13 +223,15 @@ export default function EventsAdminPage() {
       return
     }
 
+    setEditingEventLoading(true)
+
     try {
       let thumbnailUrl = editingEvent.thumbnail_url
       if (editingEvent.newThumbnail) {
         thumbnailUrl = await uploadThumbnail(editingEvent.id, editingEvent.newThumbnail)
       }
 
-      await supabase
+      const { error } = await supabase
         .from("events")
         .update({
           title: editingEvent.title,
@@ -232,16 +239,18 @@ export default function EventsAdminPage() {
           category: editingEvent.category,
           event_date: editingEvent.event_date,
           event_end_date: editingEvent.event_end_date,
-          location: editingEvent.location,
+          location_name: editingEvent.location,
           capacity: editingEvent.capacity ? parseInt(editingEvent.capacity) : null,
           is_free: editingEvent.is_free,
           ticket_price: !editingEvent.is_free ? parseFloat(editingEvent.ticket_price) : null,
           organizer_name: editingEvent.organizer_name,
           organizer_contact: editingEvent.organizer_contact,
-          tags: editingEvent.tags.split(",").map((t) => t.trim()),
+          tags: Array.isArray(editingEvent?.tags) ? editingEvent.tags : editingEvent.tags.split(",").map((t) => t.trim()),
           thumbnail_url: thumbnailUrl,
         })
         .eq("id", editingEvent.id)
+
+      if (error) throw error
 
       toast({
         title: "Success",
@@ -257,6 +266,8 @@ export default function EventsAdminPage() {
         description: "Failed to update event",
         variant: "destructive",
       })
+    } finally {
+      setEditingEventLoading(false)
     }
   }
 
@@ -383,9 +394,9 @@ export default function EventsAdminPage() {
           </Badge>
         </div>
         <div className="flex gap-2">
-          <Dialog open={editingEvent?.id === event.id} onOpenChange={() => setEditingEvent(null)}>
+          <Dialog open={editingEvent?.id === event.id} onOpenChange={(open) => { if (!open) setEditingEvent(null) }}>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="flex-1" onClick={() => setEditingEvent(event)}>
+              <Button variant="outline" size="sm" className="flex-1" onClick={() => setEditingEvent({ ...event, location: event.location_name, newThumbnail: null, thumbnailPreview: null })}>
                 <Edit2 className="w-4 h-4 mr-2" />
                 Edit
               </Button>
@@ -495,20 +506,31 @@ export default function EventsAdminPage() {
                 <div>
                   <Label>Tags (comma separated)</Label>
                   <Input
-                    value={editingEvent?.tags?.join(", ") || ""}
+                    value={Array.isArray(editingEvent?.tags) ? editingEvent.tags.join(", ") : (editingEvent?.tags || "")}
                     onChange={(e) => setEditingEvent({ ...editingEvent, tags: e.target.value })}
                   />
                 </div>
                 <div>
                   <Label>Thumbnail</Label>
-                  {editingEvent?.thumbnail_url && (
-                    <div className="mb-2 relative w-32 h-24">
+                  {editingEvent?.thumbnailPreview && (
+                    <div className="mb-3 relative w-40 h-24">
+                      <img
+                        src={editingEvent.thumbnailPreview}
+                        alt="New Thumbnail"
+                        className="w-full h-full object-cover rounded border-2 border-green-500"
+                      />
+                      <p className="text-xs text-green-600 mt-1">New thumbnail</p>
+                    </div>
+                  )}
+                  {editingEvent?.thumbnail_url && !editingEvent?.thumbnailPreview && (
+                    <div className="mb-3 relative w-40 h-24">
                       <Image
                         src={editingEvent.thumbnail_url}
-                        alt="Thumbnail"
+                        alt="Current Thumbnail"
                         fill
                         className="object-cover rounded"
                       />
+                      <p className="text-xs text-muted-foreground mt-1">Current thumbnail</p>
                     </div>
                   )}
                   <Button
@@ -518,7 +540,7 @@ export default function EventsAdminPage() {
                     className="w-full"
                   >
                     <Upload className="w-4 h-4 mr-2" />
-                    Upload Thumbnail
+                    {editingEvent?.thumbnailPreview ? "Change" : "Upload"} Thumbnail
                   </Button>
                   <input
                     ref={fileInputRef}
@@ -541,8 +563,19 @@ export default function EventsAdminPage() {
                     }}
                   />
                 </div>
-                <Button className="w-full gradient-bg" onClick={handleEditEvent}>
-                  Save Changes
+                <Button 
+                  className="w-full gradient-bg" 
+                  onClick={handleEditEvent}
+                  disabled={editingEventLoading}
+                >
+                  {editingEventLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save Changes"
+                  )}
                 </Button>
               </div>
             </DialogContent>
@@ -775,8 +808,15 @@ export default function EventsAdminPage() {
                   onChange={handleThumbnailSelect}
                 />
               </div>
-              <Button className="w-full gradient-bg" onClick={handleCreateEvent}>
-                Create Event
+              <Button className="w-full gradient-bg" onClick={handleCreateEvent} disabled={creatingEventLoading}>
+                {creatingEventLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create Event"
+                )}
               </Button>
             </div>
           </DialogContent>

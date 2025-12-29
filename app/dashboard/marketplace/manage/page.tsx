@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
-import { Loader2, Plus, Upload, Trash2, Eye, Package, X } from "lucide-react"
+import { Loader2, Plus, Upload, Trash2, Eye, Package, X, Edit2 } from "lucide-react"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { createClient } from "@/lib/supabase/client"
 
@@ -51,6 +51,9 @@ export default function DashboardMarketplaceManagePage() {
   const [allProducts, setAllProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<any>(null)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [editingLoading, setEditingLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   
   // Form state
@@ -311,6 +314,80 @@ export default function DashboardMarketplaceManagePage() {
     }
   }
 
+  async function handleEditProduct() {
+    if (!editingProduct?.title || !editingProduct?.price) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in title and price",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setEditingLoading(true)
+    try {
+      let mediaUrls = editingProduct.media || []
+
+      // Upload new images if any
+      if (editingProduct.newImages && editingProduct.newImages.length > 0) {
+        for (const file of editingProduct.newImages) {
+          try {
+            const fileExt = file.name.split(".").pop()
+            const fileName = `${editingProduct.id}/${Date.now()}.${fileExt}`
+            const { error: uploadError } = await supabase
+              .storage
+              .from("marketplace-images")
+              .upload(fileName, file, { upsert: true })
+
+            if (uploadError) throw uploadError
+
+            const { data } = supabase.storage.from("marketplace-images").getPublicUrl(fileName)
+            mediaUrls.push({ url: data.publicUrl, type: "image" })
+          } catch (err) {
+            console.error("Error uploading image:", err)
+          }
+        }
+      }
+
+      // Update product
+      const { error } = await supabase
+        .from("marketplace_products")
+        .update({
+          title: editingProduct.title,
+          description: editingProduct.description,
+          category: editingProduct.category,
+          condition: editingProduct.condition,
+          price: parseFloat(editingProduct.price),
+          currency: editingProduct.currency,
+          location_name: editingProduct.location,
+          tags: Array.isArray(editingProduct?.tags) ? editingProduct.tags : editingProduct.tags.split(",").map((t: string) => t.trim()),
+          media: mediaUrls,
+        })
+        .eq("id", editingProduct.id)
+        .eq("user_id", session?.user?.id)
+
+      if (error) throw error
+
+      toast({
+        title: "Success",
+        description: "Product updated successfully",
+      })
+
+      setEditingProduct(null)
+      setEditDialogOpen(false)
+      await fetchUserProducts()
+    } catch (error: any) {
+      console.error("Error updating product:", error?.message || JSON.stringify(error))
+      toast({
+        title: "Error",
+        description: "Failed to update product",
+        variant: "destructive",
+      })
+    } finally {
+      setEditingLoading(false)
+    }
+  }
+
   async function handleUpdateStatus(productId: string, newStatus: string) {
     try {
       const { error } = await supabase
@@ -429,6 +506,18 @@ export default function DashboardMarketplaceManagePage() {
 
                         {/* Actions */}
                         <div className="flex gap-2 pt-3">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setEditingProduct({ ...product, location: product.location_name, newImages: [], imagePreviews: [] })
+                              setEditDialogOpen(true)
+                            }}
+                            className="flex-1 gap-1 text-xs"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                            Edit
+                          </Button>
                           {isAdmin && product.status === "inactive" && (
                             <Button
                               size="sm"
@@ -762,6 +851,280 @@ export default function DashboardMarketplaceManagePage() {
                   <Plus className="w-4 h-4 mr-2" />
                   Create Product
                 </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Product Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="w-full max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle>Edit Product</DialogTitle>
+            <DialogDescription>
+              Update your product details
+            </DialogDescription>
+          </DialogHeader>
+
+          <ScrollArea className="h-[calc(90vh-200px)]">
+            <div className="space-y-4 pr-4">
+              {/* Basic Info */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-title">Product Title *</Label>
+                <Input
+                  id="edit-title"
+                  placeholder="e.g., Vintage Leather Jacket"
+                  value={editingProduct?.title || ""}
+                  onChange={(e) =>
+                    setEditingProduct((prev: any) => ({
+                      ...prev,
+                      title: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-description">Description</Label>
+                <Textarea
+                  id="edit-description"
+                  placeholder="Describe your product..."
+                  value={editingProduct?.description || ""}
+                  onChange={(e) =>
+                    setEditingProduct((prev: any) => ({
+                      ...prev,
+                      description: e.target.value,
+                    }))
+                  }
+                  rows={4}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-category">Category</Label>
+                  <Select
+                    value={editingProduct?.category || ""}
+                    onValueChange={(value) =>
+                      setEditingProduct((prev: any) => ({
+                        ...prev,
+                        category: value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-condition">Condition</Label>
+                  <Select
+                    value={editingProduct?.condition || ""}
+                    onValueChange={(value) =>
+                      setEditingProduct((prev: any) => ({
+                        ...prev,
+                        condition: value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CONDITIONS.map((cond) => (
+                        <SelectItem key={cond} value={cond}>
+                          {cond}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Price and Currency */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="edit-price">Price *</Label>
+                  <Input
+                    id="edit-price"
+                    type="number"
+                    placeholder="0.00"
+                    step="0.01"
+                    value={editingProduct?.price || ""}
+                    onChange={(e) =>
+                      setEditingProduct((prev: any) => ({
+                        ...prev,
+                        price: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-currency">Currency</Label>
+                  <Select
+                    value={editingProduct?.currency || "USD"}
+                    onValueChange={(value) =>
+                      setEditingProduct((prev: any) => ({
+                        ...prev,
+                        currency: value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CURRENCIES.map((cur) => (
+                        <SelectItem key={cur} value={cur}>
+                          {cur}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-location">Location</Label>
+                <Input
+                  id="edit-location"
+                  placeholder="e.g., New York, USA"
+                  value={editingProduct?.location || ""}
+                  onChange={(e) =>
+                    setEditingProduct((prev: any) => ({
+                      ...prev,
+                      location: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-tags">Tags (comma-separated)</Label>
+                <Input
+                  id="edit-tags"
+                  placeholder="e.g., vintage, leather, jacket"
+                  value={editingProduct?.tags || ""}
+                  onChange={(e) =>
+                    setEditingProduct((prev: any) => ({
+                      ...prev,
+                      tags: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+
+              {/* Current Images */}
+              {editingProduct?.media && editingProduct.media.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Current Images</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {editingProduct.media.map((img: any, idx: number) => (
+                      <div key={`current-${idx}`} className="relative w-full h-20">
+                        <Image
+                          src={img.url || "/placeholder.jpg"}
+                          alt={`product-${idx}`}
+                          fill
+                          className="object-cover rounded"
+                        />
+                        <p className="text-xs text-muted-foreground text-center mt-1">Existing</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* New Image Previews */}
+              {editingProduct?.imagePreviews && editingProduct.imagePreviews.length > 0 && (
+                <div className="space-y-2">
+                  <Label>New Images to Upload</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {editingProduct.imagePreviews.map((preview: string, idx: number) => (
+                      <div key={`new-${idx}`} className="relative w-full h-20">
+                        <img
+                          src={preview}
+                          alt={`new-${idx}`}
+                          className="w-full h-full object-cover rounded border-2 border-green-500"
+                        />
+                        <p className="text-xs text-green-600 text-center mt-1">New</p>
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      setEditingProduct((prev: any) => ({
+                        ...prev,
+                        newImages: [],
+                        imagePreviews: [],
+                      }))
+                    }}
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    Clear New Images
+                  </Button>
+                </div>
+              )}
+
+              {/* Add New Images */}
+              <div className="space-y-2">
+                <Label>Add More Images (Max 5 total)</Label>
+                <div className="border-2 border-dashed rounded-lg p-6 text-center hover:bg-muted/50 transition-colors">
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || [])
+                      files.forEach((file) => {
+                        const reader = new FileReader()
+                        reader.onloadend = () => {
+                          setEditingProduct((prev: any) => ({
+                            ...prev,
+                            newImages: [...(prev.newImages || []), file],
+                            imagePreviews: [...(prev.imagePreviews || []), reader.result as string],
+                          }))
+                        }
+                        reader.readAsDataURL(file)
+                      })
+                    }}
+                    className="hidden"
+                    id="edit-file-upload"
+                  />
+                  <label htmlFor="edit-file-upload" className="cursor-pointer block">
+                    <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-sm font-medium">Click to add more images</p>
+                    <p className="text-xs text-muted-foreground">PNG, JPG, GIF up to 10MB each</p>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </ScrollArea>
+
+          <DialogFooter className="pt-4 gap-2">
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleEditProduct} disabled={editingLoading}>
+              {editingLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
               )}
             </Button>
           </DialogFooter>

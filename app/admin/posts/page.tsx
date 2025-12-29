@@ -26,11 +26,12 @@ interface Post {
   status: string
   is_flagged: boolean
   is_featured: boolean
-  author: {
+  user_id: string
+  users: {
     id: string
     full_name: string
-    avatar_url?: string
-    is_verified: boolean
+    profile_picture?: string
+    email: string
   }
   likes_count?: number
   comments_count?: number
@@ -270,15 +271,12 @@ export default function AdminPostsPage() {
                       {/* Author */}
                       <div className="flex items-center gap-3 mb-4">
                         <Avatar className="w-10 h-10">
-                          <AvatarImage src={post.author.avatar_url} />
-                          <AvatarFallback>{post.author.full_name?.[0]}</AvatarFallback>
+                          <AvatarImage src={post.users?.profile_picture} />
+                          <AvatarFallback>{post.users?.full_name?.[0] || "U"}</AvatarFallback>
                         </Avatar>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <p className="font-medium text-sm">{post.author.full_name}</p>
-                            {post.author.is_verified && (
-                              <Badge className="bg-blue-500 text-white text-xs">Verified</Badge>
-                            )}
+                            <p className="font-medium text-sm">{post.users?.full_name || "Unknown User"}</p>
                           </div>
                           <p className="text-xs text-muted-foreground">
                             {new Date(post.created_at).toLocaleDateString("en-US", {
@@ -293,7 +291,39 @@ export default function AdminPostsPage() {
                       </div>
 
                       {/* Content */}
-                      <p className="text-foreground mb-3 line-clamp-3">{post.content}</p>
+                      <p className="text-foreground mb-3">{post.content}</p>
+
+                      {/* Media - Images/Videos */}
+                      {post.media && Array.isArray(post.media) && post.media.length > 0 && (
+                        <div className="mb-3 grid grid-cols-2 gap-2">
+                          {post.media.map((item: any, index: number) => (
+                            <div key={index} className="relative bg-muted rounded-lg overflow-hidden">
+                              {item.type === "image" || item.url?.includes(".jpg") || item.url?.includes(".png") || item.url?.includes(".jpeg") ? (
+                                <img
+                                  src={item.url || item}
+                                  alt={`Post media ${index + 1}`}
+                                  className="w-full h-40 object-cover hover:scale-105 transition-transform cursor-pointer"
+                                />
+                              ) : item.type === "video" || item.url?.includes(".mp4") ? (
+                                <video
+                                  src={item.url || item}
+                                  controls
+                                  className="w-full h-40 object-cover"
+                                />
+                              ) : (
+                                <a
+                                  href={item.url || item}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="w-full h-40 bg-muted flex items-center justify-center text-xs text-muted-foreground hover:text-foreground"
+                                >
+                                  View Media
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
                       {/* Badges */}
                       <div className="flex flex-wrap gap-2 mb-3">

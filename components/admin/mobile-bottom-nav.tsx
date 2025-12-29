@@ -7,7 +7,7 @@ import {
   Users,
   FileText,
   Flag,
-  Star,
+  ShoppingBag,
   BarChart3,
   Bell,
   Settings,
@@ -26,13 +26,11 @@ interface NavItem {
 
 interface AdminMobileBottomNavProps {
   reportsBadge?: number
-  featuredBadge?: number
   notificationsBadge?: number
 }
 
 export function AdminMobileBottomNav({
   reportsBadge = 0,
-  featuredBadge = 0,
   notificationsBadge = 0,
 }: AdminMobileBottomNavProps) {
   const pathname = usePathname()
@@ -61,10 +59,9 @@ export function AdminMobileBottomNav({
       badge: reportsBadge,
     },
     {
-      icon: Star,
-      label: "featured",
-      href: "/admin/featured",
-      badge: featuredBadge,
+      icon: ShoppingBag,
+      label: "marketplace",
+      href: "/admin/marketplace",
     },
     {
       icon: Bell,

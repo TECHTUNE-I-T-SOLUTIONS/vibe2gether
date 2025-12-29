@@ -16,7 +16,6 @@ import {
   Settings,
   FileText,
   Flag,
-  Star,
 } from "lucide-react"
 
 const allItems = [
@@ -24,7 +23,6 @@ const allItems = [
   { icon: Users, label: "Users", href: "/admin/users" },
   { icon: FileText, label: "Posts", href: "/admin/posts" },
   { icon: Flag, label: "Reports", href: "/admin/reports" },
-  { icon: Star, label: "Featured", href: "/admin/featured" },
   { icon: ShoppingBag, label: "Market", href: "/admin/marketplace" },
   { icon: Calendar, label: "Events", href: "/admin/events" },
   { icon: BookOpen, label: "Blog", href: "/admin/blog" },

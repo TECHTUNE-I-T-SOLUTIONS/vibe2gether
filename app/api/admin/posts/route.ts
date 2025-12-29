@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("posts")
-      .select("*, author_id", { count: "exact" });
+      .select("*, users(id, full_name, email, profile_picture)", { count: "exact" });
 
     // Apply filters
     if (status !== "all") {

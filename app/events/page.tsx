@@ -150,7 +150,7 @@ export default function EventsPage() {
                     >
                       <div className="relative aspect-video">
                         <Image
-                          src={event.thumbnail || "/placeholder.svg"}
+                          src={event.thumbnail_url || event.thumbnail || "/placeholder.svg"}
                           alt={event.title}
                           fill
                           className="object-cover transition-transform duration-500 group-hover:scale-105"
@@ -228,7 +228,7 @@ export default function EventsPage() {
                     >
                       <div className="relative aspect-video">
                         <Image
-                          src={event.thumbnail || "/placeholder.svg"}
+                          src={event.thumbnail_url || event.thumbnail || "/placeholder.svg"}
                           alt={event.title}
                           fill
                           className="object-cover transition-transform duration-500 group-hover:scale-105"

@@ -30,6 +30,8 @@ export default function BlogAdminPage() {
   const [authChecked, setAuthChecked] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [editingPost, setEditingPost] = useState<any>(null)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [editingLoading, setEditingLoading] = useState(false)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -171,6 +173,52 @@ export default function BlogAdminPage() {
       } catch (err) {
         console.error("Failed to delete post:", err)
       }
+    }
+  }
+
+  async function handleEditPost() {
+    if (!editingPost?.title) {
+      alert("Title is required")
+      return
+    }
+
+    setEditingLoading(true)
+    try {
+      let thumbnailUrl = editingPost.thumbnail_url
+      if (editingPost.newThumbnail) {
+        const file = editingPost.newThumbnail
+        const fileExt = file.name.split(".").pop()
+        const fileName = `${editingPost.id}-${Date.now()}.${fileExt}`
+        const { error: uploadError } = await createClient()
+          .storage
+          .from("blog-thumbnails")
+          .upload(fileName, file, { upsert: true })
+
+        if (uploadError) throw uploadError
+        const { data } = createClient().storage.from("blog-thumbnails").getPublicUrl(fileName)
+        thumbnailUrl = data.publicUrl
+      }
+
+      await updateBlogPost(editingPost.id, {
+        title: editingPost.title,
+        excerpt: editingPost.excerpt,
+        content: editingPost.content,
+        category: editingPost.category,
+        status: editingPost.status,
+        is_featured: editingPost.is_featured,
+        thumbnail_url: thumbnailUrl,
+      })
+
+      setPosts((prev) =>
+        prev.map((p) => (p.id === editingPost.id ? { ...p, ...editingPost } : p))
+      )
+      setEditingPost(null)
+      setEditDialogOpen(false)
+    } catch (err: any) {
+      console.error("Failed to update post:", err)
+      alert("Failed to update post: " + err.message)
+    } finally {
+      setEditingLoading(false)
     }
   }
 
@@ -372,6 +420,263 @@ export default function BlogAdminPage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Edit Dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Blog Post</DialogTitle>
+              <DialogDescription>Update your blog post details</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Title *</Label>
+                <Input
+                  placeholder="Post title"
+                  value={editingPost?.title || ""}
+                  onChange={(e) =>
+                    setEditingPost((prev: any) => ({
+                      ...prev,
+                      title: e.target.value,
+                    }))
+                  }
+                  className="mt-2"
+                />
+              </div>
+
+              <div>
+                <Label>Excerpt</Label>
+                <Textarea
+                  placeholder="Brief summary of the post"
+                  value={editingPost?.excerpt || ""}
+                  onChange={(e) =>
+                    setEditingPost((prev: any) => ({
+                      ...prev,
+                      excerpt: e.target.value,
+                    }))
+                  }
+                  className="mt-2"
+                  rows={2}
+                />
+              </div>
+
+              <div>
+                <Label>Content</Label>
+                <Textarea
+                  placeholder="Full post content"
+                  value={editingPost?.content || ""}
+                  onChange={(e) =>
+                    setEditingPost((prev: any) => ({
+                      ...prev,
+                      content: e.target.value,
+                    }))
+                  }
+                  className="mt-2"
+                  rows={6}
+                />
+              </div>
+
+              <div>
+                <Label>Category</Label>
+                <Select
+                  value={editingPost?.category || "tech"}
+                  onValueChange={(value) =>
+                    setEditingPost((prev: any) => ({
+                      ...prev,
+                      category: value,
+                    }))
+                  }
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tech">Technology</SelectItem>
+                    <SelectItem value="lifestyle">Lifestyle</SelectItem>
+                    <SelectItem value="business">Business</SelectItem>
+                    <SelectItem value="entertainment">Entertainment</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Thumbnail Image</Label>
+                {editingPost?.thumbnailPreview ? (
+                  <div className="mt-2 relative">
+                    <img
+                      src={editingPost.thumbnailPreview}
+                      alt="New thumbnail preview"
+                      className="max-h-48 rounded border-2 border-green-500"
+                    />
+                    <p className="text-xs text-green-600 mt-2">New thumbnail (not yet saved)</p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-2 w-full"
+                      onClick={() => {
+                        setEditingPost((prev: any) => ({
+                          ...prev,
+                          newThumbnail: null,
+                          thumbnailPreview: null,
+                        }))
+                      }}
+                    >
+                      <X className="w-4 h-4 mr-2" />
+                      Remove New Image
+                    </Button>
+                  </div>
+                ) : editingPost?.thumbnail_url ? (
+                  <div className="mt-2 relative">
+                    <img
+                      src={editingPost.thumbnail_url}
+                      alt="Current thumbnail"
+                      className="max-h-48 rounded"
+                    />
+                    <p className="text-xs text-muted-foreground mt-2">Current thumbnail</p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-2 w-full"
+                      onClick={() => {
+                        const input = document.createElement("input")
+                        input.type = "file"
+                        input.accept = "image/*"
+                        input.onchange = (e: any) => {
+                          const file = e.target.files[0]
+                          const reader = new FileReader()
+                          reader.onloadend = () => {
+                            setEditingPost((prev: any) => ({
+                              ...prev,
+                              newThumbnail: file,
+                              thumbnailPreview: reader.result as string,
+                            }))
+                          }
+                          reader.readAsDataURL(file)
+                        }
+                        input.click()
+                      }}
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Change Thumbnail
+                    </Button>
+                  </div>
+                ) : editingPost?.thumbnail_url ? (
+                  <div className="mt-2 relative">
+                    <img
+                      src={editingPost.thumbnail_url}
+                      alt="Current thumbnail"
+                      className="max-h-40 rounded"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-2 w-full"
+                      onClick={() => {
+                        const input = document.createElement("input")
+                        input.type = "file"
+                        input.accept = "image/*"
+                        input.onchange = (e: any) => {
+                          const file = e.target.files[0]
+                          const reader = new FileReader()
+                          reader.onloadend = () => {
+                            setEditingPost((prev: any) => ({
+                              ...prev,
+                              newThumbnail: file,
+                              thumbnailPreview: reader.result as string,
+                            }))
+                          }
+                          reader.readAsDataURL(file)
+                        }
+                        input.click()
+                      }}
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Change Image
+                    </Button>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => {
+                      const input = document.createElement("input")
+                      input.type = "file"
+                      input.accept = "image/*"
+                      input.onchange = (e: any) => {
+                        const file = e.target.files[0]
+                        const reader = new FileReader()
+                        reader.onloadend = () => {
+                          setEditingPost((prev: any) => ({
+                            ...prev,
+                            newThumbnail: file,
+                            thumbnailPreview: reader.result as string,
+                          }))
+                        }
+                        reader.readAsDataURL(file)
+                      }
+                      input.click()
+                    }}
+                    className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:bg-muted/50 transition-colors"
+                  >
+                    <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-sm font-medium">Click to upload thumbnail</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="edit-featured"
+                  checked={editingPost?.is_featured || false}
+                  onCheckedChange={(checked) =>
+                    setEditingPost((prev: any) => ({
+                      ...prev,
+                      is_featured: checked as boolean,
+                    }))
+                  }
+                />
+                <Label htmlFor="edit-featured" className="cursor-pointer">
+                  Mark as Featured
+                </Label>
+              </div>
+
+              <div>
+                <Label>Status</Label>
+                <Select
+                  value={editingPost?.status || "draft"}
+                  onValueChange={(value) =>
+                    setEditingPost((prev: any) => ({
+                      ...prev,
+                      status: value,
+                    }))
+                  }
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="published">Published</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button
+                className="w-full gradient-bg"
+                onClick={handleEditPost}
+                disabled={editingLoading}
+              >
+                {editingLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Changes"
+                )}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Search */}
@@ -463,6 +768,16 @@ export default function BlogAdminPage() {
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditingPost(post)
+                              setEditDialogOpen(true)
+                            }}
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"

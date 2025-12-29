@@ -138,7 +138,7 @@ export default function MarketplacePage() {
                       <div className="flex flex-col md:flex-row">
                         <div className="relative aspect-video md:aspect-square md:w-1/2">
                           <Image
-                            src={product.media?.[0] || product.thumbnail || "/placeholder.svg"}
+                          src={product.media?.[0]?.url || product.media?.[0] || "/placeholder.svg"}
                             alt={product.title}
                             fill
                             className="object-cover transition-transform duration-500 group-hover:scale-105"
@@ -198,7 +198,7 @@ export default function MarketplacePage() {
                     >
                       <div className="relative aspect-[4/3]">
                         <Image
-                          src={product.media?.[0] || product.thumbnail || "/placeholder.svg"}
+                          src={product.media?.[0]?.url || product.media?.[0] || "/placeholder.svg"}
                           alt={product.title}
                           fill
                           className="object-cover transition-transform duration-500 group-hover:scale-105"
