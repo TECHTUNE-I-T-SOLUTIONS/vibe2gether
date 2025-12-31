@@ -6,14 +6,9 @@ import { createClient } from "@/lib/supabase/server"
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-
-    if (!session?.user?.id) {
-      console.log("[GET /api/users/all] User not authenticated")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const userId = session?.user?.id || null
 
     const supabase = await createClient()
-    const userId = session.user.id
 
     // Get query parameters for filtering and pagination
     const searchParams = request.nextUrl.searchParams
@@ -25,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     const offset = (page - 1) * limit
 
-    console.log(`[GET /api/users/all] Fetching users for user ${userId}, page: ${page}`)
+    console.log(`[GET /api/users/all] Fetching users${userId ? ` for user ${userId}` : " (public)"}`)
 
     let query = supabase
       .from("users")
@@ -49,9 +44,14 @@ export async function GET(request: NextRequest) {
       `,
         { count: "exact" }
       )
-      .neq("id", userId) // Exclude current user
       .eq("is_active", true) // Only active users
-      .order("created_at", { ascending: false })
+
+    // Exclude current user if logged in
+    if (userId) {
+      query = query.neq("id", userId)
+    }
+
+    query = query.order("created_at", { ascending: false })
 
     // Apply filters
     if (search) {
@@ -78,19 +78,25 @@ export async function GET(request: NextRequest) {
       throw error
     }
 
-    // Get following status for each user
-    const { data: followings } = await supabase
-      .from("follows")
-      .select("following_id")
-      .eq("follower_id", userId)
-
-    const followingIds = new Set(followings?.map((f) => f.following_id) || [])
-
-    // Enrich users with following status
-    const enrichedUsers = (users || []).map((user) => ({
+    let enrichedUsers = (users || []).map((user) => ({
       ...user,
-      isFollowing: followingIds.has(user.id),
+      isFollowing: false,
     }))
+
+    // Get following status if user is logged in
+    if (userId) {
+      const { data: followings } = await supabase
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", userId)
+
+      const followingIds = new Set(followings?.map((f) => f.following_id) || [])
+
+      enrichedUsers = enrichedUsers.map((user) => ({
+        ...user,
+        isFollowing: followingIds.has(user.id),
+      }))
+    }
 
     console.log(`[GET /api/users/all] Fetched ${enrichedUsers.length} users`)
 

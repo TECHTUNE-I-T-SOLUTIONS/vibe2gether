@@ -370,7 +370,7 @@ export default function FeedPage() {
         <CardContent className="p-4">
           <div className="flex gap-4">
             <Avatar className="w-10 h-10 ring-2 ring-primary/20">
-              <AvatarImage src={user?.profile_picture} />
+              <AvatarImage src={user?.profile_picture || undefined} />
               <AvatarFallback>{user?.display_name?.substring(0, 2).toUpperCase()}</AvatarFallback>
             </Avatar>
             <Link href="/dashboard/create-post" className="flex-1">
@@ -463,15 +463,30 @@ export default function FeedPage() {
                 {/* Media */}
                 {mediaUrl && (
                   <div
-                    className="relative w-full h-96 rounded-lg overflow-hidden mb-4 bg-muted cursor-pointer hover:opacity-90 transition-opacity"
-                    onClick={() => router.push(`/post/${post.id}`)}
+                  className="relative w-full rounded-lg overflow-hidden mb-4 bg-muted"
+                  onClick={() => router.push(`/post/${post.id}`)}
                   >
+                  {mediaUrl.match(/\.(mp4|webm|ogg)$/i) ? (
+                    <video
+                    className="w-full h-96 object-cover"
+                    controls
+                    autoPlay
+                    muted
+                    onClick={(e) => e.stopPropagation()}
+                    >
+                    <source src={mediaUrl} />
+                    Your browser does not support the video tag.
+                    </video>
+                  ) : (
+                    <div className="relative w-full h-96 cursor-pointer hover:opacity-90 transition-opacity">
                     <Image
                       src={mediaUrl}
                       alt="Post media"
                       fill
                       className="object-cover"
                     />
+                    </div>
+                  )}
                   </div>
                 )}
 

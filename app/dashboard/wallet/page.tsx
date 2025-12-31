@@ -29,6 +29,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { useI18n } from "@/lib/i18n/context"
 import { useUserProfile } from "@/hooks/use-user-profile"
+import { PaystackPaymentModal } from "@/components/paystack-payment-modal"
 
 interface Transaction {
   id: string
@@ -62,6 +63,7 @@ export default function WalletPage() {
   const [referralStats, setReferralStats] = useState<any>(null)
   const [referralLink, setReferralLink] = useState("")
   const [loading, setLoading] = useState(true)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
 
   useEffect(() => {
     async function fetchWalletData() {
@@ -143,7 +145,11 @@ export default function WalletPage() {
                 <Wallet className="w-4 h-4 mr-2" />
                 {t("withdraw")}
               </Button>
-              <Button variant="secondary" className="rounded-full bg-white/20 text-white hover:bg-white/30 border-0">
+              <Button 
+                variant="secondary" 
+                className="rounded-full bg-white/20 text-white hover:bg-white/30 border-0"
+                onClick={() => setShowPaymentModal(true)}
+              >
                 <CreditCard className="w-4 h-4 mr-2" />
                 Buy Coins
               </Button>
@@ -486,6 +492,13 @@ export default function WalletPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <PaystackPaymentModal 
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        amount={1500}
+        purpose="Buy Coins"
+      />
     </div>
   )
 }

@@ -71,12 +71,19 @@ export async function GET(request: NextRequest) {
       verifications?.map((v: any) => [v.user_id, v.status]) ?? []
     )
 
-    // Enrich users with premium status and verification details
+    // Check which users are banned
+    const { data: bannedUsers } = await supabase
+      .from("banned_users")
+      .select("id")
+    const bannedUserIds = new Set(bannedUsers?.map((b: any) => b.id) ?? [])
+
+    // Enrich users with premium status, verification details, and ban status
     const enrichedUsers = (users || []).map((user: any) => ({
       ...user,
       is_premium: premiumUserIds.has(user.id),
       is_verified: verificationMap.get(user.id) === "approved",
       verification_status: verificationMap.get(user.id) || null,
+      is_banned: bannedUserIds.has(user.id),
     }))
 
     // Get stats

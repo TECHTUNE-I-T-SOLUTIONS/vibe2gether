@@ -90,8 +90,8 @@ export function DashboardMobileBottomNav() {
   }
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 md:hidden h-20 bg-background/95 backdrop-blur-md border-t border-border/50 z-40 safe-area-inset-bottom">
-      <div className="flex items-center justify-around h-full px-0.5">
+    <nav className="fixed bottom-0 left-0 right-0 md:hidden bg-background/95 backdrop-blur-md border-t border-border/50 z-40 safe-area-inset-bottom">
+      <div className="flex items-center justify-around h-20 px-0.5 gap-1">
         {navItems.map((item) => {
           const isActive = isActiveRoute(item.href)
           
@@ -107,9 +107,8 @@ export function DashboardMobileBottomNav() {
             <Link key={item.href} href={item.href} className="flex-1">
               <Button
                 variant="ghost"
-                size="icon"
                 className={cn(
-                  "relative rounded-2xl h-12 w-12 mx-auto flex flex-col items-center justify-center text-xs",
+                  "relative rounded-lg w-full h-16 flex flex-col items-center justify-center gap-1 transition-all duration-200",
                   isActive 
                     ? "gradient-bg text-primary-foreground" 
                     : "text-muted-foreground hover:text-foreground"
@@ -121,8 +120,14 @@ export function DashboardMobileBottomNav() {
                 )}>
                   {item.icon}
                 </span>
+                <span className={cn(
+                  "text-xs font-medium transition-all duration-200",
+                  isActive ? "text-primary-foreground font-semibold" : "text-muted-foreground"
+                )}>
+                  {item.label}
+                </span>
                 {badgeCount > 0 && (
-                  <Badge className="absolute top-0 right-0 w-4 h-4 p-0 flex items-center justify-center gradient-bg text-xs text-white">
+                  <Badge className="absolute top-2 right-2 w-4 h-4 p-0 flex items-center justify-center gradient-bg text-xs text-white">
                     {badgeCount > 9 ? "9+" : badgeCount}
                   </Badge>
                 )}

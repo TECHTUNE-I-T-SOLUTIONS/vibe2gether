@@ -25,22 +25,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const { id: userId } = await params
 
-    // Update user's is_active to false
+    // Update user's is_active to true
     const { error: updateError } = await supabase
       .from("users")
       .update({
-        is_active: false,
+        is_active: true,
         updated_at: new Date().toISOString(),
       })
       .eq("id", userId)
 
     if (updateError) throw updateError
 
-    return NextResponse.json({ success: true, message: "User suspended successfully" })
+    return NextResponse.json({ success: true, message: "User reactivated successfully" })
   } catch (error) {
-    console.error("Error suspending user:", error)
+    console.error("Error unsuspending user:", error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to suspend user" },
+      { error: error instanceof Error ? error.message : "Failed to unsuspend user" },
       { status: 500 }
     )
   }

@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js"
 
 const UPLOAD_TIMEOUT = 30000 // 30 seconds
 const UPLOAD_RETRIES = 2
-const FALLBACK_BUCKETS = ["posts", "profile_pictures"] // Fallback buckets that definitely exist
+const FALLBACK_BUCKETS = ["user-verifications", "posts", "profile_pictures"] // Fallback buckets that definitely exist
 
 export async function POST(request: NextRequest) {
   try {

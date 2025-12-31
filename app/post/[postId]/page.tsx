@@ -336,17 +336,33 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
           )}
 
           {/* Media */}
-          {mediaUrl && (
-            <div className="relative w-full h-[500px] rounded-lg overflow-hidden mb-6 bg-muted">
-              <Image
-                src={mediaUrl}
-                alt="Post media"
-                fill
-                className="object-cover"
-                loading="eager"
-              />
-            </div>
-          )}
+                {mediaUrl && (
+                  <div
+                  className="relative w-full rounded-lg overflow-hidden mb-4 bg-muted"
+                  >
+                  {mediaUrl.match(/\.(mp4|webm|ogg)$/i) ? (
+                    <video
+                    className="w-full h-96 object-cover"
+                    controls
+                    autoPlay
+                    muted
+                    onClick={(e) => e.stopPropagation()}
+                    >
+                    <source src={mediaUrl} />
+                    Your browser does not support the video tag.
+                    </video>
+                  ) : (
+                    <div className="relative w-full h-96 cursor-pointer hover:opacity-90 transition-opacity">
+                    <Image
+                      src={mediaUrl}
+                      alt="Post media"
+                      fill
+                      className="object-cover"
+                    />
+                    </div>
+                  )}
+                  </div>
+                )}
 
           {/* Stats */}
           <div className="grid grid-cols-4 gap-4 text-center mb-6 pb-6 border-b border-border/50">

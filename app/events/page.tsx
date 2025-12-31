@@ -15,7 +15,6 @@ import {
   MapPin,
   Clock,
   Users,
-  Heart,
   ArrowRight,
   Sparkles,
   Music,
@@ -25,6 +24,8 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getEvents } from "@/lib/supabase/queries"
+import { EventDetailsModal } from "@/components/event-details-modal"
+import { createClient } from "@/lib/supabase/client"
 
 const eventCategories = [
   { id: "all", label: "All Events", icon: Sparkles },
@@ -37,10 +38,12 @@ const eventCategories = [
 export default function EventsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeCategory, setActiveCategory] = useState("all")
-  const [savedEvents, setSavedEvents] = useState<string[]>([])
   const [events, setEvents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedEvent, setSelectedEvent] = useState<any>(null)
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false)
+  const [creatorInfo, setCreatorInfo] = useState<any>(null)
 
   useEffect(() => {
     async function fetchEvents() {
@@ -69,10 +72,35 @@ export default function EventsPage() {
     return matchesSearch && matchesCategory
   })
 
-  const toggleSave = (eventId: string) => {
-    setSavedEvents((prev) =>
-      prev.includes(eventId) ? prev.filter((id) => id !== eventId) : [...prev, eventId]
-    )
+  const handleViewDetails = async (event: any) => {
+    setSelectedEvent(event)
+
+    // Fetch creator info
+    try {
+      const supabase = await createClient()
+      const { data } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", event.creator_id)
+        .single()
+
+      if (data) {
+        setCreatorInfo(data)
+      }
+    } catch (error) {
+      console.error("Failed to fetch creator info:", error)
+    }
+
+    setDetailsModalOpen(true)
+  }
+
+  const formatPrice = (price?: number, currency?: string) => {
+    if (!price) return "Free"
+    const curr = currency || "USD"
+    if (curr === "NGN") {
+      return `₦${price.toLocaleString()}`
+    }
+    return `$${price}`
   }
 
   return (
@@ -157,17 +185,6 @@ export default function EventsPage() {
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
                         <Badge className="absolute top-4 left-4 gradient-bg text-primary-foreground">Featured</Badge>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className={cn(
-                            "absolute top-4 right-4 rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/40 text-white",
-                            savedEvents.includes(event.id) && "text-primary"
-                          )}
-                          onClick={() => toggleSave(event.id)}
-                        >
-                          <Heart className={cn("w-5 h-5", savedEvents.includes(event.id) && "fill-primary")} />
-                        </Button>
                         <div className="absolute bottom-0 left-0 right-0 p-6">
                           <h3 className="text-2xl font-bold text-white mb-2">{event.title}</h3>
                           <p className="text-white/80 mb-4 line-clamp-2">{event.description}</p>
@@ -195,13 +212,16 @@ export default function EventsPage() {
                               <span className="text-sm">{event.registered_count} registered</span>
                             </div>
                             {event.ticket_price ? (
-                              <div className="text-lg font-bold gradient-text">${event.ticket_price}</div>
+                              <div className="text-lg font-bold gradient-text">{formatPrice(event.ticket_price, event.currency)}</div>
                             ) : (
                               <Badge variant="secondary">Free</Badge>
                             )}
                           </div>
-                          <Button className="rounded-full gradient-bg">
-                            Register
+                          <Button 
+                            className="rounded-full gradient-bg"
+                            onClick={() => handleViewDetails(event)}
+                          >
+                            View Details
                             <ArrowRight className="w-4 h-4 ml-2" />
                           </Button>
                         </div>
@@ -234,17 +254,6 @@ export default function EventsPage() {
                           className="object-cover transition-transform duration-500 group-hover:scale-105"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className={cn(
-                            "absolute top-3 right-3 rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/40 text-white",
-                            savedEvents.includes(event.id) && "text-primary"
-                          )}
-                          onClick={() => toggleSave(event.id)}
-                        >
-                          <Heart className={cn("w-5 h-5", savedEvents.includes(event.id) && "fill-primary")} />
-                        </Button>
                         <div className="absolute bottom-3 left-3 right-3">
                           <Badge className="bg-white/20 backdrop-blur-sm text-white border-0 capitalize">
                             {event.category}
@@ -271,12 +280,16 @@ export default function EventsPage() {
                           </div>
                           <div className="flex items-center gap-3">
                             {event.ticket_price ? (
-                              <span className="font-bold gradient-text">${event.ticket_price}</span>
+                              <span className="font-bold gradient-text">{formatPrice(event.ticket_price, event.currency)}</span>
                             ) : (
                               <Badge variant="secondary">Free</Badge>
                             )}
-                            <Button size="sm" className="rounded-full gradient-bg">
-                              Book Now
+                            <Button 
+                              size="sm" 
+                              className="rounded-full gradient-bg"
+                              onClick={() => handleViewDetails(event)}
+                            >
+                              Details
                             </Button>
                           </div>
                         </div>
@@ -291,6 +304,18 @@ export default function EventsPage() {
       </main>
       <Footer />
       <MobileNav />
+
+      {/* Event Details Modal */}
+      <EventDetailsModal
+        isOpen={detailsModalOpen}
+        onClose={() => {
+          setDetailsModalOpen(false)
+          setSelectedEvent(null)
+          setCreatorInfo(null)
+        }}
+        event={selectedEvent}
+        creator={creatorInfo}
+      />
     </div>
   )
 }

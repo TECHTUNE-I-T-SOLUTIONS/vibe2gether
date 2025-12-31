@@ -9,9 +9,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Search, ShoppingBag, Calendar, Ticket, Gift, Sparkles, Heart, MapPin, Star, ArrowRight, Loader2 } from "lucide-react"
+import { Search, ShoppingBag, Calendar, Ticket, Gift, Sparkles, MapPin, ArrowRight, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getMarketplaceProducts } from "@/lib/supabase/queries"
+import { ProductDetailsModal } from "@/components/product-details-modal"
+import { createClient } from "@/lib/supabase/client"
 
 const categories = [
   { id: "all", label: "All", icon: Sparkles },
@@ -24,10 +26,12 @@ const categories = [
 export default function MarketplacePage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeCategory, setActiveCategory] = useState("all")
-  const [wishlist, setWishlist] = useState<string[]>([])
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedProduct, setSelectedProduct] = useState<any>(null)
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false)
+  const [sellerInfo, setSellerInfo] = useState<any>(null)
 
   useEffect(() => {
     async function fetchProducts() {
@@ -56,10 +60,34 @@ export default function MarketplacePage() {
     return matchesSearch && matchesCategory
   })
 
-  const toggleWishlist = (productId: string) => {
-    setWishlist((prev) =>
-      prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]
-    )
+  const handleViewDetails = async (product: any) => {
+    setSelectedProduct(product)
+    
+    // Fetch seller info
+    try {
+      const supabase = await createClient()
+      const { data } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", product.seller_id)
+        .single()
+      
+      if (data) {
+        setSellerInfo(data)
+      }
+    } catch (error) {
+      console.error("Failed to fetch seller info:", error)
+    }
+    
+    setDetailsModalOpen(true)
+  }
+
+  const formatPrice = (price: number, currency?: string) => {
+    const curr = currency || "USD"
+    if (curr === "NGN") {
+      return `₦${price.toLocaleString()}`
+    }
+    return `$${price}`
   }
 
   return (
@@ -144,17 +172,6 @@ export default function MarketplacePage() {
                             className="object-cover transition-transform duration-500 group-hover:scale-105"
                           />
                           <Badge className="absolute top-4 left-4 gradient-bg text-primary-foreground">Featured</Badge>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className={cn(
-                              "absolute top-4 right-4 rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/40",
-                              wishlist.includes(product.id) && "text-primary"
-                            )}
-                            onClick={() => toggleWishlist(product.id)}
-                          >
-                            <Heart className={cn("w-5 h-5", wishlist.includes(product.id) && "fill-primary")} />
-                          </Button>
                         </div>
                         <CardContent className="flex-1 p-6 flex flex-col justify-between">
                           <div>
@@ -167,9 +184,12 @@ export default function MarketplacePage() {
                           </div>
                           <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
                             <div className="text-2xl font-bold gradient-text">
-                              ${product.price} {product.currency || "USD"}
+                              {formatPrice(product.price, product.currency)}
                             </div>
-                            <Button className="rounded-full gradient-bg">
+                            <Button 
+                              className="rounded-full gradient-bg"
+                              onClick={() => handleViewDetails(product)}
+                            >
                               View Details
                               <ArrowRight className="w-4 h-4 ml-2" />
                             </Button>
@@ -203,17 +223,6 @@ export default function MarketplacePage() {
                           fill
                           className="object-cover transition-transform duration-500 group-hover:scale-105"
                         />
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className={cn(
-                            "absolute top-3 right-3 rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/40",
-                            wishlist.includes(product.id) && "text-primary"
-                          )}
-                          onClick={() => toggleWishlist(product.id)}
-                        >
-                          <Heart className={cn("w-5 h-5", wishlist.includes(product.id) && "fill-primary")} />
-                        </Button>
                       </div>
                       <CardContent className="p-4">
                         <Badge variant="outline" className="mb-2 text-xs capitalize">
@@ -223,9 +232,13 @@ export default function MarketplacePage() {
                         <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{product.description}</p>
                         <div className="flex items-center justify-between">
                           <div className="text-lg font-bold gradient-text">
-                            ${product.price} {product.currency || "USD"}
+                            {formatPrice(product.price, product.currency)}
                           </div>
-                          <Button size="sm" className="rounded-full gradient-bg">
+                          <Button 
+                            size="sm" 
+                            className="rounded-full gradient-bg"
+                            onClick={() => handleViewDetails(product)}
+                          >
                             Details
                           </Button>
                         </div>
@@ -240,6 +253,18 @@ export default function MarketplacePage() {
       </main>
       <Footer />
       <MobileNav />
+
+      {/* Product Details Modal */}
+      <ProductDetailsModal
+        isOpen={detailsModalOpen}
+        onClose={() => {
+          setDetailsModalOpen(false)
+          setSelectedProduct(null)
+          setSellerInfo(null)
+        }}
+        product={selectedProduct}
+        seller={sellerInfo}
+      />
     </div>
   )
 }

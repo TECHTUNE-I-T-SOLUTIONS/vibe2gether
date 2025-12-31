@@ -1,19 +1,29 @@
-import { createClient } from "@/lib/supabase/server"
+import { createClient } from "@supabase/supabase-js"
 import { NextRequest, NextResponse } from "next/server"
+import jwt from "jsonwebtoken"
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+)
+
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
+
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = await createClient()
-
-    // Verify user is admin
-    const {
-      data: { user: adminUser },
-    } = await supabase.auth.getUser()
-    if (!adminUser) {
+    // Verify admin auth with JWT token
+    const token = request.cookies.get("admin_token")?.value
+    if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const userId = params.id
+    try {
+      jwt.verify(token, JWT_SECRET)
+    } catch {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+    }
+
+    const { id: userId } = await params
 
     // Get user details
     const { data: user, error: userError } = await supabase
@@ -23,6 +33,22 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       .single()
 
     if (userError) throw userError
+
+    // Get admin ID from token to track who banned the user
+    const decodedToken = jwt.decode(token) as any
+    const adminId = decodedToken?.userId || decodedToken?.id
+
+    // First, clear any referral relationships where this user is the referred_by
+    // This removes the foreign key constraint
+    const { error: referralError } = await supabase
+      .from("users")
+      .update({ referred_by: null })
+      .eq("referred_by", userId)
+
+    if (referralError) {
+      console.warn("Warning: Could not clear referral relationships:", referralError)
+      // Continue anyway as this is not critical
+    }
 
     // Insert into banned_users table
     const { error: banInsertError } = await supabase.from("banned_users").insert([
@@ -58,7 +84,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         referred_by: user.referred_by,
         referral_bonus_claimed: user.referral_bonus_claimed,
         original_created_at: user.created_at,
-        banned_by: adminUser.id,
+        banned_by: adminId,
         ban_reason: "Banned by admin",
       },
     ])

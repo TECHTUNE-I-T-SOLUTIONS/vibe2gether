@@ -6,7 +6,7 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { useLanguage } from "@/lib/i18n/context"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Bell, Menu, Globe, User, Settings, LogOut, Sun, Moon, X } from "lucide-react"
+import { Bell, Menu, Globe, User, Settings, LogOut, Sun, Moon, X, Coins } from "lucide-react"
 import { useTheme } from "next-themes"
 import {
   DropdownMenu,
@@ -131,6 +131,16 @@ export function Header() {
               <div className="w-10 h-10 rounded-full bg-muted animate-pulse" />
             ) : session?.user ? (
               <>
+                {/* Coins */}
+                <Button
+                  variant="ghost"
+                  className="hidden sm:flex items-center gap-1.5 rounded-full bg-gradient-to-r from-yellow-500/10 to-amber-500/10 hover:bg-gradient-to-r hover:from-yellow-500/20 hover:to-amber-500/20 text-amber-600 font-semibold"
+                  onClick={() => router.push("/dashboard/wallet")}
+                >
+                  <Coins className="w-4 h-4" />
+                  <span>{session.user.coins_balance || 0}</span>
+                </Button>
+
                 {/* Notifications */}
                 <Button
                   variant="ghost"
@@ -292,6 +302,13 @@ export function Header() {
                       }}>
                         <User className="w-4 h-4 mr-2" />
                         {t("dashboard")}
+                      </Button>
+                      <Button variant="outline" className="w-full justify-start" onClick={() => {
+                        router.push("/dashboard/wallet")
+                        setMobileMenuOpen(false)
+                      }}>
+                        <Coins className="w-4 h-4 mr-2" />
+                        Wallet
                       </Button>
                       <Button variant="outline" className="w-full justify-start" onClick={() => {
                         router.push("/dashboard/notifications")

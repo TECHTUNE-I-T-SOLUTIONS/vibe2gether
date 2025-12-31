@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Filter, MoreHorizontal, TrendingUp, Loader } from "lucide-react"
+import { Search, Filter, MoreHorizontal, TrendingUp, Loader, X, Eye, Check, XCircle, RefreshCw } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -16,6 +16,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { useToast } from "@/hooks/use-toast"
 import { createClient } from "@/lib/supabase/client"
 
 interface Transaction {
@@ -90,6 +92,10 @@ export default function AdminTransactionsPage() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [typeFilter, setTypeFilter] = useState("all")
   const [activeTab, setActiveTab] = useState("all")
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false)
+  const [updatingStatus, setUpdatingStatus] = useState(false)
+  const { toast } = useToast()
 
   useEffect(() => {
     async function fetchData() {
@@ -158,6 +164,96 @@ export default function AdminTransactionsPage() {
 
     return matchesSearch && matchesType && matchesStatus
   })
+
+  const handleViewDetails = (tx: Transaction) => {
+    setSelectedTransaction(tx)
+    setDetailsModalOpen(true)
+  }
+
+  const handleUpdateStatus = async (newStatus: "completed" | "failed") => {
+    if (!selectedTransaction) return
+
+    setUpdatingStatus(true)
+    try {
+      const supabase = createClient()
+      
+      const { error } = await supabase
+        .from("transactions")
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq("id", selectedTransaction.id)
+
+      if (error) throw error
+
+      // Update local state
+      setTransactions(
+        transactions.map((tx) =>
+          tx.id === selectedTransaction.id ? { ...tx, status: newStatus } : tx
+        )
+      )
+
+      // Update selected transaction
+      setSelectedTransaction({ ...selectedTransaction, status: newStatus })
+
+      toast({
+        title: "Success",
+        description: `Transaction marked as ${newStatus}`,
+      })
+    } catch (error) {
+      console.error("Error updating transaction:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update transaction",
+        variant: "destructive",
+      })
+    } finally {
+      setUpdatingStatus(false)
+    }
+  }
+
+  const handleRefund = async () => {
+    if (!selectedTransaction) return
+
+    setUpdatingStatus(true)
+    try {
+      const supabase = createClient()
+
+      // Create refund transaction
+      const { error } = await supabase
+        .from("transactions")
+        .insert({
+          user_id: selectedTransaction.user_id,
+          amount: selectedTransaction.amount,
+          type: `${selectedTransaction.type}_refund`,
+          status: "completed",
+          payment_method: selectedTransaction.payment_method,
+          description: `Refund for transaction ${selectedTransaction.id}`,
+        })
+
+      if (error) throw error
+
+      // Mark original as refunded
+      await supabase
+        .from("transactions")
+        .update({ status: "refunded", updated_at: new Date().toISOString() })
+        .eq("id", selectedTransaction.id)
+
+      setSelectedTransaction({ ...selectedTransaction, status: "refunded" })
+
+      toast({
+        title: "Success",
+        description: "Refund processed successfully",
+      })
+    } catch (error) {
+      console.error("Error processing refund:", error)
+      toast({
+        title: "Error",
+        description: "Failed to process refund",
+        variant: "destructive",
+      })
+    } finally {
+      setUpdatingStatus(false)
+    }
+  }
 
   const statItems = [
     { label: "Total Revenue", value: formatCurrency(stats.totalRevenue), change: "+15%" },
@@ -318,14 +414,19 @@ export default function AdminTransactionsPage() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem>View Details</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleViewDetails(tx)}>
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  View Details
+                                </DropdownMenuItem>
                                 {tx.status === "pending" && (
                                   <>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem className="text-green-600">
+                                    <DropdownMenuItem className="text-green-600" onClick={() => handleUpdateStatus("completed")}>
+                                      <Check className="w-4 h-4 mr-2" />
                                       Mark as Completed
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem className="text-red-600">
+                                    <DropdownMenuItem className="text-red-600" onClick={() => handleUpdateStatus("failed")}>
+                                      <XCircle className="w-4 h-4 mr-2" />
                                       Mark as Failed
                                     </DropdownMenuItem>
                                   </>
@@ -333,7 +434,8 @@ export default function AdminTransactionsPage() {
                                 {tx.status === "failed" && (
                                   <>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem className="text-blue-600">
+                                    <DropdownMenuItem className="text-blue-600" onClick={handleRefund}>
+                                      <RefreshCw className="w-4 h-4 mr-2" />
                                       Refund User
                                     </DropdownMenuItem>
                                   </>
@@ -416,7 +518,10 @@ export default function AdminTransactionsPage() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem>View Details</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleViewDetails(tx)}>
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  View Details
+                                </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </td>
@@ -495,12 +600,17 @@ export default function AdminTransactionsPage() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem>View Details</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleViewDetails(tx)}>
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  View Details
+                                </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-green-600">
+                                <DropdownMenuItem className="text-green-600" onClick={() => handleUpdateStatus("completed")}>
+                                  <Check className="w-4 h-4 mr-2" />
                                   Mark as Completed
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="text-red-600">
+                                <DropdownMenuItem className="text-red-600" onClick={() => handleUpdateStatus("failed")}>
+                                  <XCircle className="w-4 h-4 mr-2" />
                                   Mark as Failed
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
@@ -516,6 +626,122 @@ export default function AdminTransactionsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Transaction Details Modal */}
+      <Dialog open={detailsModalOpen} onOpenChange={setDetailsModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span>Transaction Details</span>
+              <Badge className={getStatusColor(selectedTransaction?.status || "")} style={{ marginLeft: "auto" }}>
+                {selectedTransaction?.status}
+              </Badge>
+            </DialogTitle>
+            <DialogDescription>
+              ID: {selectedTransaction?.id}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedTransaction && (
+            <div className="space-y-6">
+              {/* User Information */}
+              <div className="bg-muted/50 p-4 rounded-lg">
+                <h3 className="font-semibold mb-4">User Information</h3>
+                <div className="flex items-center gap-4 mb-4">
+                  <Avatar className="w-12 h-12">
+                    <AvatarImage src={selectedTransaction.user?.avatar_url || "/placeholder.svg"} />
+                    <AvatarFallback>{selectedTransaction.user?.full_name?.[0] || "U"}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-medium">{selectedTransaction.user?.full_name}</p>
+                    <p className="text-sm text-muted-foreground">{selectedTransaction.user?.email}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Transaction Details */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Amount</p>
+                  <p className="font-semibold text-lg">{formatCurrency(selectedTransaction.amount / 100)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Type</p>
+                  <p className="font-semibold">{selectedTransaction.type?.replace("_", " ")}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Payment Method</p>
+                  <p className="font-semibold">{selectedTransaction.payment_method || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Currency</p>
+                  <p className="font-semibold">{selectedTransaction.currency || "NGN"}</p>
+                </div>
+              </div>
+
+              {/* Description */}
+              {selectedTransaction.description && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Description</p>
+                  <p className="text-sm bg-muted/50 p-3 rounded">{selectedTransaction.description}</p>
+                </div>
+              )}
+
+              {/* Dates */}
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground mb-1">Created</p>
+                  <p>{formatDate(selectedTransaction.created_at)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground mb-1">Updated</p>
+                  <p>{formatDate(selectedTransaction.updated_at)}</p>
+                </div>
+              </div>
+
+              {/* Actions */}
+              {selectedTransaction.status === "pending" && (
+                <div className="flex gap-2">
+                  <Button
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    onClick={() => handleUpdateStatus("completed")}
+                    disabled={updatingStatus}
+                  >
+                    {updatingStatus ? <Loader className="w-4 h-4 animate-spin mr-2" /> : null}
+                    Mark as Completed
+                  </Button>
+                  <Button
+                    className="flex-1 bg-red-600 hover:bg-red-700"
+                    onClick={() => handleUpdateStatus("failed")}
+                    disabled={updatingStatus}
+                  >
+                    {updatingStatus ? <Loader className="w-4 h-4 animate-spin mr-2" /> : null}
+                    Mark as Failed
+                  </Button>
+                </div>
+              )}
+
+              {selectedTransaction.status === "failed" && (
+                <Button
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  onClick={handleRefund}
+                  disabled={updatingStatus}
+                >
+                  {updatingStatus ? <Loader className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Process Refund
+                </Button>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailsModalOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
+

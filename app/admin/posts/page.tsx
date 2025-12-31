@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 interface Post {
   id: string
@@ -36,6 +37,10 @@ interface Post {
   likes_count?: number
   comments_count?: number
   views_count?: number
+  media?: Array<{
+    type?: string
+    url?: string
+  } | string>
 }
 
 interface Stats {
@@ -54,6 +59,7 @@ export default function AdminPostsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("all")
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [previewPostId, setPreviewPostId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchPosts()
@@ -296,32 +302,32 @@ export default function AdminPostsPage() {
                       {/* Media - Images/Videos */}
                       {post.media && Array.isArray(post.media) && post.media.length > 0 && (
                         <div className="mb-3 grid grid-cols-2 gap-2">
-                          {post.media.map((item: any, index: number) => (
-                            <div key={index} className="relative bg-muted rounded-lg overflow-hidden">
-                              {item.type === "image" || item.url?.includes(".jpg") || item.url?.includes(".png") || item.url?.includes(".jpeg") ? (
-                                <img
-                                  src={item.url || item}
-                                  alt={`Post media ${index + 1}`}
-                                  className="w-full h-40 object-cover hover:scale-105 transition-transform cursor-pointer"
-                                />
-                              ) : item.type === "video" || item.url?.includes(".mp4") ? (
-                                <video
-                                  src={item.url || item}
-                                  controls
-                                  className="w-full h-40 object-cover"
-                                />
-                              ) : (
-                                <a
-                                  href={item.url || item}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="w-full h-40 bg-muted flex items-center justify-center text-xs text-muted-foreground hover:text-foreground"
-                                >
-                                  View Media
-                                </a>
-                              )}
-                            </div>
-                          ))}
+                          {post.media.map((item: any, index: number) => {
+                            const mediaUrl = typeof item === "string" ? item : item?.url || ""
+                            const isVideo = typeof mediaUrl === "string" && /\.(mp4|webm|mov)$/i.test(mediaUrl)
+                            
+                            if (!mediaUrl) return null
+                            
+                            return (
+                              <div key={index} className="relative bg-muted rounded-lg overflow-hidden">
+                                {isVideo ? (
+                                  <video
+                                    src={mediaUrl}
+                                    controls
+                                    autoPlay
+                                    muted
+                                    className="w-full h-40 object-cover"
+                                  />
+                                ) : (
+                                  <img
+                                    src={mediaUrl}
+                                    alt={`Post media ${index + 1}`}
+                                    className="w-full h-40 object-cover hover:scale-105 transition-transform cursor-pointer"
+                                  />
+                                )}
+                              </div>
+                            )
+                          })}
                         </div>
                       )}
 
@@ -365,7 +371,7 @@ export default function AdminPostsPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setPreviewPostId(post.id)}>
                             <Eye className="w-4 h-4 mr-2" />
                             Preview
                           </DropdownMenuItem>
@@ -444,6 +450,107 @@ export default function AdminPostsPage() {
           </div>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Preview Post Modal */}
+      <Dialog open={!!previewPostId} onOpenChange={(open) => !open && setPreviewPostId(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Post Details</DialogTitle>
+          </DialogHeader>
+          {previewPostId && posts.find(p => p.id === previewPostId) && (
+            (() => {
+              const post = posts.find(p => p.id === previewPostId)!
+              return (
+                <div className="space-y-4">
+                  {/* Author */}
+                  <div className="flex items-center gap-3">
+                    <Avatar className="w-12 h-12">
+                      <AvatarImage src={post.users?.profile_picture} />
+                      <AvatarFallback>{post.users?.full_name?.[0] || "U"}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium">{post.users?.full_name || "Unknown User"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(post.created_at).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Content */}
+                  <p className="text-foreground">{post.content}</p>
+
+                  {/* Media */}
+                  {post.media && Array.isArray(post.media) && post.media.length > 0 && (
+                    <div className="grid grid-cols-2 gap-2">
+                      {post.media.map((item: any, index: number) => {
+                        const mediaUrl = typeof item === "string" ? item : item?.url || ""
+                        const isVideo = typeof mediaUrl === "string" && /\.(mp4|webm|mov)$/i.test(mediaUrl)
+                        
+                        if (!mediaUrl) return null
+                        
+                        return (
+                          <div key={index} className="relative bg-muted rounded-lg overflow-hidden">
+                            {isVideo ? (
+                              <video
+                                src={mediaUrl}
+                                controls
+                                autoPlay
+                                muted
+                                className="w-full h-64 object-cover"
+                              />
+                            ) : (
+                              <img
+                                src={mediaUrl}
+                                alt={`Post media ${index + 1}`}
+                                className="w-full h-64 object-cover"
+                              />
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Badges */}
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant={post.status === "published" ? "default" : "secondary"}>
+                      {post.status?.replace(/_/g, " ")}
+                    </Badge>
+                    {post.is_flagged && (
+                      <Badge className="bg-destructive text-white">Flagged</Badge>
+                    )}
+                    {post.is_featured && (
+                      <Badge className="bg-purple-500 text-white">Featured</Badge>
+                    )}
+                  </div>
+
+                  {/* Engagement */}
+                  <div className="flex gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <Heart className="w-4 h-4" />
+                      <span>{post.likes_count || 0} likes</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <MessageCircle className="w-4 h-4" />
+                      <span>{post.comments_count || 0} comments</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Eye className="w-4 h-4" />
+                      <span>{post.views_count || 0} views</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

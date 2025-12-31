@@ -298,17 +298,32 @@ export default function UserProfilePage({ params }: { params: Promise<{ userId: 
                   {/* Post Content */}
                   <p className="text-sm text-foreground mb-3 line-clamp-3">{post.content}</p>
 
-                  {/* Media Preview */}
-                  {post.media && post.media.length > 0 && (
+                    {/* Media Preview */}
+                    {post.media && post.media.length > 0 && (
                     <div className="relative w-full h-48 rounded-lg overflow-hidden mb-3 bg-muted">
-                      <Image
-                        src={post.media[0].url || post.media[0]}
+                      {(() => {
+                      const mediaUrl = post.media[0].url || post.media[0];
+                      const isVideo = typeof mediaUrl === 'string' && /\.(mp4|webm|mov)$/i.test(mediaUrl);
+                      
+                      return isVideo ? (
+                        <video
+                        src={mediaUrl}
+                        controls
+                        autoPlay
+                        muted
+                        className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <Image
+                        src={mediaUrl}
                         alt="Post media"
                         fill
                         className="object-cover"
-                      />
+                        />
+                      );
+                      })()}
                     </div>
-                  )}
+                    )}
 
                   {/* Tags */}
                   {post.tags && post.tags.length > 0 && (

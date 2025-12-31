@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Filter, MoreHorizontal, UserCheck, UserX, Shield, Eye, Ban, Verified, Loader } from "lucide-react"
+import { Search, Filter, MoreHorizontal, UserCheck, UserX, Shield, Eye, Ban, Verified, Loader, Trash2, AlertTriangle } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -16,8 +16,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { createClient } from "@/lib/supabase/client"
 import { UserProfileModal } from "@/components/admin/user-profile-modal"
+import { useToast } from "@/hooks/use-toast"
 
 interface User {
   id: string
@@ -29,6 +38,7 @@ interface User {
   is_verified?: boolean
   is_premium?: boolean
   is_active?: boolean
+  is_banned?: boolean
   coins_balance?: number
   last_login_at?: string
   created_at?: string
@@ -71,6 +81,7 @@ function formatDate(date: string | null | undefined) {
 }
 
 export default function AdminUsersPage() {
+  const { toast } = useToast()
   const [searchQuery, setSearchQuery] = useState("")
   const [users, setUsers] = useState<User[]>([])
   const [stats, setStats] = useState<DashboardStats>({
@@ -85,6 +96,24 @@ export default function AdminUsersPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("all")
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [userToDelete, setUserToDelete] = useState<User | null>(null)
+  const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const [deleteStep, setDeleteStep] = useState(1) // 1: Initial, 2: Confirmation, 3: Word entry
+  const [isDeleting, setIsDeleting] = useState(false)
+  
+  // Ban user states
+  const [banModalOpen, setBanModalOpen] = useState(false)
+  const [userToBan, setUserToBan] = useState<User | null>(null)
+  const [banConfirmation, setBanConfirmation] = useState(false)
+  const [isBanning, setIsBanning] = useState(false)
+  const [isUnbanning, setIsUnbanning] = useState(false)
+  
+  // Suspend user states
+  const [suspendModalOpen, setSuspendModalOpen] = useState(false)
+  const [userToSuspend, setUserToSuspend] = useState<User | null>(null)
+  const [isSuspending, setIsSuspending] = useState(false)
+  const [isUnsuspending, setIsUnsuspending] = useState(false)
 
   useEffect(() => {
     fetchUsers()
@@ -112,6 +141,215 @@ export default function AdminUsersPage() {
       console.error("Error fetching users:", error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const openDeleteModal = (user: User) => {
+    setUserToDelete(user)
+    setDeleteStep(1)
+    setDeleteConfirmText("")
+    setDeleteModalOpen(true)
+  }
+
+  const proceedToConfirmation = () => {
+    if (deleteStep === 1) {
+      setDeleteStep(2)
+    }
+  }
+
+  const proceedToWordEntry = () => {
+    if (deleteStep === 2) {
+      setDeleteStep(3)
+    }
+  }
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return
+
+    const confirmWord = "DELETE " + userToDelete.email.toUpperCase()
+    if (deleteConfirmText !== confirmWord) {
+      toast({
+        title: "Confirmation failed",
+        description: `Please type exactly: ${confirmWord}`,
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsDeleting(true)
+    try {
+      const response = await fetch(`/api/admin/users/${userToDelete.id}/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to delete user")
+      }
+
+      toast({
+        title: "User deleted",
+        description: `Account for ${userToDelete.email} has been permanently deleted.`,
+      })
+
+      setDeleteModalOpen(false)
+      setUserToDelete(null)
+      setDeleteStep(1)
+      setDeleteConfirmText("")
+      await fetchUsers()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete user",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const openSuspendModal = (user: User) => {
+    setUserToSuspend(user)
+    setSuspendModalOpen(true)
+  }
+
+  const handleSuspendUser = async () => {
+    if (!userToSuspend) return
+
+    setIsSuspending(true)
+    try {
+      const response = await fetch(`/api/admin/users/${userToSuspend.id}/suspend`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to suspend user")
+      }
+
+      toast({
+        title: "User suspended",
+        description: `${userToSuspend.email} has been suspended and set to inactive.`,
+      })
+
+      setSuspendModalOpen(false)
+      setUserToSuspend(null)
+      await fetchUsers()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to suspend user",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSuspending(false)
+    }
+  }
+
+  const handleUnsuspendUser = async () => {
+    if (!userToSuspend) return
+
+    setIsUnsuspending(true)
+    try {
+      const response = await fetch(`/api/admin/users/${userToSuspend.id}/unsuspend`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to unsuspend user")
+      }
+
+      toast({
+        title: "User reactivated",
+        description: `${userToSuspend.email} has been reactivated and set to active.`,
+      })
+
+      setSuspendModalOpen(false)
+      setUserToSuspend(null)
+      await fetchUsers()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to unsuspend user",
+        variant: "destructive",
+      })
+    } finally {
+      setIsUnsuspending(false)
+    }
+  }
+
+  const openBanModal = (user: User) => {
+    setUserToBan(user)
+    setBanConfirmation(false)
+    setBanModalOpen(true)
+  }
+
+  const handleBanUser = async () => {
+    if (!userToBan) return
+
+    setIsBanning(true)
+    try {
+      const response = await fetch(`/api/admin/users/${userToBan.id}/ban`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to ban user")
+      }
+
+      toast({
+        title: "User banned",
+        description: `${userToBan.email} has been banned and moved to banned users.`,
+      })
+
+      setBanModalOpen(false)
+      setUserToBan(null)
+      setBanConfirmation(false)
+      await fetchUsers()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to ban user",
+        variant: "destructive",
+      })
+    } finally {
+      setIsBanning(false)
+    }
+  }
+
+  const handleUnbanUser = async () => {
+    if (!userToBan) return
+
+    setIsUnbanning(true)
+    try {
+      const response = await fetch(`/api/admin/users/${userToBan.id}/unban`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to unban user")
+      }
+
+      toast({
+        title: "User unbanned",
+        description: `${userToBan.email} has been unbanned and can access their account again.`,
+      })
+
+      setBanModalOpen(false)
+      setUserToBan(null)
+      setBanConfirmation(false)
+      await fetchUsers()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to unban user",
+        variant: "destructive",
+      })
+    } finally {
+      setIsUnbanning(false)
     }
   }
 
@@ -328,13 +566,46 @@ export default function AdminUsersPage() {
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-orange-500 cursor-pointer">
-                                <UserX className="w-4 h-4 mr-2" />
-                                Suspend User
+                              {user.is_active ? (
+                                <DropdownMenuItem 
+                                  onClick={() => openSuspendModal(user)}
+                                  className="text-orange-500 cursor-pointer"
+                                >
+                                  <UserX className="w-4 h-4 mr-2" />
+                                  Suspend User
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem 
+                                  onClick={() => openSuspendModal(user)}
+                                  className="text-green-600 cursor-pointer"
+                                >
+                                  <UserCheck className="w-4 h-4 mr-2" />
+                                  Unsuspend User
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem 
+                                onClick={() => openBanModal(user)}
+                                className={user.is_banned ? "text-green-600 cursor-pointer" : "text-destructive cursor-pointer"}
+                              >
+                                {user.is_banned ? (
+                                  <>
+                                    <UserCheck className="w-4 h-4 mr-2" />
+                                    Unban User
+                                  </>
+                                ) : (
+                                  <>
+                                    <Ban className="w-4 h-4 mr-2" />
+                                    Ban User
+                                  </>
+                                )}
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="text-destructive cursor-pointer">
-                                <Ban className="w-4 h-4 mr-2" />
-                                Ban User
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => openDeleteModal(user)}
+                                className="text-destructive cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete Account
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -348,6 +619,127 @@ export default function AdminUsersPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
+              Delete User Account
+            </DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. Please follow the steps carefully.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {deleteStep === 1 && (
+              <div className="space-y-4">
+                <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4">
+                  <p className="font-medium text-sm mb-2">User to Delete:</p>
+                  <p className="text-sm font-mono bg-background p-2 rounded">
+                    {userToDelete?.email} ({userToDelete?.display_name})
+                  </p>
+                </div>
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                  <p className="text-sm font-medium text-amber-900">⚠ Warning:</p>
+                  <ul className="text-sm text-amber-800 mt-2 space-y-1">
+                    <li>• All user data will be permanently deleted</li>
+                    <li>• Cannot be recovered after deletion</li>
+                    <li>• Related posts, messages, and connections will be affected</li>
+                    <li>• Action will be logged in audit trail</li>
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {deleteStep === 2 && (
+              <div className="space-y-4">
+                <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4">
+                  <p className="font-medium text-sm mb-2">Final Confirmation</p>
+                  <p className="text-sm">
+                    Are you absolutely sure you want to delete this account? This is irreversible.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {deleteStep === 3 && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Type the confirmation phrase to proceed:</p>
+                  <div className="bg-muted p-3 rounded-lg font-mono text-sm text-center">
+                    DELETE {userToDelete?.email?.toUpperCase()}
+                  </div>
+                </div>
+                <Input
+                  placeholder="Enter the phrase above"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  className="font-mono"
+                />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteModalOpen(false)}
+            >
+              Cancel
+            </Button>
+
+            {deleteStep === 1 && (
+              <Button
+                variant="destructive"
+                onClick={proceedToConfirmation}
+              >
+                I Understand, Continue
+              </Button>
+            )}
+
+            {deleteStep === 2 && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setDeleteStep(1)}
+                >
+                  Go Back
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={proceedToWordEntry}
+                >
+                  Yes, Continue to Confirmation
+                </Button>
+              </>
+            )}
+
+            {deleteStep === 3 && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setDeleteStep(2)}
+                >
+                  Go Back
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteUser}
+                  disabled={
+                    isDeleting ||
+                    deleteConfirmText !== "DELETE " + (userToDelete?.email?.toUpperCase() || "")
+                  }
+                >
+                  {isDeleting ? "Deleting..." : "Permanently Delete Account"}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Users Cards - Mobile */}
       <div className="md:hidden space-y-4">
@@ -417,13 +809,46 @@ export default function AdminUsersPage() {
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-orange-500 cursor-pointer">
-                        <UserX className="w-4 h-4 mr-2" />
-                        Suspend User
+                      {user.is_active ? (
+                        <DropdownMenuItem 
+                          onClick={() => openSuspendModal(user)}
+                          className="text-orange-500 cursor-pointer"
+                        >
+                          <UserX className="w-4 h-4 mr-2" />
+                          Suspend User
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem 
+                          onClick={() => openSuspendModal(user)}
+                          className="text-green-600 cursor-pointer"
+                        >
+                          <UserCheck className="w-4 h-4 mr-2" />
+                          Unsuspend User
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem 
+                        onClick={() => openBanModal(user)}
+                        className={user.is_banned ? "text-green-600 cursor-pointer" : "text-destructive cursor-pointer"}
+                      >
+                        {user.is_banned ? (
+                          <>
+                            <UserCheck className="w-4 h-4 mr-2" />
+                            Unban User
+                          </>
+                        ) : (
+                          <>
+                            <Ban className="w-4 h-4 mr-2" />
+                            Ban User
+                          </>
+                        )}
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive cursor-pointer">
-                        <Ban className="w-4 h-4 mr-2" />
-                        Ban User
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => openDeleteModal(user)}
+                        className="text-destructive cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete Account
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -466,6 +891,128 @@ export default function AdminUsersPage() {
         onOpenChange={setModalOpen}
         onRefresh={fetchUsers}
       />
+
+      {/* Suspend User Modal */}
+      <Dialog open={suspendModalOpen} onOpenChange={setSuspendModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {userToSuspend?.is_active ? (
+                <>
+                  <UserX className="w-5 h-5 text-orange-500" />
+                  Suspend User
+                </>
+              ) : (
+                <>
+                  <UserCheck className="w-5 h-5 text-green-600" />
+                  Reactivate User
+                </>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {userToSuspend?.is_active 
+                ? `Are you sure you want to suspend ${userToSuspend?.email}? They will be marked as inactive.`
+                : `Are you sure you want to reactivate ${userToSuspend?.email}? They will be able to use their account again.`
+              }
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSuspendModalOpen(false)}>
+              Cancel
+            </Button>
+            {userToSuspend?.is_active ? (
+              <Button 
+                onClick={handleSuspendUser} 
+                disabled={isSuspending}
+                className="bg-orange-500 hover:bg-orange-600"
+              >
+                {isSuspending ? "Suspending..." : "Suspend User"}
+              </Button>
+            ) : (
+              <Button 
+                onClick={handleUnsuspendUser} 
+                disabled={isUnsuspending}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {isUnsuspending ? "Reactivating..." : "Reactivate User"}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ban User Modal */}
+      <Dialog open={banModalOpen} onOpenChange={setBanModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {userToBan?.is_banned ? (
+                <>
+                  <UserCheck className="w-5 h-5 text-green-600" />
+                  Unban User
+                </>
+              ) : (
+                <>
+                  <Ban className="w-5 h-5 text-destructive" />
+                  Ban User
+                </>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {userToBan?.is_banned
+                ? `This will restore ${userToBan?.email}'s access to the platform.`
+                : `This will permanently move ${userToBan?.email} to the banned users table.`
+              }
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {!userToBan?.is_banned && (
+              <>
+                <div className="flex items-center gap-2 p-3 bg-red-50 rounded-lg">
+                  <AlertTriangle className="w-4 h-4 text-red-600" />
+                  <p className="text-sm text-red-700">
+                    Banning a user removes them from the active users table and prevents them from accessing the platform.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="ban-confirm"
+                    checked={banConfirmation}
+                    onChange={(e) => setBanConfirmation(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <label htmlFor="ban-confirm" className="text-sm cursor-pointer">
+                    I understand this action cannot be undone and the user will be banned.
+                  </label>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBanModalOpen(false)}>
+              Cancel
+            </Button>
+            {userToBan?.is_banned ? (
+              <Button 
+                onClick={handleUnbanUser}
+                disabled={isUnbanning}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {isUnbanning ? "Unbanning..." : "Unban User"}
+              </Button>
+            ) : (
+              <Button 
+                onClick={handleBanUser}
+                disabled={!banConfirmation || isBanning}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {isBanning ? "Banning..." : "Ban User"}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

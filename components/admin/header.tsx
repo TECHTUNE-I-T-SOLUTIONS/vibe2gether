@@ -40,6 +40,7 @@ export function AdminHeader({ onLogoutClick }: AdminHeaderProps) {
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [showResults, setShowResults] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
+  const [showMobileSearch, setShowMobileSearch] = useState(false)
   const [adminData, setAdminData] = useState<AdminData | null>(null)
   const [notificationCount, setNotificationCount] = useState(0)
   const { theme, setTheme } = useTheme()
@@ -178,24 +179,131 @@ export function AdminHeader({ onLogoutClick }: AdminHeaderProps) {
       )}
     >
       <div className="flex items-center justify-between h-16 px-4 gap-4">
-        {/* Mobile Menu */}
-        <Sheet>
-          <SheetTrigger asChild className="lg:hidden">
-            <Button variant="ghost" size="icon" className="rounded-full">
-              <Menu className="w-5 h-5" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="p-0 w-72 flex flex-col gap-0">
-            <AdminMobileSidebar onLogoutClick={onLogoutClick} />
-          </SheetContent>
-        </Sheet>
+        {/* Mobile Menu Toggle or Search Toggle */}
+        {!showMobileSearch ? (
+          <>
+            <Sheet>
+              <SheetTrigger asChild className="lg:hidden">
+                <Button variant="ghost" size="icon" className="rounded-full">
+                  <Menu className="w-5 h-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="p-0 w-72 flex flex-col gap-0">
+                <AdminMobileSidebar onLogoutClick={onLogoutClick} />
+              </SheetContent>
+            </Sheet>
 
-        {/* Mobile Logo */}
-        <Link href="/admin" className="lg:hidden">
-          <div className="relative w-8 h-8 rounded-full overflow-hidden">
-            <Image src="/v2g-logo.png" alt="V2G" fill className="object-cover" />
-          </div>
-        </Link>
+            {/* Mobile Logo */}
+            <Link href="/admin" className="lg:hidden">
+              <div className="relative w-8 h-8 rounded-full overflow-hidden">
+                <Image src="/v2g-logo.png" alt="V2G" fill className="object-cover" />
+              </div>
+            </Link>
+
+            {/* Mobile Search Toggle */}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="rounded-full lg:hidden ml-auto"
+              onClick={() => setShowMobileSearch(true)}
+            >
+              <Search className="w-5 h-5" />
+            </Button>
+          </>
+        ) : (
+          <>
+            {/* Mobile Search Input */}
+            <div className="flex-1 lg:hidden relative">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  autoFocus
+                  placeholder="Search..."
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  onFocus={() => searchQuery && setShowResults(true)}
+                  className="pl-10 pr-8 rounded-full bg-muted/50 border-0 focus-visible:ring-primary/50"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery("")
+                      setSearchResults([])
+                      setShowResults(false)
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2"
+                  >
+                    <X className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                  </button>
+                )}
+              </div>
+
+              {/* Mobile Search Results Dropdown */}
+              {showResults && (searchResults.length > 0 || isSearching) && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-lg shadow-lg max-h-96 overflow-y-auto z-50">
+                  {isSearching ? (
+                    <div className="p-6 text-center">
+                      <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Searching...</span>
+                      </div>
+                    </div>
+                  ) : searchResults.length > 0 ? (
+                    <div className="divide-y divide-border">
+                      {searchResults.map((result, idx) => (
+                        <button
+                          key={`${result.type}-${result.id}-${idx}`}
+                          onClick={() => {
+                            handleResultClick(result)
+                            setShowMobileSearch(false)
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-muted/50 transition-colors flex items-center gap-3"
+                        >
+                          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary text-xs font-semibold flex-shrink-0">
+                            {result.type === "user" && "U"}
+                            {result.type === "post" && "P"}
+                            {result.type === "event" && "E"}
+                            {result.type === "product" && "M"}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {result.title || result.full_name || result.email || result.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {result.type === "user" && `User • ${result.email}`}
+                              {result.type === "post" && `Blog Post • ${result.category || "Uncategorized"}`}
+                              {result.type === "event" && `Event • ${result.location_name || "Location TBD"}`}
+                              {result.type === "product" && `Product • $${result.price || "N/A"}`}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-6 text-center text-muted-foreground">
+                      <p className="text-sm">No results found for "{searchQuery}"</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Close Search Button */}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="rounded-full lg:hidden"
+              onClick={() => {
+                setShowMobileSearch(false)
+                setSearchQuery("")
+                setSearchResults([])
+                setShowResults(false)
+              }}
+            >
+              <X className="w-5 h-5" />
+            </Button>
+          </>
+        )}
 
         {/* Search */}
         <div className="flex-1 max-w-md hidden md:block relative">

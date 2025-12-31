@@ -102,12 +102,12 @@ export default function BlogAdminPage() {
       const fileName = `${Date.now()}-${selectedImage.name}`
 
       const { data, error } = await supabase.storage
-        .from("blog-images")
-        .upload(fileName, selectedImage, { cacheControl: "3600" })
+        .from("blog-thumbnails")
+        .upload(fileName, selectedImage, { cacheControl: "3600", upsert: true })
 
       if (error) throw error
 
-      const { data: urlData } = supabase.storage.from("blog-images").getPublicUrl(fileName)
+      const { data: urlData } = supabase.storage.from("blog-thumbnails").getPublicUrl(fileName)
 
       setFormData({ ...formData, thumbnail_url: urlData.publicUrl })
       setSelectedImage(null)
@@ -119,9 +119,29 @@ export default function BlogAdminPage() {
     }
   }
 
+  // Generate slug from title
+  function generateSlug(title: string): string {
+    return title
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .slice(0, 255)
+  }
+
   async function handleCreatePost() {
     if (!formData.title || !formData.content) {
       alert("Please fill in title and content")
+      return
+    }
+
+    // Get admin ID from session
+    const sessionRes = await fetch("/api/admin/auth/me")
+    const sessionData = await sessionRes.json()
+
+    if (!sessionData.id) {
+      alert("Unable to determine admin ID. Please log in again.")
       return
     }
 
@@ -129,37 +149,60 @@ export default function BlogAdminPage() {
     try {
       const supabase = createClient()
 
+      // Verify that the admin user exists in the users table
+      const { data: authorUser, error: userError } = await supabase
+        .from("users")
+        .select("id")
+        .eq("id", sessionData.id)
+        .single()
+
+      if (userError || !authorUser) {
+        console.error("User validation error:", userError)
+        alert("Your user account was not found. Your account may have been deactivated. Please contact support.")
+        return
+      }
+
+      const slug = generateSlug(formData.title)
+
       const { data, error } = await supabase
         .from("blog_posts")
         .insert([
           {
+            author_id: sessionData.id,
             title: formData.title,
+            slug: slug,
             excerpt: formData.excerpt,
             content: formData.content,
             category: formData.category,
-            thumbnail_url: formData.thumbnail_url,
-            status: formData.status,
+            thumbnail: formData.thumbnail_url,
+            tags: [],
+            is_published: formData.status === "published",
             is_featured: formData.is_featured,
-            published_at: formData.status === "published" ? new Date() : null,
+            published_at: formData.status === "published" ? new Date().toISOString() : null,
           },
         ])
         .select()
 
-      if (!error) {
-        await fetchPosts()
-        setCreateDialogOpen(false)
-        setFormData({
-          title: "",
-          excerpt: "",
-          content: "",
-          category: "tech",
-          thumbnail_url: "",
-          status: "draft",
-          is_featured: false,
-        })
+      if (error) {
+        console.error("Error creating post:", error)
+        alert("Failed to create post: " + error.message)
+        return
       }
+
+      await fetchPosts()
+      setCreateDialogOpen(false)
+      setFormData({
+        title: "",
+        excerpt: "",
+        content: "",
+        category: "tech",
+        thumbnail_url: "",
+        status: "draft",
+        is_featured: false,
+      })
     } catch (err) {
       console.error("Failed to create post:", err)
+      alert("Failed to create post. Please try again.")
     } finally {
       setCreating(false)
     }
