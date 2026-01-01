@@ -45,11 +45,11 @@ const mainItems: SidebarItem[] = [
 
 const secondaryItems: SidebarItem[] = [
   { icon: ShoppingBag, label: "marketplace", href: "/admin/marketplace" },
-  { icon: Calendar, label: "Events", href: "/admin/events" },
-  { icon: BookOpen, label: "Blog", href: "/admin/blog" },
+  { icon: Calendar, label: "events", href: "/admin/events" },
+  { icon: BookOpen, label: "blog", href: "/admin/blog" },
   { icon: MessageSquare, label: "messages", href: "/admin/messages" },
-  { icon: CreditCard, label: "Transactions", href: "/admin/transactions" },
-  { icon: CreditCard, label: "Withdrawals", href: "/admin/withdrawals" },
+  { icon: CreditCard, label: "transactions", href: "/admin/transactions" },
+  { icon: CreditCard, label: "withdrawals", href: "/admin/withdrawals" },
   { icon: BarChart3, label: "analytics", href: "/admin/analytics" },
   { icon: Bell, label: "notifications", href: "/admin/notifications" },
 ]

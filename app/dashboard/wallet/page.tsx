@@ -49,10 +49,10 @@ interface CoinRate {
 }
 
 const redeemOptions = [
-  { title: "Premium Membership", coins: 500, description: "1 month of premium features", icon: Sparkles },
-  { title: "Profile Boost", coins: 50, description: "24hr visibility boost", icon: TrendingUp },
-  { title: "Featured Product", coins: 200, description: "Feature your product for 7 days", icon: ShoppingBag },
-  { title: "Gift Card", coins: 1000, description: "$10 gift card", icon: Gift },
+  { title: "Premium Membership", coins: 500, description: "1 month of premium features", icon: Sparkles, id: "premium" },
+  { title: "Profile Boost", coins: 50, description: "24hr visibility boost", icon: TrendingUp, id: "profile_boost" },
+  { title: "Featured Product", coins: 200, description: "Feature your product for 7 days", icon: ShoppingBag, id: "featured_product" },
+  { title: "Gift Card", coins: 30000, description: "$10 gift card", icon: Gift, id: "gift_card" },
 ]
 
 export default function WalletPage() {
@@ -79,6 +79,16 @@ export default function WalletPage() {
   const [accountVerified, setAccountVerified] = useState(false)
   const [withdrawalRequests, setWithdrawalRequests] = useState<any[]>([])
   const [loadingRequests, setLoadingRequests] = useState(false)
+  
+  // New redemption states
+  const [premiumTiers, setPremiumTiers] = useState<any[]>([])
+  const [showRedemptionModal, setShowRedemptionModal] = useState(false)
+  const [selectedRedemption, setSelectedRedemption] = useState<any>(null)
+  const [redeeming, setRedeeming] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<any>(null)
+  const [userProducts, setUserProducts] = useState<any[]>([])
+  const [loadingProducts, setLoadingProducts] = useState(false)
+  
   const { toast } = useToast()
 
   useEffect(() => {
@@ -94,7 +104,36 @@ export default function WalletPage() {
         console.error("Failed to fetch banks:", error)
       }
     }
+    
+    // Fetch premium tiers
+    const fetchPremiumTiers = async () => {
+      try {
+        const response = await fetch("/api/premium-tiers")
+        const data = await response.json()
+        if (data.success) {
+          setPremiumTiers(data.tiers || [])
+        }
+      } catch (error) {
+        console.error("Failed to fetch premium tiers:", error)
+      }
+    }
+    
+    // Fetch user products for featured product selection
+    const fetchUserProducts = async () => {
+      try {
+        const response = await fetch("/api/marketplace/my-products")
+        const data = await response.json()
+        if (data.success) {
+          setUserProducts(data.products || [])
+        }
+      } catch (error) {
+        console.error("Failed to fetch user products:", error)
+      }
+    }
+    
     fetchBanks()
+    fetchPremiumTiers()
+    fetchUserProducts()
   }, [])
 
   useEffect(() => {
@@ -242,8 +281,8 @@ export default function WalletPage() {
     const amount = parseFloat(withdrawalAmount)
     const minWithdrawal = 15 // $15 minimum (21,750 NGN)
     const currentBalance = user?.coins_balance || 0
-    const maxWithdrawal = currentBalance / 1450 // Convert coins to USD
-    const usdBalance = currentBalance / 1450
+    const maxWithdrawal = currentBalance / 500 // Convert coins to USD
+    const usdBalance = currentBalance / 500
 
     // Validation
     if (!withdrawalAmount || !bankCode || !bankName || !accountNumber || !accountName || !accountVerified) {
@@ -317,6 +356,117 @@ export default function WalletPage() {
       setWithdrawalLoading(false)
     }
   }
+
+  const handleOpenRedemptionModal = (option: any) => {
+    // Check if already premium (for premium membership)
+    if (option.id === "premium" && user?.is_premium) {
+      toast({
+        title: "Already Premium",
+        description: "You are already a premium member",
+        variant: "default",
+      })
+      return
+    }
+
+    // For featured product, check if user has products
+    if (option.id === "featured_product" && userProducts.length === 0) {
+      toast({
+        title: "No Products",
+        description: "You need to create a product first before featuring it",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setSelectedRedemption(option)
+    setShowRedemptionModal(true)
+  }
+
+  const handleRedeemCoins = async () => {
+    if (!selectedRedemption) return
+
+    // Validate user has enough coins
+    if ((user?.coins_balance || 0) < selectedRedemption.coins) {
+      toast({
+        title: "Insufficient Coins",
+        description: `You need ${selectedRedemption.coins} coins but only have ${user?.coins_balance || 0}`,
+        variant: "destructive",
+      })
+      return
+    }
+
+    // For featured product, validate product selection
+    if (selectedRedemption.id === "featured_product" && !selectedProduct) {
+      toast({
+        title: "Select Product",
+        description: "Please select a product to feature",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setRedeeming(true)
+
+      const response = await fetch("/api/wallet/redeem-coins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          redemptionType: selectedRedemption.id,
+          coinsAmount: selectedRedemption.coins,
+          selectedProductId: selectedProduct?.id,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to redeem coins")
+      }
+
+      toast({
+        title: "Success",
+        description: `Successfully redeemed ${selectedRedemption.coins} coins for ${selectedRedemption.title}`,
+      })
+
+      // Close modal
+      setShowRedemptionModal(false)
+      setSelectedRedemption(null)
+      setSelectedProduct(null)
+
+      // Refresh user data
+      // In a real app, you'd trigger a refetch of user data
+      window.location.reload()
+    } catch (error) {
+      console.error("Redemption error:", error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to redeem coins",
+        variant: "destructive",
+      })
+    } finally {
+      setRedeeming(false)
+    }
+  }
+
+  // Calculate premium membership coins based on tier price
+  const getPremiumCoins = () => {
+    if (premiumTiers.length === 0) return 500 // Default fallback
+    const premiumTier = premiumTiers.find((t) => t.name.toLowerCase() === "premium")
+    if (premiumTier) {
+      // Assuming monthly_price is in USD, convert to coins
+      return Math.round((premiumTier.monthly_price / 100) * 500) // If price is in cents
+    }
+    return 500
+  }
+
+  const updatedRedeemOptions = redeemOptions.map((option) => {
+    if (option.id === "premium") {
+      const premiumCoins = getPremiumCoins()
+      return { ...option, coins: premiumCoins }
+    }
+    return option
+  })
 
   if (loading) {
     return (
@@ -758,32 +908,42 @@ export default function WalletPage() {
             </CardHeader>
             <CardContent>
               <div className="grid sm:grid-cols-2 gap-4">
-                {redeemOptions.map((option, i) => {
+                {updatedRedeemOptions.map((option, i) => {
                   const Icon = option.icon
-                  const canAfford = balance >= option.coins
+                  const canAfford = (user?.coins_balance || 0) >= option.coins
+                  const isPremiumAlready = option.id === "premium" && user?.is_premium
                   return (
                     <div
                       key={i}
-                      className={`p-4 rounded-xl border ${canAfford ? "border-primary/30 bg-primary/5" : "border-border bg-muted/30"}`}
+                      className={`p-4 rounded-xl border ${canAfford && !isPremiumAlready ? "border-primary/30 bg-primary/5" : "border-border bg-muted/30"}`}
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center">
                           <Icon className="w-5 h-5 text-white" />
                         </div>
-                        <Badge variant={canAfford ? "default" : "secondary"} className={canAfford ? "gradient-bg" : ""}>
+                        <Badge variant={canAfford && !isPremiumAlready ? "default" : "secondary"} className={canAfford && !isPremiumAlready ? "gradient-bg" : ""}>
                           <Coins className="w-3 h-3 mr-1" />
                           {option.coins}
                         </Badge>
                       </div>
                       <h3 className="font-semibold mb-1">{option.title}</h3>
                       <p className="text-sm text-muted-foreground mb-3">{option.description}</p>
-                      <Button
-                        className={`w-full rounded-full ${canAfford ? "gradient-bg" : ""}`}
-                        variant={canAfford ? "default" : "secondary"}
-                        disabled={!canAfford}
-                      >
-                        {canAfford ? "Redeem" : "Not enough coins"}
-                      </Button>
+                      {isPremiumAlready && (
+                        <div className="w-full py-2 px-3 rounded-full bg-green-500/20 border border-green-500/50 text-green-700 text-sm font-medium text-center flex items-center justify-center gap-2">
+                          <BadgeCheck className="w-4 h-4" />
+                          Already Premium
+                        </div>
+                      )}
+                      {!isPremiumAlready && (
+                        <Button
+                          className={`w-full rounded-full ${canAfford ? "gradient-bg" : ""}`}
+                          variant={canAfford ? "default" : "secondary"}
+                          disabled={!canAfford}
+                          onClick={() => handleOpenRedemptionModal(option)}
+                        >
+                          {canAfford ? "Redeem" : "Not enough coins"}
+                        </Button>
+                      )}
                     </div>
                   )
                 })}
@@ -812,7 +972,7 @@ export default function WalletPage() {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">In USD</span>
-                <span className="font-bold">${((user?.coins_balance || 0) / 1450).toFixed(2)}</span>
+                <span className="font-bold">${((user?.coins_balance || 0) / 500).toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">In NGN</span>
@@ -835,7 +995,7 @@ export default function WalletPage() {
                     type="number"
                     placeholder="15.00"
                     min="15"
-                    max={(user?.coins_balance || 0) / 1450}
+                    max={(user?.coins_balance || 0) / 500}
                     step="0.01"
                     value={withdrawalAmount}
                     onChange={(e) => setWithdrawalAmount(e.target.value)}
@@ -922,7 +1082,7 @@ export default function WalletPage() {
 
               {/* Eligibility Check */}
               {(() => {
-                const usdBalance = (user?.coins_balance || 0) / 1450
+                const usdBalance = (user?.coins_balance || 0) / 500
                 const requestAmount = parseFloat(withdrawalAmount) || 0
                 const insufficientBalance = usdBalance < 15
                 const requestTooSmall = requestAmount < 15 && requestAmount > 0
@@ -955,7 +1115,7 @@ export default function WalletPage() {
                 <Button
                   className="gradient-bg"
                   type="submit"
-                  disabled={withdrawalLoading || !withdrawalAmount || !bankCode || !accountNumber || !accountVerified || ((user?.coins_balance || 0) / 1450) < 15}
+                  disabled={withdrawalLoading || !withdrawalAmount || !bankCode || !accountNumber || !accountVerified || ((user?.coins_balance || 0) / 500) < 15}
                 >
                   {withdrawalLoading ? (
                     <>
@@ -969,6 +1129,118 @@ export default function WalletPage() {
               </DialogFooter>
             </form>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Redemption Modal */}
+      <Dialog open={showRedemptionModal} onOpenChange={setShowRedemptionModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Redemption</DialogTitle>
+            <DialogDescription>
+              {selectedRedemption?.title}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Redemption Details */}
+            <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Feature</span>
+                <span className="font-semibold">{selectedRedemption?.title}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Coins Required</span>
+                <span className="font-bold text-lg flex items-center gap-1">
+                  <Coins className="w-4 h-4" />
+                  {selectedRedemption?.coins}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Your Balance</span>
+                <span className={`font-semibold ${(user?.coins_balance || 0) >= selectedRedemption?.coins ? "text-green-600" : "text-red-600"}`}>
+                  {(user?.coins_balance || 0).toLocaleString()} coins
+                </span>
+              </div>
+              {selectedRedemption?.id === "premium" && (
+                <>
+                  <div className="border-t border-border pt-2">
+                    <p className="text-sm text-muted-foreground">Duration: 1 Month</p>
+                    <p className="text-sm text-muted-foreground">Auto-renewal: Disabled</p>
+                  </div>
+                </>
+              )}
+              {selectedRedemption?.id === "profile_boost" && (
+                <div className="border-t border-border pt-2">
+                  <p className="text-sm text-muted-foreground">Duration: 24 Hours</p>
+                  <p className="text-sm text-muted-foreground">Visibility: Top of Users List</p>
+                </div>
+              )}
+            </div>
+
+            {/* Product Selection for Featured Product */}
+            {selectedRedemption?.id === "featured_product" && (
+              <div className="space-y-2">
+                <Label>Select Product to Feature</Label>
+                <select
+                  value={selectedProduct?.id || ""}
+                  onChange={(e) => {
+                    const product = userProducts.find((p) => p.id === e.target.value)
+                    setSelectedProduct(product)
+                  }}
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Choose a product...</option>
+                  {userProducts.map((product) => (
+                    <option key={product.id} value={product.id}>
+                      {product.title} ({product.condition || "Unknown"})
+                    </option>
+                  ))}
+                </select>
+                {selectedProduct && (
+                  <div className="bg-primary/5 border border-primary/30 p-3 rounded-lg">
+                    <p className="text-sm font-medium">{selectedProduct.title}</p>
+                    <p className="text-xs text-muted-foreground">Feature expires in 7 days</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Confirmation Message */}
+            <div className="bg-amber-50 dark:bg-amber-950/30 p-3 rounded-lg border border-amber-200 dark:border-amber-800">
+              <p className="text-sm text-amber-900 dark:text-amber-200">
+                You are about to redeem <span className="font-semibold">{selectedRedemption?.coins}</span> coins for <span className="font-semibold">{selectedRedemption?.title}</span>. This action cannot be undone.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowRedemptionModal(false)
+                setSelectedRedemption(null)
+                setSelectedProduct(null)
+              }}
+              disabled={redeeming}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="gradient-bg"
+              onClick={handleRedeemCoins}
+              disabled={redeeming || (selectedRedemption?.id === "featured_product" && !selectedProduct)}
+            >
+              {redeeming ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                "Confirm Redemption"
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

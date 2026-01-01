@@ -1,33 +1,29 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
-import { getServerSession } from "next-auth/next"
-import { authOptions } from "@/lib/auth"
+import jwt from "jsonwebtoken"
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || "",
   process.env.SUPABASE_SERVICE_ROLE_KEY || ""
 )
 
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-
-    // Check if user is admin
-    if (!session?.user?.id) {
+    // Verify admin auth using JWT token
+    const token = request.cookies.get("admin_token")?.value
+    if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: adminUser } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", session.user.id)
-      .single()
-
-    if (adminUser?.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    try {
+      jwt.verify(token, JWT_SECRET)
+    } catch {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
     }
 
     const { status, notes } = await request.json()

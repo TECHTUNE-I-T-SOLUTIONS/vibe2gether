@@ -93,6 +93,7 @@ export function AdminMobileSidebar({ onLogoutClick }: AdminMobileSidebarProps) {
     { icon: BookOpen, label: "blog", href: "/admin/blog" },
     { icon: MessageSquare, label: "messages", href: "/admin/messages" },
     { icon: CreditCard, label: "transactions", href: "/admin/transactions" },
+    { icon: CreditCard, label: "withdrawals", href: "/admin/withdrawals" },
     { icon: BarChart3, label: "analytics", href: "/admin/analytics" },
     { icon: Bell, label: "notifications", href: "/admin/notifications", badge: counts.notifications },
   ]

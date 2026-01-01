@@ -22,6 +22,8 @@ export default function AdminNotificationsPage() {
   const { t } = useI18n()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchNotifications()
@@ -64,6 +66,50 @@ export default function AdminNotificationsPage() {
     setNotifications((prev) => prev.filter((n) => n.id !== id))
   }
 
+  const handleMarkAllRead = async () => {
+    try {
+      setActionLoading(true)
+      setError(null)
+      const response = await fetch("/api/admin/notifications/actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "mark-all-read" }),
+      })
+
+      if (!response.ok) throw new Error("Failed to mark all as read")
+      
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to mark all as read")
+      console.error("Error marking all read:", err)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleClearAll = async () => {
+    if (!confirm("Are you sure you want to delete all notifications? This action cannot be undone.")) return
+    
+    try {
+      setActionLoading(true)
+      setError(null)
+      const response = await fetch("/api/admin/notifications/actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "clear-all" }),
+      })
+
+      if (!response.ok) throw new Error("Failed to clear all notifications")
+      
+      setNotifications([])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to clear notifications")
+      console.error("Error clearing all:", err)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   const unreadCount = notifications.filter((n) => !n.is_read).length
   const readCount = notifications.filter((n) => n.is_read).length
 
@@ -83,13 +129,49 @@ export default function AdminNotificationsPage() {
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold mb-2 flex items-center gap-2">
-          <Bell className="w-8 h-8 text-accent" />
-          {t("notifications")}
-        </h1>
-        <p className="text-muted-foreground">Stay updated with system notifications and alerts</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold mb-2 flex items-center gap-2">
+            <Bell className="w-8 h-8 text-accent" />
+            {t("notifications")}
+          </h1>
+          <p className="text-muted-foreground">Stay updated with system notifications and alerts</p>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            className="rounded-full bg-transparent"
+            onClick={handleMarkAllRead}
+            disabled={actionLoading || unreadCount === 0}
+          >
+            {actionLoading ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <CheckCircle className="w-4 h-4 mr-2" />
+            )}
+            Mark All Read
+          </Button>
+          <Button 
+            variant="outline" 
+            className="rounded-full bg-transparent text-destructive hover:text-destructive"
+            onClick={handleClearAll}
+            disabled={actionLoading || notifications.length === 0}
+          >
+            {actionLoading ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Trash2 className="w-4 h-4 mr-2" />
+            )}
+            Clear All
+          </Button>
+        </div>
       </div>
+
+      {error && (
+        <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

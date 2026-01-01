@@ -43,6 +43,7 @@ export default function SettingsPage() {
   const { t, locale, setLocale } = useI18n()
   const { theme, setTheme } = useTheme()
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const [notifications, setNotifications] = useState({
     messages: true,
     matches: true,
@@ -58,6 +59,11 @@ export default function SettingsPage() {
       router.push("/login")
     }
   }, [session, router])
+
+  // Ensure component is mounted before rendering theme-dependent UI
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-4xl mx-auto">
@@ -103,35 +109,37 @@ export default function SettingsPage() {
                 <Label className="text-base">Theme</Label>
                 <p className="text-sm text-muted-foreground">Choose your preferred theme</p>
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant={theme === "light" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTheme("light")}
-                  className="rounded-full"
-                >
-                  <Sun className="w-4 h-4 mr-1" />
-                  Light
-                </Button>
-                <Button
-                  variant={theme === "dark" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTheme("dark")}
-                  className="rounded-full"
-                >
-                  <Moon className="w-4 h-4 mr-1" />
-                  Dark
-                </Button>
-                <Button
-                  variant={theme === "system" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTheme("system")}
-                  className="rounded-full"
-                >
-                  <Smartphone className="w-4 h-4 mr-1" />
-                  System
-                </Button>
-              </div>
+              {mounted && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant={theme === "light" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setTheme("light")}
+                    className="rounded-full"
+                  >
+                    <Sun className="w-4 h-4 mr-1" />
+                    Light
+                  </Button>
+                  <Button
+                    variant={theme === "dark" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setTheme("dark")}
+                    className="rounded-full"
+                  >
+                    <Moon className="w-4 h-4 mr-1" />
+                    Dark
+                  </Button>
+                  <Button
+                    variant={theme === "system" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setTheme("system")}
+                    className="rounded-full"
+                  >
+                    <Smartphone className="w-4 h-4 mr-1" />
+                    System
+                  </Button>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

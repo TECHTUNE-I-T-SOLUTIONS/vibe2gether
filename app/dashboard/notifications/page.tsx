@@ -85,6 +85,7 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [actionLoading, setActionLoading] = useState(false)
 
   // Check authentication
   useEffect(() => {
@@ -113,6 +114,58 @@ export default function NotificationsPage() {
 
   const unreadCount = notifications.filter((n) => !n.read).length
 
+  const handleMarkAllRead = async () => {
+    try {
+      setActionLoading(true)
+      const response = await fetch("/api/notifications/actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "mark-all-read" }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to mark all as read")
+      }
+
+      // Update local state
+      setNotifications((prev) =>
+        prev.map((n) => ({ ...n, read: true }))
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to mark all as read")
+      console.error("Error:", err)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleClearAll = async () => {
+    if (!confirm("Are you sure you want to delete all notifications?")) {
+      return
+    }
+
+    try {
+      setActionLoading(true)
+      const response = await fetch("/api/notifications/actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "clear-all" }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to clear all notifications")
+      }
+
+      // Update local state
+      setNotifications([])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to clear notifications")
+      console.error("Error:", err)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   return (
     <div className="p-4 md:p-6 lg:p-8">
       <div className="flex items-center justify-between mb-8">
@@ -121,12 +174,30 @@ export default function NotificationsPage() {
           <p className="text-muted-foreground">Stay updated with your activity</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="rounded-full bg-transparent">
-            <CheckCheck className="w-4 h-4 mr-2" />
+          <Button 
+            variant="outline" 
+            className="rounded-full bg-transparent"
+            onClick={handleMarkAllRead}
+            disabled={actionLoading || unreadCount === 0}
+          >
+            {actionLoading ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <CheckCheck className="w-4 h-4 mr-2" />
+            )}
             Mark All Read
           </Button>
-          <Button variant="outline" className="rounded-full bg-transparent text-destructive hover:text-destructive">
-            <Trash2 className="w-4 h-4 mr-2" />
+          <Button 
+            variant="outline" 
+            className="rounded-full bg-transparent text-destructive hover:text-destructive"
+            onClick={handleClearAll}
+            disabled={actionLoading || notifications.length === 0}
+          >
+            {actionLoading ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Trash2 className="w-4 h-4 mr-2" />
+            )}
             Clear All
           </Button>
         </div>
