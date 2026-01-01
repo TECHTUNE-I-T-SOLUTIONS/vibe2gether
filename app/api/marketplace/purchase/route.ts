@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
         transactionId: transaction.id,
         type: "marketplace_purchase",
       },
-      callback_url: `${process.env.APP_BASE_URL}/marketplace/payment-success`,
+      callback_url: `${process.env.APP_BASE_URL}/marketplace/payment-callback?reference=${reference}`,
     })
 
     if (!paystackResponse.status || !paystackResponse.data) {

@@ -118,90 +118,140 @@ export async function GET(request: NextRequest) {
           })
         }
 
-        // Add coins to user if not already done
-        if (transaction.metadata?.coins_added) {
-          console.log(`[PAYSTACK] Coins already added for transaction ${transaction.id}`)
+        // Add coins to user if not already done (for coin purchases)
+        if (transaction.type === "coin_purchase" || transaction.metadata?.coinsAmount) {
+          if (transaction.metadata?.coins_added) {
+            console.log(`[PAYSTACK] Coins already added for transaction ${transaction.id}`)
+            return NextResponse.json({
+              success: true,
+              status: "completed",
+              coinsAdded: transaction.metadata?.coinsAmount || 0,
+              amount: transaction.amount,
+            })
+          }
+
+          const coinsAmount = transaction.metadata?.coinsAmount || Math.round((transaction.amount / 1450) * 500)
+
+          const { data: user, error: fetchError } = await supabase
+            .from("users")
+            .select("coins_balance")
+            .eq("id", transaction.user_id)
+            .single()
+
+          if (!fetchError && user) {
+            const newBalance = (user.coins_balance || 0) + coinsAmount
+            const { error: addCoinsError } = await supabase
+              .from("users")
+              .update({
+                coins_balance: newBalance,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", transaction.user_id)
+
+            if (!addCoinsError) {
+              console.log(`[PAYSTACK] Added ${coinsAmount} coins to user, new balance: ${newBalance}`)
+
+              // Mark coins as added in transaction metadata
+              await supabase
+                .from("transactions")
+                .update({
+                  metadata: {
+                    ...transaction.metadata,
+                    coins_added: true,
+                    coins_added_at: new Date().toISOString(),
+                  },
+                })
+                .eq("id", transaction.id)
+
+              // Check if coin transaction already exists for this payment
+              const { data: existingCoinTx, error: checkError } = await supabase
+                .from("coin_transactions")
+                .select("id")
+                .eq("reference_id", transaction.id)
+                .eq("reference_type", "paystack_transaction")
+                .single()
+
+              // Only insert if it doesn't already exist
+              if (!existingCoinTx && !checkError) {
+                const { error: coinTxError } = await supabase
+                  .from("coin_transactions")
+                  .insert({
+                    user_id: transaction.user_id,
+                    amount: coinsAmount,
+                    transaction_type: "purchase",
+                    description: `Purchased ${coinsAmount} coins via Paystack (₦${transaction.amount.toFixed(2)})`,
+                    reference_id: transaction.id,
+                    reference_type: "paystack_transaction",
+                    balance_after: newBalance,
+                    created_at: new Date().toISOString(),
+                  })
+
+                if (coinTxError) {
+                  console.error("[PAYSTACK] Failed to save coin transaction:", coinTxError)
+                } else {
+                  console.log(`[PAYSTACK] Saved coin transaction for user ${transaction.user_id}`)
+                }
+              } else {
+                console.log(`[PAYSTACK] Coin transaction already exists for reference ${transaction.id}`)
+              }
+            }
+          }
+
           return NextResponse.json({
             success: true,
             status: "completed",
-            coinsAdded: transaction.metadata?.coinsAmount || 0,
+            coinsAdded: coinsAmount,
             amount: transaction.amount,
           })
         }
 
-        const coinsAmount = transaction.metadata?.coinsAmount || Math.round((transaction.amount / 1450) * 500)
+        // Handle marketplace purchase (create purchase record)
+        if (transaction.type === "marketplace_purchase") {
+          const metadata = transaction.metadata || {}
+          const productId = metadata.productId
+          const sellerId = metadata.sellerId
 
-        const { data: user, error: fetchError } = await supabase
-          .from("users")
-          .select("coins_balance")
-          .eq("id", transaction.user_id)
-          .single()
+          if (productId && sellerId) {
+            console.log(`[PAYSTACK] Creating marketplace purchase record for product ${productId}`)
 
-        if (!fetchError && user) {
-          const newBalance = (user.coins_balance || 0) + coinsAmount
-          const { error: addCoinsError } = await supabase
-            .from("users")
-            .update({
-              coins_balance: newBalance,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", transaction.user_id)
-
-          if (!addCoinsError) {
-            console.log(`[PAYSTACK] Added ${coinsAmount} coins to user, new balance: ${newBalance}`)
-
-            // Mark coins as added in transaction metadata
-            await supabase
-              .from("transactions")
-              .update({
-                metadata: {
-                  ...transaction.metadata,
-                  coins_added: true,
-                  coins_added_at: new Date().toISOString(),
-                },
+            const { error: purchaseError } = await supabase
+              .from("marketplace_purchases")
+              .insert({
+                product_id: productId,
+                buyer_id: transaction.user_id,
+                seller_id: sellerId,
+                quantity: 1,
+                unit_price: transaction.amount / 100, // Convert from kobo to NGN
+                total_amount: transaction.amount / 100,
+                transaction_id: transaction.id,
+                status: "completed",
+                delivery_status: "pending",
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               })
-              .eq("id", transaction.id)
 
-            // Check if coin transaction already exists for this payment
-            const { data: existingCoinTx, error: checkError } = await supabase
-              .from("coin_transactions")
-              .select("id")
-              .eq("reference_id", transaction.id)
-              .eq("reference_type", "paystack_transaction")
-              .single()
-
-            // Only insert if it doesn't already exist
-            if (!existingCoinTx && !checkError) {
-              const { error: coinTxError } = await supabase
-                .from("coin_transactions")
-                .insert({
-                  user_id: transaction.user_id,
-                  amount: coinsAmount,
-                  transaction_type: "purchase",
-                  description: `Purchased ${coinsAmount} coins via Paystack (₦${transaction.amount.toFixed(2)})`,
-                  reference_id: transaction.id,
-                  reference_type: "paystack_transaction",
-                  balance_after: newBalance,
-                  created_at: new Date().toISOString(),
-                })
-
-              if (coinTxError) {
-                console.error("[PAYSTACK] Failed to save coin transaction:", coinTxError)
-              } else {
-                console.log(`[PAYSTACK] Saved coin transaction for user ${transaction.user_id}`)
-              }
-            } else {
-              console.log(`[PAYSTACK] Coin transaction already exists for reference ${transaction.id}`)
+            if (purchaseError) {
+              console.error("[PAYSTACK] Failed to create marketplace purchase:", purchaseError)
+              return NextResponse.json({
+                success: false,
+                error: "Failed to create purchase record",
+                status: "error",
+              })
             }
+
+            console.log(`[PAYSTACK] Marketplace purchase created successfully`)
           }
+
+          return NextResponse.json({
+            success: true,
+            status: "completed",
+            amount: transaction.amount,
+            type: "marketplace_purchase",
+          })
         }
 
-        return NextResponse.json({
-          success: true,
-          status: "completed",
-          coinsAdded: coinsAmount,
-          amount: transaction.amount,
-        })
+        // Handle other transaction types
+        console.log(`[PAYSTACK] Transaction type: ${transaction.type}, no specific action needed`)
       } catch (error) {
         console.error("[PAYSTACK] Verification error:", error)
         return NextResponse.json(

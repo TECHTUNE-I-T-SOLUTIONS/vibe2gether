@@ -54,16 +54,34 @@ export function PaystackPaymentModal({
   // Check for payment reference in URL params (Paystack redirect)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const reference = params.get("reference")
+    const urlReference = params.get("reference")
     
-    if (reference && isOpen) {
-      console.log("[PAYSTACK] Payment reference found in URL:", reference)
+    // Check URL first, then localStorage
+    const reference = urlReference || (typeof window !== 'undefined' ? localStorage.getItem("paystack_reference") : null)
+    
+    if (reference) {
+      console.log("[PAYSTACK] Payment reference found:", reference)
       setPaymentReference(reference)
-      verifyPayment(reference)
+      // Auto-verify payment when component mounts with reference
+      setTimeout(() => verifyPayment(reference), 500)
       // Clean up URL
-      window.history.replaceState({}, document.title, window.location.pathname)
+      if (urlReference) {
+        window.history.replaceState({}, document.title, window.location.pathname)
+      }
     }
-  }, [isOpen])
+  }, [])
+
+  // Poll for payment if user comes back from Paystack
+  useEffect(() => {
+    if (!paymentReference || paymentStatus === "success") return
+    
+    // Start polling every 2 seconds if payment reference exists and not yet successful
+    const pollInterval = setInterval(() => {
+      verifyPayment(paymentReference)
+    }, 2000)
+    
+    return () => clearInterval(pollInterval)
+  }, [paymentReference, paymentStatus])
 
   // Fetch user details from session on modal open
   useEffect(() => {
@@ -141,7 +159,13 @@ export function PaystackPaymentModal({
       }
 
       const data = await response.json()
-      const { authorizationUrl } = data
+      const { authorizationUrl, reference } = data
+
+      // Store reference in localStorage for polling if redirect fails
+      if (reference) {
+        localStorage.setItem("paystack_reference", reference)
+        setPaymentReference(reference)
+      }
 
       // Redirect to Paystack payment page
       if (authorizationUrl) {
@@ -169,6 +193,15 @@ export function PaystackPaymentModal({
     }
   }
 
+  const handleReturnToMarketplace = () => {
+    if (paymentReference) {
+      // Redirect to verification page with reference
+      window.location.href = `/marketplace/payment-callback?reference=${paymentReference}`
+    } else {
+      window.location.href = "/marketplace"
+    }
+  }
+
   const verifyPayment = async (reference: string) => {
     try {
       console.log("[PAYSTACK] Verifying payment with reference:", reference)
@@ -179,15 +212,30 @@ export function PaystackPaymentModal({
 
       if (result.success && result.status === "completed") {
         setPaymentStatus("success")
+        // Clear stored reference
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem("paystack_reference")
+        }
         toast({
           title: "Success!",
-          description: `${result.coinsAdded} coins have been added to your wallet!`,
+          description: itemType === "product" 
+            ? "Payment successful! Redirecting to marketplace..."
+            : `${result.coinsAdded || "Payment"} completed!`,
           variant: "default",
         })
         onPaymentSuccess?.(reference)
-        // Auto close after 3 seconds
-        setTimeout(() => {
-          handleClose()
+        
+        // Auto redirect based on item type
+        if (itemType === "product") {
+          setTimeout(() => {
+            window.location.href = `/marketplace/payment-callback?reference=${reference}`
+          }, 2000)
+        } else {
+          // Auto close after 3 seconds for other types
+          setTimeout(() => {
+            handleClose()
+          }, 3000)
+        }
         }, 3000)
       } else if (result.status === "pending") {
         setErrorMessage("Payment is being processed. Please wait...")
@@ -312,23 +360,59 @@ export function PaystackPaymentModal({
           )}
         </div>
 
-        <DialogFooter className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={handleClose}
-            disabled={isProcessing}
-          >
-            {paymentStatus === "success" ? "Done" : "Cancel"}
-          </Button>
-          {paymentStatus !== "success" && (
-            <Button
-              onClick={handlePayment}
-              disabled={isProcessing || !email || !fullName || isLoading || paymentAmount < 1500}
-              className="gap-2"
-            >
-              {isProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
-              {isProcessing ? "Processing..." : `Pay ₦${paymentAmount.toLocaleString()}`}
-            </Button>
+        <DialogFooter className="flex gap-2 w-full justify-end">
+          {paymentStatus === "success" ? (
+            <>
+              {itemType === "product" && (
+                <Button
+                  onClick={handleReturnToMarketplace}
+                  className="gap-2 gradient-bg"
+                  size="lg"
+                >
+                  ✓ Return to Marketplace
+                </Button>
+              )}
+              {itemType !== "product" && (
+                <Button
+                  onClick={handleClose}
+                  className="gap-2 gradient-bg"
+                  size="lg"
+                >
+                  Done
+                </Button>
+              )}
+            </>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                onClick={handleClose}
+                disabled={isProcessing}
+              >
+                Cancel
+              </Button>
+              {paymentStatus !== "success" && paymentReference && (
+                <Button
+                  onClick={() => verifyPayment(paymentReference)}
+                  disabled={isProcessing}
+                  className="gap-2"
+                  variant="default"
+                >
+                  {isProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Verify Payment
+                </Button>
+              )}
+              {paymentStatus !== "success" && !paymentReference && (
+                <Button
+                  onClick={handlePayment}
+                  disabled={isProcessing || !email || !fullName || isLoading || paymentAmount < 1500}
+                  className="gap-2"
+                >
+                  {isProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {isProcessing ? "Processing..." : `Pay ₦${paymentAmount.toLocaleString()}`}
+                </Button>
+              )}
+            </>
           )}
         </DialogFooter>
       </DialogContent>

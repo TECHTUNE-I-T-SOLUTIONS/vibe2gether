@@ -13,7 +13,7 @@ export async function GET() {
       );
     }
 
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Get user
     const { data: user, error: userError } = await supabase

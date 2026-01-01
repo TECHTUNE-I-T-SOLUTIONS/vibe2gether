@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import Image from "next/image"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
@@ -13,6 +14,7 @@ import { Search, ShoppingBag, Calendar, Ticket, Gift, Sparkles, MapPin, ArrowRig
 import { cn } from "@/lib/utils"
 import { getMarketplaceProducts } from "@/lib/supabase/queries"
 import { ProductDetailsModal } from "@/components/product-details-modal"
+import { PaymentVerificationModal } from "@/components/payment-verification-modal"
 import { createClient } from "@/lib/supabase/client"
 
 const categories = [
@@ -24,6 +26,9 @@ const categories = [
 ]
 
 export default function MarketplacePage() {
+  const searchParams = useSearchParams()
+  const paymentReference = searchParams.get("reference")
+  
   const [searchQuery, setSearchQuery] = useState("")
   const [activeCategory, setActiveCategory] = useState("all")
   const [products, setProducts] = useState<any[]>([])
@@ -32,6 +37,14 @@ export default function MarketplacePage() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null)
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
   const [sellerInfo, setSellerInfo] = useState<any>(null)
+  const [showPaymentVerification, setShowPaymentVerification] = useState(false)
+
+  // Handle payment callback redirect
+  useEffect(() => {
+    if (paymentReference) {
+      setShowPaymentVerification(true)
+    }
+  }, [paymentReference])
 
   useEffect(() => {
     async function fetchProducts() {
@@ -264,6 +277,27 @@ export default function MarketplacePage() {
         }}
         product={selectedProduct}
         seller={sellerInfo}
+      />
+
+      {/* Payment Verification Modal */}
+      <PaymentVerificationModal
+        isOpen={showPaymentVerification}
+        reference={paymentReference}
+        onClose={() => {
+          setShowPaymentVerification(false)
+          // Clean up the URL
+          if (typeof window !== 'undefined') {
+            window.history.replaceState({}, document.title, "/marketplace")
+          }
+          // Refresh product details if open to show updated purchase status
+          if (detailsModalOpen && selectedProduct) {
+            // Re-open the details modal to refresh purchase status
+            setDetailsModalOpen(false)
+            setTimeout(() => {
+              setDetailsModalOpen(true)
+            }, 500)
+          }
+        }}
       />
     </div>
   )

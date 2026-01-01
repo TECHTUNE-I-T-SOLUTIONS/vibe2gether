@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -28,61 +28,45 @@ export function ProductDetailsModal({ isOpen, onClose, product, seller }: Produc
   const [showPayment, setShowPayment] = useState(false)
   const [paymentType, setPaymentType] = useState<"contact" | "buy">("contact")
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
-  const [hasAccessDetails, setHasAccessDetails] = useState(false)
+  const [hasPurchased, setHasPurchased] = useState(false)
   const [verifying, setVerifying] = useState(false)
   const isOwnProduct = product?.seller_id === session?.user?.id
 
-  // Check if user has already paid for this
-  const checkAccessDetails = async () => {
-    if (!session?.user?.id) {
-      router.push("/login")
+  // Check if user has already purchased this product
+  const checkPurchaseStatus = async () => {
+    if (!session?.user?.id || !product?.id) {
       return
     }
 
     try {
       setVerifying(true)
-      const response = await fetch(`/api/transactions/check-access?itemId=${product.id}&itemType=product`)
+      const response = await fetch(`/api/marketplace/check-purchase?productId=${product.id}`)
       if (response.ok) {
         const data = await response.json()
-        if (data.hasAccess) {
-          setHasAccessDetails(true)
-        } else {
-          setPaymentType("contact")
-          setShowPayment(true)
-        }
+        setHasPurchased(data.purchased)
       }
     } catch (error) {
-      console.error("Failed to check access:", error)
-      toast({
-        title: "Error",
-        description: "Failed to check access",
-        variant: "destructive",
-      })
+      console.error("Failed to check purchase status:", error)
     } finally {
       setVerifying(false)
     }
   }
 
-  const handleContactSeller = async () => {
+  // Check purchase status when modal opens or product changes
+  useEffect(() => {
+    if (isOpen && product?.id && session?.user?.id) {
+      checkPurchaseStatus()
+    }
+  }, [isOpen, product?.id, session?.user?.id])
+
+  const handleMessageSeller = async () => {
     if (!session?.user?.id) {
       router.push("/login")
       return
     }
 
-    if (!hasAccessDetails) {
-      checkAccessDetails()
-      return
-    }
-
-    // Copy seller contact and navigate to messaging
-    navigator.clipboard.writeText(seller?.email || "")
-    toast({
-      title: "Copied",
-      description: "Seller email copied to clipboard",
-    })
-
     // Navigate to messages with seller
-    router.push(`/messages?userId=${seller.id}`)
+    router.push(`/dashboard/messages?userId=${seller.id}`)
   }
 
   const handleBuyProduct = () => {
@@ -96,18 +80,11 @@ export function ProductDetailsModal({ isOpen, onClose, product, seller }: Produc
   }
 
   const handlePaymentSuccess = () => {
-    if (paymentType === "contact") {
-      setHasAccessDetails(true)
-      toast({
-        title: "Success",
-        description: "Payment verified! You can now contact the seller.",
-      })
-    } else {
-      toast({
-        title: "Success",
-        description: "Payment successful! Product purchased.",
-      })
-    }
+    setHasPurchased(true)
+    toast({
+      title: "Success",
+      description: "Payment successful! Product purchased.",
+    })
     setShowPayment(false)
   }
 
@@ -324,19 +301,23 @@ export function ProductDetailsModal({ isOpen, onClose, product, seller }: Produc
               </Button>
             ) : isOwnProduct ? (
               <div className="text-sm text-muted-foreground">This is your product</div>
-            ) : (
+            ) : hasPurchased ? (
               <>
-                {/* Message Button (only if not own product) */}
+                {/* Show Paid Badge and Message Button */}
+                <Badge variant="default" className="bg-green-500">
+                  ✓ Paid
+                </Badge>
                 <Button 
                   variant="outline" 
                   className="gap-2"
-                  onClick={handleContactSeller}
-                  disabled={verifying}
+                  onClick={handleMessageSeller}
                 >
                   <MessageSquare className="w-4 h-4" />
-                  {verifying ? "Checking..." : hasAccessDetails ? "Message Seller" : "Message (₦1,500)"}
+                  Message Seller
                 </Button>
-
+              </>
+            ) : (
+              <>
                 {/* Buy Button */}
                 <Button 
                   className="rounded-full gradient-bg gap-2"
