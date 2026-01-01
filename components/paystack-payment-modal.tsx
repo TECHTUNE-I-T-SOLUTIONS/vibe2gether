@@ -236,7 +236,6 @@ export function PaystackPaymentModal({
             handleClose()
           }, 3000)
         }
-        }, 3000)
       } else if (result.status === "pending") {
         setErrorMessage("Payment is being processed. Please wait...")
         setPaymentStatus("processing")
