@@ -11,6 +11,7 @@ import {
   BarChart3,
   Bell,
   Settings,
+  CreditCard,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -73,6 +74,11 @@ export function AdminMobileBottomNav({
       icon: BarChart3,
       label: "analytics",
       href: "/admin/analytics",
+    },
+    {
+      icon: CreditCard,
+      label: "withdrawals",
+      href: "/admin/withdrawals",
     },
     {
       icon: Settings,

@@ -27,6 +27,8 @@ import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { useToast } from "@/hooks/use-toast"
 import { useI18n } from "@/lib/i18n/context"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { PaystackPaymentModal } from "@/components/paystack-payment-modal"
@@ -64,6 +66,67 @@ export default function WalletPage() {
   const [referralLink, setReferralLink] = useState("")
   const [loading, setLoading] = useState(true)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [showWithdrawalModal, setShowWithdrawalModal] = useState(false)
+  const [withdrawalAmount, setWithdrawalAmount] = useState("")
+  const [bankName, setBankName] = useState("")
+  const [accountNumber, setAccountNumber] = useState("")
+  const [accountName, setAccountName] = useState("")
+  const [withdrawalLoading, setWithdrawalLoading] = useState(false)
+  const [balance, setBalance] = useState(0)
+  const [banks, setBanks] = useState<any[]>([])
+  const [bankCode, setBankCode] = useState("")
+  const [verifyingAccount, setVerifyingAccount] = useState(false)
+  const [accountVerified, setAccountVerified] = useState(false)
+  const [withdrawalRequests, setWithdrawalRequests] = useState<any[]>([])
+  const [loadingRequests, setLoadingRequests] = useState(false)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    // Fetch banks from Paystack
+    const fetchBanks = async () => {
+      try {
+        const response = await fetch("/api/payments/paystack/banks")
+        const data = await response.json()
+        if (data.success) {
+          setBanks(data.banks)
+        }
+      } catch (error) {
+        console.error("Failed to fetch banks:", error)
+      }
+    }
+    fetchBanks()
+  }, [])
+
+  useEffect(() => {
+    // Check for payment reference in URL
+    const params = new URLSearchParams(window.location.search)
+    const reference = params.get("reference")
+    
+    if (reference) {
+      console.log("Payment reference detected:", reference)
+      // Verify the payment and open modal to show success
+      verifyPaymentAndShowModal(reference)
+    }
+  }, [])
+
+  const verifyPaymentAndShowModal = async (reference: string) => {
+    try {
+      console.log("Verifying payment with reference:", reference)
+      const response = await fetch(`/api/paystack/verify?reference=${reference}`)
+      const data = await response.json()
+      
+      if (data.success) {
+        console.log("Payment verified successfully, coins added:", data.coinsAdded)
+        // Show modal with success message
+        setShowPaymentModal(true)
+        // The modal will detect the reference and show success
+      } else {
+        console.error("Payment verification failed:", data.error)
+      }
+    } catch (error) {
+      console.error("Error verifying payment:", error)
+    }
+  }
 
   useEffect(() => {
     async function fetchWalletData() {
@@ -106,7 +169,154 @@ export default function WalletPage() {
     fetchWalletData()
   }, [])
 
-  const balance = user?.coins_balance || 0
+  const handleVerifyAccount = async () => {
+    if (!accountNumber || !bankCode) {
+      toast({ title: "Error", description: "Please select bank and enter account number", variant: "destructive" })
+      return
+    }
+
+    try {
+      setVerifyingAccount(true)
+      const response = await fetch("/api/payments/paystack/verify-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountNumber,
+          bankCode,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to verify account")
+      }
+
+      setAccountName(data.accountName)
+      setAccountVerified(true)
+      toast({ title: "Success", description: "Account verified successfully", variant: "default" })
+    } catch (error) {
+      console.error("Account verification error:", error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to verify account",
+        variant: "destructive",
+      })
+    } finally {
+      setVerifyingAccount(false)
+    }
+  }
+
+  const fetchWithdrawalRequests = async () => {
+    try {
+      setLoadingRequests(true)
+      const response = await fetch("/api/wallet/withdrawal-requests")
+      const data = await response.json()
+      if (response.ok) {
+        setWithdrawalRequests(data.requests || [])
+      }
+    } catch (error) {
+      console.error("Failed to fetch withdrawal requests:", error)
+    } finally {
+      setLoadingRequests(false)
+    }
+  }
+
+  useEffect(() => {
+    if (showWithdrawalModal === false) {
+      // Modal closed, reset verification
+      setAccountVerified(false)
+    }
+  }, [showWithdrawalModal])
+
+  useEffect(() => {
+    // Fetch withdrawal requests when component mounts
+    if (user?.id) {
+      fetchWithdrawalRequests()
+    }
+  }, [user?.id])
+
+  const handleWithdrawal = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    const amount = parseFloat(withdrawalAmount)
+    const minWithdrawal = 15 // $15 minimum (21,750 NGN)
+    const currentBalance = user?.coins_balance || 0
+    const maxWithdrawal = currentBalance / 1450 // Convert coins to USD
+    const usdBalance = currentBalance / 1450
+
+    // Validation
+    if (!withdrawalAmount || !bankCode || !bankName || !accountNumber || !accountName || !accountVerified) {
+      toast({ title: "Error", description: "Please complete all fields and verify account", variant: "destructive" })
+      return
+    }
+
+    if (amount < minWithdrawal) {
+      toast({
+        title: "Error",
+        description: `Minimum withdrawal is $${minWithdrawal} (₦${(minWithdrawal * 1450).toLocaleString()})`,
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (amount > maxWithdrawal) {
+      toast({
+        title: "Error",
+        description: `Insufficient balance. You have $${usdBalance.toFixed(2)}`,
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setWithdrawalLoading(true)
+
+      const response = await fetch("/api/wallet/withdrawal-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: amount,
+          bankCode: bankCode,
+          bankName: bankName,
+          accountNumber: accountNumber,
+          accountName: accountName,
+          requestedCoins: Math.round(currentBalance),
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to submit withdrawal request")
+      }
+
+      toast({
+        title: "Success",
+        description: "Withdrawal request submitted successfully. Our team will review it shortly.",
+      })
+
+      // Reset form
+      setWithdrawalAmount("")
+      setBankCode("")
+      setBankName("")
+      setAccountNumber("")
+      setAccountName("")
+      setAccountVerified(false)
+      setShowWithdrawalModal(false)
+      // Refresh withdrawal requests
+      await fetchWithdrawalRequests()
+    } catch (error) {
+      console.error("Withdrawal error:", error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to submit withdrawal request",
+        variant: "destructive",
+      })
+    } finally {
+      setWithdrawalLoading(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -131,17 +341,24 @@ export default function WalletPage() {
               <div>
                 <p className="text-white/70 mb-1">Total Balance</p>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-4xl md:text-5xl font-bold text-white">{balance.toLocaleString()}</span>
+                  <span className="text-4xl md:text-5xl font-bold text-white">{(user?.coins_balance || 0).toLocaleString()}</span>
                   <span className="text-white/70 text-lg">coins</span>
                 </div>
-                <p className="text-white/70 text-sm mt-2">≈ ${(balance / 100).toFixed(2)} USD</p>
+                <div className="flex gap-4 mt-2">
+                  <p className="text-white/70 text-sm">≈ ${((user?.coins_balance || 0) / 500).toFixed(2)} USD</p>
+                  <p className="text-white/70 text-sm">≈ ₦{((user?.coins_balance || 0) * 2.9).toLocaleString(undefined, { maximumFractionDigits: 0 })} NGN</p>
+                </div>
               </div>
               <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center">
                 <Coins className="w-8 h-8 text-white" />
               </div>
             </div>
             <div className="flex gap-3 mt-6">
-              <Button variant="secondary" className="rounded-full bg-white/20 text-white hover:bg-white/30 border-0">
+              <Button 
+                variant="secondary" 
+                className="rounded-full bg-white/20 text-white hover:bg-white/30 border-0"
+                onClick={() => setShowWithdrawalModal(true)}
+              >
                 <Wallet className="w-4 h-4 mr-2" />
                 {t("withdraw")}
               </Button>
@@ -192,6 +409,9 @@ export default function WalletPage() {
           <TabsTrigger value="transactions" className="rounded-full">
             Transactions
           </TabsTrigger>
+          <TabsTrigger value="withdrawals" className="rounded-full">
+            Withdrawals
+          </TabsTrigger>
           <TabsTrigger value="earn" className="rounded-full">
             {t("earnCoins")}
           </TabsTrigger>
@@ -241,6 +461,86 @@ export default function WalletPage() {
                   <p className="text-center text-muted-foreground py-8">No transactions yet</p>
                 )}
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="withdrawals" className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold">Withdrawal Requests</h2>
+            <Button onClick={() => setShowWithdrawalModal(true)}>
+              Request Withdrawal
+            </Button>
+          </div>
+
+          <Card className="border-border/50">
+            <CardHeader>
+              <CardTitle className="text-lg">Your Withdrawal Requests</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingRequests ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : withdrawalRequests.length > 0 ? (
+                <div className="space-y-3">
+                  {withdrawalRequests.map((request) => (
+                    <div
+                      key={request.id}
+                      className="flex items-center justify-between p-4 border border-border/50 rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3">
+                          <div className="text-center">
+                            {request.status === "pending" && (
+                              <Badge variant="outline" className="bg-yellow-500/10 text-yellow-700 border-yellow-200">
+                                Pending
+                              </Badge>
+                            )}
+                            {request.status === "approved" && (
+                              <Badge variant="outline" className="bg-blue-500/10 text-blue-700 border-blue-200">
+                                Approved
+                              </Badge>
+                            )}
+                            {request.status === "settled" && (
+                              <Badge variant="outline" className="bg-green-500/10 text-green-700 border-green-200">
+                                Settled
+                              </Badge>
+                            )}
+                            {request.status === "rejected" && (
+                              <Badge variant="outline" className="bg-red-500/10 text-red-700 border-red-200">
+                                Rejected
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-medium">
+                              ${request.amount.toFixed(2)} USD ({(request.amount * 1450).toLocaleString()} NGN)
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {request.bank_name} • {request.account_number}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {new Date(request.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      {request.notes && (
+                        <div className="text-right ml-4">
+                          <p className="text-xs text-muted-foreground italic">
+                            {request.notes}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-center text-muted-foreground py-8">
+                  No withdrawal requests yet. Request one to get started!
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -493,10 +793,190 @@ export default function WalletPage() {
         </TabsContent>
       </Tabs>
 
+      {/* Withdrawal Modal */}
+      <Dialog open={showWithdrawalModal} onOpenChange={setShowWithdrawalModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Request Withdrawal</DialogTitle>
+            <DialogDescription>
+              Withdraw your earnings to your bank account
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Wallet Info */}
+            <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Current Balance</span>
+                <span className="font-bold">{(user?.coins_balance || 0).toLocaleString()} coins</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">In USD</span>
+                <span className="font-bold">${((user?.coins_balance || 0) / 1450).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">In NGN</span>
+                <span className="font-bold">₦{((user?.coins_balance || 0) * 2.9).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+              </div>
+              <div className="pt-2 border-t border-border">
+                <span className="text-xs text-muted-foreground">Minimum withdrawal: $15 USD</span>
+              </div>
+            </div>
+
+            {/* Withdrawal Form */}
+            <form onSubmit={handleWithdrawal} className="space-y-4">
+              {/* Amount */}
+              <div className="space-y-2">
+                <Label htmlFor="amount">Withdrawal Amount (USD)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
+                  <Input
+                    id="amount"
+                    type="number"
+                    placeholder="15.00"
+                    min="15"
+                    max={(user?.coins_balance || 0) / 1450}
+                    step="0.01"
+                    value={withdrawalAmount}
+                    onChange={(e) => setWithdrawalAmount(e.target.value)}
+                    className="pl-7"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  ≈ ₦{withdrawalAmount ? (parseFloat(withdrawalAmount) * 1450).toLocaleString(undefined, { maximumFractionDigits: 0 }) : "0"}
+                </p>
+              </div>
+
+              {/* Bank Dropdown */}
+              <div className="space-y-2">
+                <Label htmlFor="bankCode">Bank Name</Label>
+                <select
+                  id="bankCode"
+                  value={bankCode}
+                  onChange={(e) => {
+                    const selected = banks.find((b) => b.code === e.target.value)
+                    if (selected) {
+                      setBankCode(selected.code)
+                      setBankName(selected.name)
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
+                >
+                  <option value="">Select a bank...</option>
+                  {banks.map((bank, index) => (
+                    <option key={`${bank.code}-${index}`} value={bank.code}>
+                      {bank.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Account Number & Verify */}
+              <div className="space-y-2">
+                <Label htmlFor="account">Account Number</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="account"
+                    placeholder="Your bank account number"
+                    value={accountNumber}
+                    onChange={(e) => {
+                      setAccountNumber(e.target.value)
+                      setAccountVerified(false)
+                      setAccountName("")
+                    }}
+                    disabled={!bankCode}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleVerifyAccount}
+                    disabled={!accountNumber || !bankCode || verifyingAccount || accountVerified}
+                    className="whitespace-nowrap"
+                  >
+                    {verifyingAccount ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      </>
+                    ) : accountVerified ? (
+                      <>✓ Verified</>
+                    ) : (
+                      "Verify"
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Account Name (Auto-filled after verification) */}
+              {accountVerified && (
+                <div className="space-y-2">
+                  <Label htmlFor="accountName">Account Name (Verified)</Label>
+                  <Input
+                    id="accountName"
+                    value={accountName}
+                    disabled
+                    className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800"
+                  />
+                  <p className="text-xs text-green-600 dark:text-green-400">✓ Account verified with Paystack</p>
+                </div>
+              )}
+
+              {/* Eligibility Check */}
+              {(() => {
+                const usdBalance = (user?.coins_balance || 0) / 1450
+                const requestAmount = parseFloat(withdrawalAmount) || 0
+                const insufficientBalance = usdBalance < 15
+                const requestTooSmall = requestAmount < 15 && requestAmount > 0
+
+                return withdrawalAmount ? (
+                  <div className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <p className="text-sm">
+                      {insufficientBalance ? (
+                        <span className="text-red-600 dark:text-red-400 font-medium">✗ Insufficient balance (${usdBalance.toFixed(2)}). Minimum required: $15</span>
+                      ) : requestAmount >= 15 && accountVerified ? (
+                        <span className="text-green-600 dark:text-green-400 font-medium">✓ You are eligible for withdrawal</span>
+                      ) : requestTooSmall ? (
+                        <span className="text-orange-600 dark:text-orange-400 font-medium">⚠ Minimum $15 required</span>
+                      ) : (
+                        <span className="text-blue-600 dark:text-blue-400 font-medium">ℹ Verify account to proceed</span>
+                      )}
+                    </p>
+                  </div>
+                ) : null
+              })()}
+
+              <DialogFooter className="gap-2 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowWithdrawalModal(false)}
+                  disabled={withdrawalLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="gradient-bg"
+                  type="submit"
+                  disabled={withdrawalLoading || !withdrawalAmount || !bankCode || !accountNumber || !accountVerified || ((user?.coins_balance || 0) / 1450) < 15}
+                >
+                  {withdrawalLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    "Submit Request"
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <PaystackPaymentModal 
         isOpen={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
         amount={1500}
+        itemType="coins"
         purpose="Buy Coins"
       />
     </div>

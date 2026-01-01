@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { getEvents, registerForEvent, unregisterFromEvent, getUserEventRegistrations } from "@/lib/supabase/queries"
+import { useRouter } from "next/navigation"
 import Image from "next/image"
 
 const EVENT_CATEGORIES = [
@@ -24,6 +25,7 @@ const EVENT_CATEGORIES = [
 
 export default function EventsPage() {
   const { user, loading } = useUserProfile()
+  const router = useRouter()
   const [events, setEvents] = useState<any[]>([])
   const [loadingEvents, setLoadingEvents] = useState(true)
   const [offset, setOffset] = useState(0)
@@ -114,6 +116,14 @@ export default function EventsPage() {
     }
   }
 
+  const formatPrice = (price: number, currency: string) => {
+    if (!price) return "Free"
+    if (currency === "NGN") {
+      return `₦${price.toLocaleString()}`
+    }
+    return `$${price}`
+  }
+
   function formatDate(dateString: string) {
     const date = new Date(dateString)
     return date.toLocaleDateString("en-US", {
@@ -178,10 +188,6 @@ export default function EventsPage() {
               <Card
                 key={event.id}
                 className="border-border/50 hover:border-primary/50 transition overflow-hidden cursor-pointer group"
-                onClick={() => {
-                  setSelectedEvent(event)
-                  setShowDetailDialog(true)
-                }}
               >
                 <div className="relative h-40 bg-muted overflow-hidden">
                   <Image
@@ -223,13 +229,13 @@ export default function EventsPage() {
                     <Button
                       className="w-full"
                       size="sm"
-                      variant={isRegistered ? "outline" : "default"}
-                      onClick={(e) => {
-                        e.stopPropagation()
+                      variant="default"
+                      onClick={() => {
                         setSelectedEvent(event)
+                        setShowDetailDialog(true)
                       }}
                     >
-                      {isRegistered ? "Registered" : "Register Now"}
+                      View Details
                     </Button>
                   )}
                 </CardContent>
@@ -247,58 +253,53 @@ export default function EventsPage() {
 
       <div ref={observerTarget} />
 
-      {/* Event Detail Dialog */}
+      {/* Event Detail Dialog with Payment Check */}
       <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
-        <DialogContent className="max-w-2xl max-h-96 overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Event Details</DialogTitle>
+            <DialogDescription>View full event information</DialogDescription>
           </DialogHeader>
 
           {selectedEvent && (
             <div className="space-y-6">
+              {/* Image */}
               <div className="relative h-48 bg-muted rounded-lg overflow-hidden">
                 <Image
-                  src={selectedEvent.image || "/placeholder.jpg"}
+                  src={selectedEvent.image || selectedEvent.thumbnail || "/placeholder.jpg"}
                   alt={selectedEvent.title}
                   fill
                   className="object-cover"
                 />
               </div>
 
+              {/* Event Info */}
               <div className="space-y-4">
                 <div>
                   <h2 className="text-2xl font-bold">{selectedEvent.title}</h2>
-                  {selectedEvent.description && (
-                    <p className="text-muted-foreground mt-2">{selectedEvent.description}</p>
-                  )}
+                  <p className="text-muted-foreground mt-2">{selectedEvent.description}</p>
                 </div>
 
+                {/* Details */}
                 <div className="space-y-2 text-sm border-t border-border/50 pt-4">
                   <div className="flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-primary" />
+                    <Calendar className="w-4 h-4" />
                     <span>{formatDate(selectedEvent.event_date)}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <MapPin className="w-5 h-5 text-primary" />
-                    <span>{selectedEvent.location}</span>
+                    <MapPin className="w-4 h-4" />
+                    <span>{selectedEvent.location || "Location TBD"}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Users className="w-5 h-5 text-primary" />
-                    <span>{selectedEvent.registration_count || 0} / {selectedEvent.capacity} people registered</span>
+                    <Users className="w-4 h-4" />
+                    <span>{selectedEvent.registration_count || 0} / {selectedEvent.capacity || "Unlimited"} registered</span>
                   </div>
                 </div>
-
-                {selectedEvent.user && (
-                  <div className="bg-muted/50 p-3 rounded-lg text-sm">
-                    <p className="text-muted-foreground">Organized by</p>
-                    <p className="font-semibold">{selectedEvent.user.display_name}</p>
-                  </div>
-                )}
               </div>
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="flex gap-2">
             <Button variant="outline" onClick={() => setShowDetailDialog(false)}>
               Close
             </Button>
@@ -323,6 +324,8 @@ export default function EventsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Old Event Detail Dialog - REMOVED, replaced above */}
     </div>
   )
 }

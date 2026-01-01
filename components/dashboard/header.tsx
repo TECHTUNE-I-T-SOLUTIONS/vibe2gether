@@ -5,7 +5,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
-import { Menu, Bell, MessageCircle, Search, Sun, Moon, Coins, Loader2, X } from "lucide-react"
+import { Menu, Search, Sun, Moon, Coins, Loader2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -23,8 +23,6 @@ export function DashboardHeader() {
   const [isScrolled, setIsScrolled] = useState(false)
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
-  const [unreadMessages, setUnreadMessages] = useState(0)
-  const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
@@ -39,33 +37,6 @@ export function DashboardHeader() {
     window.addEventListener("scroll", handleScroll)
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
-
-  useEffect(() => {
-    async function fetchCounts() {
-      try {
-        const notifRes = await fetch("/api/notifications")
-        if (notifRes.ok) {
-          const notifData = await notifRes.json()
-          setUnreadNotifications(notifData.unreadCount || 0)
-        }
-
-        const messagesRes = await fetch("/api/messages")
-        if (messagesRes.ok) {
-          const messagesData = await messagesRes.json()
-          const unreadCount = (messagesData.conversations || []).reduce(
-            (total: number, conv: any) => total + (conv.unreadCount || 0),
-            0
-          )
-          setUnreadMessages(unreadCount)
-        }
-      } catch (err) {
-        console.error("Failed to fetch counts:", err)
-      }
-    }
-    if (mounted) {
-      fetchCounts()
-    }
-  }, [mounted])
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value)
@@ -280,26 +251,10 @@ export function DashboardHeader() {
           )}
 
           {/* Messages */}
-          <Button variant="ghost" size="icon" className="rounded-full relative">
-            <MessageCircle className="w-5 h-5" />
-            {unreadMessages > 0 && (
-              <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center gradient-bg text-xs text-white">
-                {unreadMessages}
-              </Badge>
-            )}
-          </Button>
+          {/* Removed - messaging available in bottom navigation and sidebar */}
 
           {/* Notifications */}
-          <Link href="/dashboard/notifications">
-            <Button variant="ghost" size="icon" className="rounded-full relative">
-              <Bell className="w-5 h-5" />
-              {unreadNotifications > 0 && (
-                <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center gradient-bg text-xs text-white">
-                  {unreadNotifications}
-                </Badge>
-              )}
-            </Button>
-          </Link>
+          {/* Removed - notifications available in bottom navigation and sidebar */}
 
           {/* Profile */}
           <Link href="/dashboard/profile">

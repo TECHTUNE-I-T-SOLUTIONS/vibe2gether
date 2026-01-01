@@ -94,10 +94,14 @@ export default function EventsPage() {
     setDetailsModalOpen(true)
   }
 
-  const formatPrice = (price?: number, currency?: string) => {
-    if (!price) return "Free"
-    const curr = currency || "USD"
-    if (curr === "NGN") {
+  const formatPrice = (event: any) => {
+    if (!event?.ticket_price || event?.is_free) return "Free"
+    
+    // Get currency from event (NGN or USD)
+    const currency = event.currency || "USD"
+    const price = event.ticket_price
+    
+    if (currency === "NGN") {
       return `₦${price.toLocaleString()}`
     }
     return `$${price}`
@@ -211,8 +215,8 @@ export default function EventsPage() {
                               <Users className="w-4 h-4" />
                               <span className="text-sm">{event.registered_count} registered</span>
                             </div>
-                            {event.ticket_price ? (
-                              <div className="text-lg font-bold gradient-text">{formatPrice(event.ticket_price, event.currency)}</div>
+                            {!event.is_free && event.ticket_price ? (
+                              <div className="text-lg font-bold gradient-text">{formatPrice(event)}</div>
                             ) : (
                               <Badge variant="secondary">Free</Badge>
                             )}
@@ -279,8 +283,8 @@ export default function EventsPage() {
                             <span className="text-sm text-muted-foreground">{event.registered_count}</span>
                           </div>
                           <div className="flex items-center gap-3">
-                            {event.ticket_price ? (
-                              <span className="font-bold gradient-text">{formatPrice(event.ticket_price, event.currency)}</span>
+                            {!event.is_free && event.ticket_price ? (
+                              <span className="font-bold gradient-text">{formatPrice(event)}</span>
                             ) : (
                               <Badge variant="secondary">Free</Badge>
                             )}

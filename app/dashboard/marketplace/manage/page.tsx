@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
-import { Loader2, Plus, Upload, Trash2, Eye, Package, X, Edit2 } from "lucide-react"
+import { Loader2, Plus, Upload, Trash2, Eye, Package, X, Edit2, MessageCircle } from "lucide-react"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { createClient } from "@/lib/supabase/client"
 
@@ -51,6 +51,9 @@ export default function DashboardMarketplaceManagePage() {
   const [allProducts, setAllProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [showDetailDialog, setShowDetailDialog] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<any>(null)
+  const [processingPayment, setProcessingPayment] = useState(false)
   const [editingProduct, setEditingProduct] = useState<any>(null)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingLoading, setEditingLoading] = useState(false)
@@ -405,6 +408,66 @@ export default function DashboardMarketplaceManagePage() {
     }
   }
 
+  async function handleBuyProduct() {
+    if (!selectedProduct || !session?.user?.id) {
+      toast({ title: "Error", description: "Product or session not found", variant: "destructive" })
+      return
+    }
+
+    try {
+      setProcessingPayment(true)
+      
+      // Convert price to Naira if needed
+      let priceInNaira = selectedProduct.price
+      if (selectedProduct.currency === "USD") {
+        priceInNaira = selectedProduct.price * 1450
+      } else if (selectedProduct.currency !== "NGN") {
+        // Handle other currencies - convert to USD first, then to Naira
+        priceInNaira = selectedProduct.price * 1450
+      }
+
+      const amount = Math.round(priceInNaira * 100) // Convert to kobo
+
+      // Initialize Paystack payment
+      const response = await fetch("/api/payments/paystack/initialize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: session.user.email,
+          amount: amount,
+          metadata: {
+            productId: selectedProduct.id,
+            productTitle: selectedProduct.title,
+            sellerId: selectedProduct.user_id,
+            buyerId: session.user.id,
+            price: selectedProduct.price,
+            currency: selectedProduct.currency,
+          },
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to initialize payment")
+      }
+
+      const { authorization_url } = await response.json()
+      
+      if (authorization_url) {
+        // Redirect to Paystack
+        window.location.href = authorization_url
+      }
+    } catch (error) {
+      console.error("Payment error:", error)
+      toast({ 
+        title: "Payment Error", 
+        description: error instanceof Error ? error.message : "Failed to process payment", 
+        variant: "destructive" 
+      })
+    } finally {
+      setProcessingPayment(false)
+    }
+  }
+
   return (
     <div className="min-h-screen w-full">
       {/* Main Content Area with proper padding */}
@@ -669,7 +732,13 @@ export default function DashboardMarketplaceManagePage() {
                               Your Product
                             </Button>
                           ) : (
-                            <Button className="w-full gap-1 text-xs mt-3">
+                            <Button 
+                              className="w-full gap-1 text-xs mt-3"
+                              onClick={() => {
+                                setSelectedProduct(product)
+                                setShowDetailDialog(true)
+                              }}
+                            >
                               <Eye className="w-3 h-3" />
                               View Details
                             </Button>
@@ -1130,6 +1199,89 @@ export default function DashboardMarketplaceManagePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+
+      {/* Product Detail Dialog */}
+      <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          {selectedProduct && (
+            <div className="space-y-4">
+              <DialogHeader>
+                <DialogTitle>{selectedProduct.title}</DialogTitle>
+              </DialogHeader>
+              
+              {selectedProduct.media && selectedProduct.media.length > 0 && (
+                <div className="w-full aspect-square rounded-lg overflow-hidden bg-muted">
+                  <img 
+                    src={typeof selectedProduct.media[0] === 'string' ? selectedProduct.media[0] : selectedProduct.media[0]?.url} 
+                    alt={selectedProduct.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Price</label>
+                  <div className="space-y-1">
+                    {selectedProduct.currency === "USD" ? (
+                      <>
+                        <p className="text-lg font-semibold">${selectedProduct.price}</p>
+                        <p className="text-sm text-muted-foreground">₦{(selectedProduct.price * 1450).toLocaleString()}</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-lg font-semibold">₦{selectedProduct.price.toLocaleString()}</p>
+                        <p className="text-sm text-muted-foreground">${(selectedProduct.price / 1450).toFixed(2)}</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Condition</label>
+                  <p className="text-lg font-semibold">{selectedProduct.condition || "Not specified"}</p>
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Description</label>
+                <p className="mt-2">{selectedProduct.description}</p>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Location</label>
+                <p className="mt-2">{selectedProduct.location_name || "Not specified"}</p>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Seller</label>
+                <p className="mt-2">{selectedProduct.users?.display_name || selectedProduct.seller_name || "Unknown"}</p>
+              </div>
+              
+              <DialogFooter className="pt-4 gap-2">
+                <Button variant="outline" onClick={() => setShowDetailDialog(false)}>
+                  Close
+                </Button>
+                <Button 
+                  className="bg-pink-600 hover:bg-pink-700"
+                  onClick={handleBuyProduct}
+                  disabled={processingPayment}
+                >
+                  {processingPayment ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <MessageCircle className="w-4 h-4 mr-2" />
+                      Buy Now
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>    </div>
   )
 }

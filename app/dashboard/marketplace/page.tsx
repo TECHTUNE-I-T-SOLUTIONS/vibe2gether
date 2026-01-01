@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { Loader2, ShoppingBag, MapPin, Star, MessageSquare } from "lucide-react"
+import { Loader2, ShoppingBag, MapPin, Star, MessageSquare, DollarSign } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { getMarketplaceProducts, createMarketplaceInquiry } from "@/lib/supabase/queries"
+import { useRouter } from "next/navigation"
 import Image from "next/image"
 
 const CATEGORIES = [
@@ -26,6 +27,7 @@ const CATEGORIES = [
 
 export default function MarketplacePage() {
   const { user, loading } = useUserProfile()
+  const router = useRouter()
   const [products, setProducts] = useState<any[]>([])
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [offset, setOffset] = useState(0)
@@ -33,6 +35,7 @@ export default function MarketplacePage() {
   const [search, setSearch] = useState("")
   const [category, setCategory] = useState("All")
   const [selectedProduct, setSelectedProduct] = useState<any>(null)
+  const [showDetailDialog, setShowDetailDialog] = useState(false)
   const [showInquiryDialog, setShowInquiryDialog] = useState(false)
   const [inquiryMessage, setInquiryMessage] = useState("")
   const [submittingInquiry, setSubmittingInquiry] = useState(false)
@@ -150,7 +153,6 @@ export default function MarketplacePage() {
               <Card
                 key={product.id}
                 className="border-border/50 hover:border-primary/50 transition overflow-hidden cursor-pointer group"
-                onClick={() => setSelectedProduct(product)}
               >
                 <div className="relative h-40 bg-muted overflow-hidden">
                   <Image
@@ -177,20 +179,20 @@ export default function MarketplacePage() {
                   <div className="space-y-2">
                     <div className="text-lg font-bold text-primary">${product.price}</div>
 
-                    {product.user && (
+                    {product.seller && (
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <div className="w-6 h-6 rounded-full bg-muted overflow-hidden flex-shrink-0">
-                          {product.user.profile_picture && (
+                          {product.seller.profile_picture && (
                             <Image
-                              src={product.user.profile_picture}
-                              alt={product.user.display_name}
+                              src={product.seller.profile_picture}
+                              alt={product.seller.display_name}
                               width={24}
                               height={24}
                               className="w-full h-full object-cover"
                             />
                           )}
                         </div>
-                        <span>{product.user.display_name}</span>
+                        <span>{product.seller.display_name}</span>
                       </div>
                     )}
 
@@ -205,14 +207,12 @@ export default function MarketplacePage() {
                   <Button
                     className="w-full"
                     size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation()
+                    onClick={() => {
                       setSelectedProduct(product)
-                      setShowInquiryDialog(true)
+                      setShowDetailDialog(true)
                     }}
                   >
-                    <MessageSquare className="w-3 h-3 mr-2" />
-                    Inquire
+                    View Details
                   </Button>
                 </CardContent>
               </Card>
@@ -229,7 +229,80 @@ export default function MarketplacePage() {
 
       <div ref={observerTarget} />
 
-      {/* Product Detail & Inquiry Dialog */}
+      {/* Product Detail Dialog with Payment Check */}
+      <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Product Details</DialogTitle>
+            <DialogDescription>View full product information</DialogDescription>
+          </DialogHeader>
+
+          {selectedProduct && (
+            <div className="space-y-6">
+              {/* Image */}
+              <div className="relative h-48 bg-muted rounded-lg overflow-hidden">
+                <Image
+                  src={selectedProduct.images?.[0] || "/placeholder.jpg"}
+                  alt={selectedProduct.title}
+                  fill
+                  className="object-cover"
+                />
+              </div>
+
+              {/* Product Info */}
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-2xl font-bold">{selectedProduct.title}</h2>
+                  <p className="text-muted-foreground mt-2">{selectedProduct.description}</p>
+                </div>
+
+                {/* Price */}
+                <div className="p-4 bg-accent/10 rounded-lg space-y-2">
+                  <span className="font-semibold block">Price</span>
+                  <div className="space-y-1">
+                    {selectedProduct.currency === "USD" ? (
+                      <>
+                        <p className="text-2xl font-bold text-primary">${selectedProduct.price}</p>
+                        <p className="text-sm text-muted-foreground">₦{(selectedProduct.price * 1450).toLocaleString()}</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-2xl font-bold text-primary">₦{selectedProduct.price.toLocaleString()}</p>
+                        <p className="text-sm text-muted-foreground">${(selectedProduct.price / 1450).toFixed(2)}</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Details */}
+                <div className="space-y-2 text-sm border-t border-border/50 pt-4">
+                  <div><strong>Category:</strong> {selectedProduct.category}</div>
+                  <div><strong>Condition:</strong> {selectedProduct.condition || "Not specified"}</div>
+                  {selectedProduct.location_name && <div><strong>Location:</strong> {selectedProduct.location_name}</div>}
+                  {selectedProduct.seller && (
+                    <div><strong>Seller:</strong> {selectedProduct.seller.display_name}</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowDetailDialog(false)}>
+              Close
+            </Button>
+            <Button onClick={() => {
+              setShowDetailDialog(false)
+              setShowInquiryDialog(true)
+            }}>
+              <MessageSquare className="w-4 h-4 mr-2" />
+              Message Seller
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Product Inquiry Dialog */}
       <Dialog open={showInquiryDialog} onOpenChange={setShowInquiryDialog}>
         <DialogContent className="max-w-2xl max-h-96 overflow-y-auto">
           <DialogHeader>
@@ -256,8 +329,8 @@ export default function MarketplacePage() {
                   <div className="text-sm text-muted-foreground space-y-1">
                     <p><strong>Category:</strong> {selectedProduct.category}</p>
                     <p><strong>Condition:</strong> {selectedProduct.condition}</p>
-                    {selectedProduct.user && (
-                      <p><strong>Seller:</strong> {selectedProduct.user.display_name}</p>
+                    {selectedProduct.seller && (
+                      <p><strong>Seller:</strong> {selectedProduct.seller.display_name}</p>
                     )}
                   </div>
                 </div>

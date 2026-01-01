@@ -1955,3 +1955,100 @@ create index if not exists idx_admin_notifications_admin_id on public.admin_noti
 create index if not exists idx_admin_notifications_is_read on public.admin_notifications using btree (is_read) tablespace pg_default;
 create index if not exists idx_admin_notifications_created_at on public.admin_notifications using btree (created_at desc) tablespace pg_default;
 create index if not exists idx_admin_notifications_admin_id_is_read on public.admin_notifications using btree (admin_id, is_read) tablespace pg_default;
+
+
+-- ============================================================
+-- PAYMENT SYSTEM TABLES
+-- ============================================================
+
+-- MARKETPLACE MESSAGE PAYMENTS TABLE
+-- Handles payment for accessing messages in marketplace products
+CREATE TABLE public.marketplace_message_payments (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  product_id uuid NOT NULL,
+  buyer_id uuid NOT NULL,
+  seller_id uuid NOT NULL,
+  amount numeric NOT NULL,
+  currency character varying NOT NULL DEFAULT 'USD'::character varying,
+  amount_in_naira numeric,
+  status character varying NOT NULL DEFAULT 'pending'::character varying,
+  payment_reference character varying,
+  transaction_id uuid,
+  message_unlocked_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT marketplace_message_payments_pkey PRIMARY KEY (id),
+  CONSTRAINT marketplace_message_payments_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.marketplace_products(id) ON DELETE CASCADE,
+  CONSTRAINT marketplace_message_payments_buyer_id_fkey FOREIGN KEY (buyer_id) REFERENCES public.users(id) ON DELETE CASCADE,
+  CONSTRAINT marketplace_message_payments_seller_id_fkey FOREIGN KEY (seller_id) REFERENCES public.users(id) ON DELETE CASCADE,
+  CONSTRAINT marketplace_message_payments_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id) ON DELETE SET NULL,
+  CONSTRAINT marketplace_message_payments_unique_buyer_product UNIQUE (product_id, buyer_id) WHERE status = 'completed'
+);
+
+CREATE INDEX idx_marketplace_message_payments_product_id ON public.marketplace_message_payments (product_id);
+CREATE INDEX idx_marketplace_message_payments_buyer_id ON public.marketplace_message_payments (buyer_id);
+CREATE INDEX idx_marketplace_message_payments_seller_id ON public.marketplace_message_payments (seller_id);
+CREATE INDEX idx_marketplace_message_payments_status ON public.marketplace_message_payments (status);
+CREATE INDEX idx_marketplace_message_payments_created_at ON public.marketplace_message_payments (created_at DESC);
+
+
+-- UPDATED EVENTS TABLE WITH CURRENCY SUPPORT
+-- Currency field added to support NGN and USD pricing
+-- ticket_price_ngn and ticket_price_usd for proper conversion
+ALTER TABLE public.events ADD COLUMN IF NOT EXISTS currency character varying DEFAULT 'NGN'::character varying;
+ALTER TABLE public.events ADD COLUMN IF NOT EXISTS is_paid boolean DEFAULT false;
+ALTER TABLE public.events ADD COLUMN IF NOT EXISTS ticket_price_ngn numeric;
+ALTER TABLE public.events ADD COLUMN IF NOT EXISTS ticket_price_usd numeric;
+
+CREATE INDEX IF NOT EXISTS idx_events_currency ON public.events (currency);
+CREATE INDEX IF NOT EXISTS idx_events_is_paid ON public.events (is_paid);
+
+
+-- UPDATED EVENT REGISTRATIONS WITH PAYMENT TRACKING
+-- payment_status and transaction tracking for paid events
+ALTER TABLE public.event_registrations ADD COLUMN IF NOT EXISTS payment_status character varying DEFAULT 'free'::character varying;
+ALTER TABLE public.event_registrations ADD COLUMN IF NOT EXISTS payment_reference character varying;
+ALTER TABLE public.event_registrations ADD COLUMN IF NOT EXISTS transaction_id uuid;
+ALTER TABLE public.event_registrations ADD COLUMN IF NOT EXISTS amount_paid numeric;
+ALTER TABLE public.event_registrations ADD COLUMN IF NOT EXISTS currency character varying DEFAULT 'USD'::character varying;
+ALTER TABLE public.event_registrations ADD COLUMN IF NOT EXISTS payment_method character varying;
+ALTER TABLE public.event_registrations ADD COLUMN IF NOT EXISTS paid_at timestamp with time zone;
+
+CREATE INDEX IF NOT EXISTS idx_event_registrations_payment_status ON public.event_registrations (payment_status);
+CREATE INDEX IF NOT EXISTS idx_event_registrations_transaction_id ON public.event_registrations (transaction_id);
+
+
+-- WITHDRAWAL REQUESTS TABLE
+-- Handles user withdrawal requests with bank details and approval workflow
+CREATE TABLE public.withdraw_requests (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  amount numeric NOT NULL,
+  currency character varying NOT NULL DEFAULT 'USD'::character varying,
+  amount_in_naira numeric NOT NULL,
+  requested_coins integer NOT NULL,
+  bank_code character varying NOT NULL,
+  bank_name character varying NOT NULL,
+  account_number character varying NOT NULL,
+  account_name character varying NOT NULL,
+  account_type character varying DEFAULT 'individual'::character varying,
+  status character varying NOT NULL DEFAULT 'pending'::character varying,
+  notes text,
+  processed_by uuid,
+  processed_at timestamp with time zone,
+  rejection_reason text,
+  current_coin_balance integer NOT NULL,
+  user_coin_balance_at_request integer NOT NULL,
+  reference_id character varying,
+  paystack_recipient_code character varying,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT withdraw_requests_pkey PRIMARY KEY (id),
+  CONSTRAINT withdraw_requests_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE,
+  CONSTRAINT withdraw_requests_processed_by_fkey FOREIGN KEY (processed_by) REFERENCES public.admins(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_withdraw_requests_user_id ON public.withdraw_requests (user_id);
+CREATE INDEX idx_withdraw_requests_status ON public.withdraw_requests (status);
+CREATE INDEX idx_withdraw_requests_created_at ON public.withdraw_requests (created_at DESC);
+CREATE INDEX idx_withdraw_requests_user_status ON public.withdraw_requests (user_id, status);

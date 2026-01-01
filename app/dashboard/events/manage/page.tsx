@@ -43,6 +43,8 @@ export default function DashboardEventsManagePage() {
   const [allEvents, setAllEvents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [showDetailDialog, setShowDetailDialog] = useState(false)
+  const [selectedEvent, setSelectedEvent] = useState<any>(null)
   const [uploading, setUploading] = useState(false)
   
   // Form state
@@ -612,7 +614,13 @@ export default function DashboardEventsManagePage() {
                               Your Event
                             </Button>
                           ) : (
-                            <Button className="w-full gap-1 text-xs mt-3">
+                            <Button 
+                              className="w-full gap-1 text-xs mt-3"
+                              onClick={() => {
+                                setSelectedEvent(event)
+                                setShowDetailDialog(true)
+                              }}
+                            >
                               <Users className="w-3 h-3" />
                               Register
                             </Button>
@@ -836,6 +844,81 @@ export default function DashboardEventsManagePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+
+      {/* Event Detail Dialog */}
+      <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          {selectedEvent && (
+            <div className="space-y-4">
+              <DialogHeader>
+                <DialogTitle>{selectedEvent.title}</DialogTitle>
+              </DialogHeader>
+              
+              {selectedEvent.thumbnail && (
+                <div className="w-full aspect-video rounded-lg overflow-hidden bg-muted">
+                  <img 
+                    src={selectedEvent.thumbnail} 
+                    alt={selectedEvent.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Date</label>
+                  <p className="text-lg font-semibold">
+                    {selectedEvent.event_date ? new Date(selectedEvent.event_date).toLocaleDateString() : "Not specified"}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Price</label>
+                  <div className="space-y-1">
+                    {selectedEvent.is_free ? (
+                      <p className="text-lg font-semibold">Free</p>
+                    ) : (
+                      <>
+                        <p className="text-lg font-semibold">${selectedEvent.ticket_price || "0"}</p>
+                        <p className="text-sm text-muted-foreground">₦{((selectedEvent.ticket_price || 0) * 1450).toLocaleString()}</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Location</label>
+                <p className="mt-2">{selectedEvent.location || "Not specified"}</p>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Description</label>
+                <p className="mt-2">{selectedEvent.description}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Capacity</label>
+                  <p className="text-lg font-semibold">{selectedEvent.capacity || "Unlimited"}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Organizer</label>
+                  <p className="text-lg font-semibold">{selectedEvent.users?.display_name || selectedEvent.organizer_name || "Unknown"}</p>
+                </div>
+              </div>
+              
+              <DialogFooter className="pt-4 gap-2">
+                <Button variant="outline" onClick={() => setShowDetailDialog(false)}>
+                  Close
+                </Button>
+                <Button className="bg-pink-600 hover:bg-pink-700">
+                  <Users className="w-4 h-4 mr-2" />
+                  {selectedEvent.is_free ? "Register for Event" : "Book Now"}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>    </div>
   )
 }

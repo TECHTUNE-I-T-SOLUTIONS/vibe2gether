@@ -51,7 +51,6 @@ export async function POST(request: NextRequest) {
     // Handle charge.success event
     if (event === "charge.success") {
       const reference = data.reference
-      const status = data.status // "success"
       const amount = data.amount / 100 // Paystack returns amount in kobo (1/100 of Naira)
       const authorization = data.authorization
       const customer = data.customer
@@ -145,6 +144,87 @@ export async function POST(request: NextRequest) {
         } else {
           console.log(`[Paystack] Premium subscription activated: ${transaction.metadata?.subscription_id}`)
         }
+      } else if (transaction.type === "coin_purchase") {
+        // Check if coins were already added (prevent duplicate additions)
+        if (transaction.metadata?.coins_added) {
+          console.log(`[Paystack] Coins already added for transaction ${transaction.id}, skipping`)
+          return NextResponse.json({ status: "ok" })
+        }
+
+        // Update user's coin balance
+        const coinsAmount = transaction.metadata?.coinsAmount || Math.round((amount / 1450) * 500)
+
+        console.log(`[Paystack] Processing coin purchase - Adding ${coinsAmount} coins to user ${transaction.user_id}`)
+
+        // Fetch current balance and add coins
+        const { data: user, error: fetchError } = await supabase
+          .from("users")
+          .select("coins_balance")
+          .eq("id", transaction.user_id)
+          .single()
+
+        if (fetchError || !user) {
+          console.error("[Paystack] Failed to fetch user for coin update:", fetchError)
+        } else {
+          const newBalance = (user.coins_balance || 0) + coinsAmount
+          const { error: addCoinsError } = await supabase
+            .from("users")
+            .update({
+              coins_balance: newBalance,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", transaction.user_id)
+
+          if (addCoinsError) {
+            console.error("[Paystack] Failed to add coins to user:", addCoinsError)
+          } else {
+            console.log(`[Paystack] Successfully added ${coinsAmount} coins to user ${transaction.user_id}, new balance: ${newBalance}`)
+
+            // Mark coins as added in transaction metadata
+            await supabase
+              .from("transactions")
+              .update({
+                metadata: {
+                  ...transaction.metadata,
+                  coins_added: true,
+                  coins_added_at: new Date().toISOString(),
+                },
+              })
+              .eq("id", transaction.id)
+
+            // Check if coin transaction already exists for this payment
+            const { data: existingCoinTx, error: checkError } = await supabase
+              .from("coin_transactions")
+              .select("id")
+              .eq("reference_id", transaction.id)
+              .eq("reference_type", "paystack_transaction")
+              .single()
+
+            // Only insert if it doesn't already exist
+            if (!existingCoinTx && !checkError) {
+              const { error: coinTxError } = await supabase
+                .from("coin_transactions")
+                .insert({
+                  user_id: transaction.user_id,
+                  amount: coinsAmount,
+                  transaction_type: "purchase",
+                  description: `Purchased ${coinsAmount} coins via Paystack (₦${amount.toFixed(2)})`,
+                  reference_id: transaction.id,
+                  reference_type: "paystack_transaction",
+                  balance_after: newBalance,
+                  created_at: new Date().toISOString(),
+                })
+
+              if (coinTxError) {
+                console.error("[Paystack] Failed to save coin transaction:", coinTxError)
+              } else {
+                console.log(`[Paystack] Saved coin transaction for user ${transaction.user_id}`)
+              }
+            } else {
+              console.log(`[Paystack] Coin transaction already exists for reference ${transaction.id}`)
+            }
+          }
+        }
       }
 
       return NextResponse.json({ status: "ok" })
@@ -216,7 +296,7 @@ export async function POST(request: NextRequest) {
 /**
  * GET endpoint for webhook health check
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   return NextResponse.json({
     status: "ok",
     message: "Paystack webhook endpoint is active",

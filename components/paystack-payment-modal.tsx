@@ -38,13 +38,32 @@ export function PaystackPaymentModal({
   const { data: session } = useSession()
   const [email, setEmail] = useState("")
   const [fullName, setFullName] = useState("")
+  const [paymentAmount, setPaymentAmount] = useState(amount)
   const [isProcessing, setIsProcessing] = useState(false)
   const [paymentStatus, setPaymentStatus] = useState<"idle" | "processing" | "success" | "error">("idle")
   const [errorMessage, setErrorMessage] = useState("")
   const [isLoading, setIsLoading] = useState(true)
+  const [paymentReference, setPaymentReference] = useState<string | null>(null)
 
-  // Convert to Kobo for Paystack (1 NGN = 100 Kobo)
-  const amountInKobo = Math.round(amount * 100)
+  // USD equivalent = NGN / 1450 (1 USD = 1450 NGN)
+  const usdEquivalent = paymentAmount / 1450
+
+  // Coins equivalent = USD * 500 (500 coins = 1 USD)
+  const coinsEquivalent = Math.round(usdEquivalent * 500)
+
+  // Check for payment reference in URL params (Paystack redirect)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const reference = params.get("reference")
+    
+    if (reference && isOpen) {
+      console.log("[PAYSTACK] Payment reference found in URL:", reference)
+      setPaymentReference(reference)
+      verifyPayment(reference)
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname)
+    }
+  }, [isOpen])
 
   // Fetch user details from session on modal open
   useEffect(() => {
@@ -81,6 +100,15 @@ export function PaystackPaymentModal({
       return
     }
 
+    if (paymentAmount < 1500) {
+      toast({
+        title: "Minimum Amount Required",
+        description: "The minimum payment amount is ₦1,500",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsProcessing(true)
     setPaymentStatus("processing")
     setErrorMessage("")
@@ -95,7 +123,7 @@ export function PaystackPaymentModal({
         body: JSON.stringify({
           email,
           fullName,
-          amount: amountInKobo,
+          amount: paymentAmount,
           currency,
           itemType,
           itemData,
@@ -136,13 +164,52 @@ export function PaystackPaymentModal({
     if (!isProcessing) {
       setPaymentStatus("idle")
       setErrorMessage("")
+      setPaymentReference(null)
       onClose()
     }
   }
 
+  const verifyPayment = async (reference: string) => {
+    try {
+      console.log("[PAYSTACK] Verifying payment with reference:", reference)
+      const response = await fetch(`/api/paystack/verify?reference=${reference}`)
+      const result = await response.json()
+
+      console.log("[PAYSTACK] Verification response:", result)
+
+      if (result.success && result.status === "completed") {
+        setPaymentStatus("success")
+        toast({
+          title: "Success!",
+          description: `${result.coinsAdded} coins have been added to your wallet!`,
+          variant: "default",
+        })
+        onPaymentSuccess?.(reference)
+        // Auto close after 3 seconds
+        setTimeout(() => {
+          handleClose()
+        }, 3000)
+      } else if (result.status === "pending") {
+        setErrorMessage("Payment is being processed. Please wait...")
+        setPaymentStatus("processing")
+        // Retry verification after 3 seconds
+        setTimeout(() => {
+          verifyPayment(reference)
+        }, 3000)
+      } else {
+        setErrorMessage("Payment verification failed. Please contact support.")
+        setPaymentStatus("error")
+      }
+    } catch (error) {
+      console.error("[PAYSTACK] Verification error:", error)
+      setErrorMessage("Could not verify payment. Please try again.")
+      setPaymentStatus("error")
+    }
+  }
+
   // Amount is already in NGN (1500 = ₦1,500)
-  // USD equivalent = NGN / 1670 (1 USD = 1670 NGN)
-  const usdEquivalent = amount / 1670
+  // USD equivalent = NGN / 1450 (1 USD = 1450 NGN)
+  // Moved to top with other calculations
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -157,14 +224,31 @@ export function PaystackPaymentModal({
         <div className="space-y-6">
           {/* Payment Summary */}
           <div className="bg-muted p-4 rounded-lg">
-            <p className="text-sm text-muted-foreground mb-2">Item: {itemData?.title || purpose || "Purchase"}</p>
-            <div className="flex justify-between items-baseline">
-              <span className="text-xl font-bold">
-                ₦{amount.toLocaleString()}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                ${usdEquivalent.toFixed(2)} USD
-              </span>
+            <p className="text-sm text-muted-foreground mb-3">Item: {itemData?.title || purpose || "Purchase"}</p>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="amount" className="text-sm">Amount (NGN)</Label>
+                <div className="flex gap-2 mt-1">
+                  <Input
+                    id="amount"
+                    type="number"
+                    min="1500"
+                    step="100"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(Math.max(1500, parseInt(e.target.value) || 1500))}
+                    disabled={isProcessing}
+                    className="font-semibold"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Minimum: ₦1,500</p>
+              </div>
+              <div className="flex justify-between items-baseline bg-background p-3 rounded">
+                <div>
+                  <span className="text-lg font-bold block">₦{paymentAmount.toLocaleString()}</span>
+                  <span className="text-xs text-muted-foreground">{coinsEquivalent.toLocaleString()} coins</span>
+                </div>
+                <span className="text-sm text-muted-foreground">${usdEquivalent.toFixed(2)} USD</span>
+              </div>
             </div>
           </div>
 
@@ -188,25 +272,16 @@ export function PaystackPaymentModal({
                 <>
                   <div className="space-y-2">
                     <Label htmlFor="full-name">Full Name</Label>
-                    <Input
-                      id="full-name"
-                      placeholder="John Doe"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      disabled={isProcessing}
-                    />
+                    <div className="px-4 py-2 bg-muted rounded-md text-sm font-medium">
+                      {fullName || "—"}
+                    </div>
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="email">Email Address</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="john@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      disabled={isProcessing}
-                    />
+                    <div className="px-4 py-2 bg-muted rounded-md text-sm font-medium break-all">
+                      {email || "—"}
+                    </div>
                   </div>
                 </>
               )}
@@ -248,11 +323,11 @@ export function PaystackPaymentModal({
           {paymentStatus !== "success" && (
             <Button
               onClick={handlePayment}
-              disabled={isProcessing || !email || !fullName || isLoading}
+              disabled={isProcessing || !email || !fullName || isLoading || paymentAmount < 1500}
               className="gap-2"
             >
               {isProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
-              {isProcessing ? "Processing..." : `Pay ₦${amount.toLocaleString()}`}
+              {isProcessing ? "Processing..." : `Pay ₦${paymentAmount.toLocaleString()}`}
             </Button>
           )}
         </DialogFooter>

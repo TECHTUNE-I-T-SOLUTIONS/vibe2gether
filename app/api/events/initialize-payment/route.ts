@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { createClient } from "@supabase/supabase-js"
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY
-const PAYSTACK_PUBLIC_KEY = process.env.PAYSTACK_PUBLIC_KEY
+const USD_TO_NGN_RATE = 1450
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || "",
@@ -18,15 +18,14 @@ if (!PAYSTACK_SECRET_KEY) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { email, fullName, amount, currency, itemType, itemData, metadata } = body
+    const { email, fullName, eventId, itemData } = body
 
-    console.log("[PAYSTACK] Initialize request received:", { email, fullName, amount, currency, itemType })
+    console.log("[PAYSTACK_EVENT] Initialize request received:", { email, fullName, eventId })
 
     // Validate required fields
-    if (!email || !fullName || !amount || !itemType) {
-      console.error("[PAYSTACK] Validation failed:", { email, fullName, amount, itemType })
+    if (!email || !fullName || !eventId) {
       return NextResponse.json(
-        { error: "Missing required fields", details: { email: !!email, fullName: !!fullName, amount: !!amount, itemType: !!itemType } },
+        { error: "Missing required fields" },
         { status: 400 }
       )
     }
@@ -42,19 +41,57 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession(authOptions)
     const userId = session?.user?.id
 
-    // Convert to Kobo if currency is NGN
-    let amountInKobo = amount
-    if (currency === "NGN") {
-      amountInKobo = Math.round(amount * 100)
-    } else if (currency === "USD") {
-      // Convert USD to NGN (~1670 NGN per USD)
-      const amountInNGN = amount * 1670
-      amountInKobo = Math.round(amountInNGN * 100)
+    // Get event details
+    const { data: event, error: eventError } = await supabase
+      .from("events")
+      .select("*")
+      .eq("id", eventId)
+      .single()
+
+    if (eventError || !event) {
+      return NextResponse.json(
+        { error: "Event not found" },
+        { status: 404 }
+      )
     }
 
+    // Determine the amount in NGN
+    let amountInNGN = 0
+    let amountInUSD = 0
+    const currency = event.currency || "NGN"
+
+    if (event.is_free || !event.ticket_price || event.ticket_price === 0) {
+      // Free event - just register
+      return NextResponse.json({
+        success: true,
+        isFree: true,
+        message: "This is a free event. Proceed with registration.",
+      })
+    }
+
+    // Calculate amount correctly
+    if (currency === "NGN") {
+      amountInNGN = Math.round(event.ticket_price)
+      amountInUSD = event.ticket_price / USD_TO_NGN_RATE
+    } else if (currency === "USD") {
+      amountInUSD = event.ticket_price
+      amountInNGN = Math.round(event.ticket_price * USD_TO_NGN_RATE)
+    }
+
+    // Convert to Kobo for Paystack
+    const amountInKobo = amountInNGN * 100
+
+    console.log("[PAYSTACK_EVENT] Payment details:", {
+      currency,
+      ticketPrice: event.ticket_price,
+      amountInNGN,
+      amountInUSD,
+      amountInKobo,
+    })
+
     // Initialize Paystack transaction
-    const redirectUrl = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/dashboard/wallet`
-    
+    const redirectUrl = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/dashboard/events`
+
     const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
       headers: {
@@ -68,11 +105,12 @@ export async function POST(request: NextRequest) {
         callback_url: redirectUrl,
         metadata: {
           fullName,
-          itemType,
-          itemId: itemData?.id,
-          itemTitle: itemData?.title,
+          eventId,
+          eventTitle: event.title,
+          currency,
+          amountInNGN,
+          amountInUSD,
           userId,
-          ...metadata,
         },
         channels: ["card", "bank", "ussd", "qr", "mobile_money", "bank_transfer"],
       }),
@@ -80,7 +118,7 @@ export async function POST(request: NextRequest) {
 
     if (!paystackResponse.ok) {
       const error = await paystackResponse.json()
-      console.error("[PAYSTACK] Initialization error:", error)
+      console.error("[PAYSTACK_EVENT] Initialization error:", error)
       return NextResponse.json(
         { error: error.message || "Failed to initialize payment" },
         { status: paystackResponse.status }
@@ -98,36 +136,37 @@ export async function POST(request: NextRequest) {
 
     const reference = paystackData.data.reference
 
-    // Create transaction record in database
-    if (userId && itemType === "coins") {
+    // Create transaction record
+    if (userId) {
       try {
         await supabase.from("transactions").insert({
           user_id: userId,
-          type: "coin_purchase",
-          amount: Math.round(amount), // Store NGN amount
+          type: "event_registration",
+          amount: Math.round(amountInNGN),
           currency: "NGN",
           payment_method: "paystack",
           payment_reference: reference,
           status: "pending",
           metadata: {
             fullName,
-            itemType: "coins",
-            itemTitle: itemData?.title || "Buy Coins",
-            coinsAmount: Math.round((amount / 1450) * 500), // Pre-calculate coins
+            eventId,
+            eventTitle: event.title,
+            currency,
+            amountInNGN,
+            amountInUSD,
           },
         })
-        console.log("[PAYSTACK] Transaction record created for reference:", reference)
+        console.log("[PAYSTACK_EVENT] Transaction record created for reference:", reference)
       } catch (txError) {
-        console.error("[PAYSTACK] Failed to create transaction record:", txError)
-        // Don't fail the payment initialization if transaction record creation fails
+        console.error("[PAYSTACK_EVENT] Failed to create transaction record:", txError)
       }
     }
 
-    console.log("[PAYSTACK] Transaction initialized:", {
+    console.log("[PAYSTACK_EVENT] Transaction initialized:", {
       reference,
       email,
-      amount: amountInKobo,
-      itemType,
+      amountInKobo,
+      eventId,
     })
 
     return NextResponse.json({
@@ -135,9 +174,11 @@ export async function POST(request: NextRequest) {
       authorizationUrl: paystackData.data.authorization_url,
       accessCode: paystackData.data.access_code,
       reference,
+      amountInNGN,
+      amountInUSD,
     })
   } catch (error) {
-    console.error("[PAYSTACK] Initialization error:", error)
+    console.error("[PAYSTACK_EVENT] Initialization error:", error)
     const errorMsg = error instanceof Error ? error.message : "Failed to initialize payment"
     return NextResponse.json(
       { error: errorMsg },
