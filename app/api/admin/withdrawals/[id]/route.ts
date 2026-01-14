@@ -11,7 +11,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Verify admin auth using JWT token
@@ -35,6 +35,8 @@ export async function PATCH(
       )
     }
 
+    const { id } = await params
+
     // Update withdrawal request
     const { data, error } = await supabase
       .from("withdraw_requests")
@@ -43,7 +45,7 @@ export async function PATCH(
         notes,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", params.id)
+      .eq("id", id)
       .select("*, user:user_id(id, display_name, email)")
       .single()
 

@@ -21,12 +21,19 @@ export default function VerificationPage() {
     try {
       setLoading(true)
       const formData = new FormData()
-      formData.append('id_type', idType)
-      formData.append('id_number', idNumber)
-      formData.append('id_document', idFile)
+      formData.append('idType', idType)
+      formData.append('idNumber', idNumber)
+      formData.append('idDocument', idFile)
       formData.append('selfie', selfieFile)
 
-      const res = await fetch('/api/verification/submit', { method: 'POST', body: formData })
+      console.log('[Verification Page] Submitting verification with:', {
+        idType,
+        idNumber: '***',
+        hasIdDocument: !!idFile,
+        hasSelfie: !!selfieFile,
+      })
+
+      const res = await fetch('/api/user/submit-verification', { method: 'POST', body: formData })
       const json = await res.json()
       if (res.ok) {
         setStatus(json.status)

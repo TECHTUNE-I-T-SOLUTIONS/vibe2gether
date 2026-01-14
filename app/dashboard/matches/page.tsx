@@ -189,6 +189,38 @@ export default function MatchesPage() {
     setPotentialMatches((prev) => prev.filter((m) => m.id !== userId))
   }
 
+  const handleLikePotential = async (match: any) => {
+    if (!user) return
+    try {
+      console.log(`[Matches Page] Creating match for user ${match.id} with compatibility ${match.compatibilityScore}%`)
+      
+      const response = await fetch("/api/matches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: match.id,
+          compatibilityScore: match.compatibilityScore || 0,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to create match")
+      }
+
+      const newMatch = await response.json()
+      console.log("[Matches Page] Match created successfully:", newMatch.id)
+      
+      // Remove from potential matches
+      setPotentialMatches((prev) => prev.filter((m) => m.id !== match.id))
+      
+      // Add to active matches
+      setActiveMatches((prev) => [...prev, newMatch])
+    } catch (err) {
+      console.error("[Matches Page] Error creating match:", err)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -448,7 +480,10 @@ export default function MatchesPage() {
                         <X className="w-4 h-4 mr-2" />
                         Pass
                       </Button>
-                      <Button className="flex-1 gradient-bg">
+                      <Button 
+                        className="flex-1 gradient-bg"
+                        onClick={() => handleLikePotential(match)}
+                      >
                         <Heart className="w-4 h-4 mr-2" />
                         Like
                       </Button>

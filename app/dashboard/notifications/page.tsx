@@ -14,6 +14,7 @@ interface NotificationItem {
   id: string
   type: string
   user_id: string
+  actor_id?: string
   actor_name: string
   actor_image: string
   title?: string
@@ -86,6 +87,7 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
+  const [followingStates, setFollowingStates] = useState<Record<string, boolean>>({})
 
   // Check authentication
   useEffect(() => {
@@ -101,7 +103,36 @@ export default function NotificationsPage() {
         const response = await fetch("/api/notifications")
         if (!response.ok) throw new Error("Failed to fetch notifications")
         const data = await response.json()
-        setNotifications(data.notifications || [])
+        const notifications = data.notifications || []
+        setNotifications(notifications)
+
+        // Check following status for follow notifications
+        const followNotifications = notifications.filter((n: NotificationItem) => n.type === "follow")
+        if (followNotifications.length > 0) {
+          const followingStates: Record<string, boolean> = {}
+          
+          for (const notification of followNotifications) {
+            try {
+              if (notification.actor_id) {
+                console.log(`[Notifications] Checking follow status for actor ${notification.actor_id}`)
+                const followCheckResponse = await fetch(`/api/users/follow/check?userId=${notification.actor_id}`)
+                if (followCheckResponse.ok) {
+                  const followData = await followCheckResponse.json()
+                  followingStates[notification.id] = followData.following
+                  console.log(`[Notifications] Follow status for ${notification.actor_id}: ${followData.following}`)
+                } else {
+                  console.error(`[Notifications] Failed to check follow status: ${followCheckResponse.status}`)
+                }
+              } else {
+                console.warn(`[Notifications] Missing actor_id for notification ${notification.id}`)
+              }
+            } catch (err) {
+              console.error("Error checking follow status:", err)
+            }
+          }
+          
+          setFollowingStates(followingStates)
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred")
         console.error("Fetch error:", err)
@@ -160,6 +191,53 @@ export default function NotificationsPage() {
       setNotifications([])
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to clear notifications")
+      console.error("Error:", err)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleFollowBack = async (notification: NotificationItem) => {
+    if (!notification.actor_id) {
+      console.error(`[Notifications] Cannot follow user: missing actor_id for notification ${notification.id}`, notification)
+      setError("Cannot follow user: missing actor information")
+      return
+    }
+
+    try {
+      setActionLoading(true)
+      console.log(`[Notifications] Following user ${notification.actor_id}`)
+      
+      const response = await fetch("/api/users/follow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: notification.actor_id }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to follow user")
+      }
+
+      const data = await response.json()
+      console.log(`[Notifications] Follow response:`, data)
+      
+      // Update following state for all notifications from this user
+      setFollowingStates(prev => {
+        const updatedStates = { ...prev }
+        // Find all notifications from the same actor and update their state
+        notifications.forEach(notif => {
+          if (notif.type === "follow" && notif.actor_id === notification.actor_id) {
+            updatedStates[notif.id] = data.following
+          }
+        })
+        return updatedStates
+      })
+
+      // Show success message
+      setError(null) // Clear any previous errors
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to follow user")
       console.error("Error:", err)
     } finally {
       setActionLoading(false)
@@ -364,8 +442,13 @@ export default function NotificationsPage() {
                         </p>
                         <p className="text-sm text-muted-foreground">{new Date(notification.created_at).toLocaleDateString()}</p>
                       </div>
-                      <Button size="sm" className="rounded-full gradient-bg">
-                        Follow Back
+                      <Button 
+                        size="sm" 
+                        className="rounded-full gradient-bg"
+                        onClick={() => handleFollowBack(notification)}
+                        disabled={actionLoading}
+                      >
+                        {followingStates[notification.id] ? "Following" : "Follow Back"}
                       </Button>
                     </div>
                   ))

@@ -97,7 +97,7 @@ export default function LoginPage() {
             <div className="space-y-3">
               <Button
                 variant="outline"
-                className="w-full h-12 rounded-xl"
+                className="w-full h-12 rounded-xl bg-white dark:bg-black/50 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800"
                 onClick={() => handleOAuthSignIn("google")}
                 disabled={isLoading}
             >

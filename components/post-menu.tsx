@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { MoreHorizontal, Trash2, Share2, Flag, Copy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -11,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { useToast } from "@/hooks/use-toast"
+import { ReportPostModal } from "@/components/report-post-modal"
 
 interface PostMenuProps {
   postId: string
@@ -22,6 +24,7 @@ interface PostMenuProps {
 export function PostMenu({ postId, postAuthorId, postLink, onDelete }: PostMenuProps) {
   const { user } = useUserProfile()
   const { toast } = useToast()
+  const [showReportModal, setShowReportModal] = useState(false)
   const isAuthor = user?.id === postAuthorId
 
   const handleCopyLink = async () => {
@@ -76,54 +79,60 @@ export function PostMenu({ postId, postAuthorId, postLink, onDelete }: PostMenuP
   }
 
   const handleReport = () => {
-    toast({
-      title: "Report submitted",
-      description: "Thank you for helping keep our community safe",
-    })
+    setShowReportModal(true)
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <MoreHorizontal className="h-4 w-4" />
-          <span className="sr-only">Post menu</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuItem onClick={handleShare}>
-          <Share2 className="h-4 w-4 mr-2" />
-          Share
-        </DropdownMenuItem>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-8 w-8">
+            <MoreHorizontal className="h-4 w-4" />
+            <span className="sr-only">Post menu</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuItem onClick={handleShare}>
+            <Share2 className="h-4 w-4 mr-2" />
+            Share
+          </DropdownMenuItem>
 
-        <DropdownMenuItem onClick={handleCopyLink}>
-          <Copy className="h-4 w-4 mr-2" />
-          Copy link
-        </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleCopyLink}>
+            <Copy className="h-4 w-4 mr-2" />
+            Copy link
+          </DropdownMenuItem>
 
-        {isAuthor && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={handleDelete}
-              className="text-red-600 focus:text-red-600 focus:bg-red-50"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete post
-            </DropdownMenuItem>
-          </>
-        )}
+          {isAuthor && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={handleDelete}
+                className="text-red-600 focus:text-red-600 focus:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete post
+              </DropdownMenuItem>
+            </>
+          )}
 
-        {!isAuthor && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleReport} className="text-amber-600 focus:text-amber-600 focus:bg-amber-50">
-              <Flag className="h-4 w-4 mr-2" />
-              Report post
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          {!isAuthor && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleReport} className="text-amber-600 focus:text-amber-600 focus:bg-amber-50">
+                <Flag className="h-4 w-4 mr-2" />
+                Report post
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <ReportPostModal
+        open={showReportModal}
+        onOpenChange={setShowReportModal}
+        postId={postId}
+        postAuthorId={postAuthorId}
+      />
+    </>
   )
 }

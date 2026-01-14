@@ -47,7 +47,7 @@ export function AdminHeader({ onLogoutClick }: AdminHeaderProps) {
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
-  const searchTimeoutRef = useRef<NodeJS.Timeout>()
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     setMounted(true)

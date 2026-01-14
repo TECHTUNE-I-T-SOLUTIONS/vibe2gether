@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Search, Phone, Video, MoreVertical, Send, Smile, ImagePlus, Mic, Loader2, MessageCircle, UserPlus, MessageSquare, MapPin, Users, Plus, X, ChevronLeft, ChevronRight, ArrowLeft, Flag, User, Pause, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n/context"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
 import { createClient } from "@/lib/supabase/client"
@@ -72,6 +72,7 @@ interface User {
 export default function MessagesPage() {
   const { data: session } = useSession()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { t } = useI18n()
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -121,8 +122,156 @@ export default function MessagesPage() {
   const [mediaCaption, setMediaCaption] = useState("")
   const [justSentMessageIds, setJustSentMessageIds] = useState<Set<string>>(new Set())
 
+  // Match confirmation dialog state
+  const [showMatchConfirmation, setShowMatchConfirmation] = useState(false)
+  const [pendingMatchUser, setPendingMatchUser] = useState<User | null>(null)
+  const [creatingMatch, setCreatingMatch] = useState(false)
+
   // Realtime subscription ref
   const realtimeSubscriptionRef = useRef<any>(null)
+
+  const handleStartNewConversation = async (userId: string) => {
+    try {
+      // Fetch user data first
+      const userResponse = await fetch(`/api/user/${userId}`)
+      if (!userResponse.ok) {
+        console.error("Failed to fetch user data for conversation")
+        toast({
+          title: "Error",
+          description: "Could not load user information",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const userData = await userResponse.json()
+      const user = userData.user
+
+      // Check if a match already exists
+      const matchResponse = await fetch(`/api/matches?userId=${userId}`)
+      let matchExists = false
+
+      if (matchResponse.ok) {
+        const matchData = await matchResponse.json()
+        matchExists = matchData.exists
+      }
+
+      // If no match exists, show confirmation dialog
+      if (!matchExists) {
+        setPendingMatchUser(user)
+        setShowMatchConfirmation(true)
+        return
+      }
+
+      // If match exists, proceed to create conversation
+      await createConversationWithMatch(user, matchResponse.ok ? (await matchResponse.json()).matchId : null)
+
+    } catch (error) {
+      console.error("Error starting conversation:", error)
+      toast({
+        title: "Error",
+        description: "Could not start conversation with this user",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Helper function to create conversation with existing match
+  const createConversationWithMatch = async (user: User, matchId: string | null) => {
+    try {
+      // Create conversation object
+      const newConversation: Conversation = {
+        id: matchId || user.id,
+        name: user.display_name,
+        avatar: user.profile_picture,
+        lastMessage: "",
+        lastMessageTime: "",
+        unreadCount: 0,
+        online: false,
+        userId: user.id
+      }
+
+      // Add to conversations array
+      setConversations(prev => {
+        // Check if conversation already exists
+        const exists = prev.find(conv => conv.userId === user.id)
+        if (exists) return prev
+        return [newConversation, ...prev]
+      })
+
+      setSelectedChat(newConversation)
+
+      // Clear the URL parameter
+      const newUrl = new URL(window.location.href)
+      newUrl.searchParams.delete('userId')
+      window.history.replaceState({}, '', newUrl.toString())
+
+      toast({
+        title: "Conversation started",
+        description: `You can now message ${user.display_name}`,
+      })
+    } catch (error) {
+      console.error("Error creating conversation:", error)
+      toast({
+        title: "Error",
+        description: "Could not start conversation",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Handle match confirmation
+  const handleConfirmMatch = async () => {
+    if (!pendingMatchUser) return
+
+    try {
+      setCreatingMatch(true)
+
+      // Create the match
+      const createMatchResponse = await fetch("/api/matches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: pendingMatchUser.id,
+          compatibilityScore: 50
+        }), // Default compatibility score
+      })
+
+      if (!createMatchResponse.ok) {
+        throw new Error("Failed to create match")
+      }
+
+      const matchData = await createMatchResponse.json()
+      const matchId = matchData.matchId
+
+      // Create conversation with the new match
+      await createConversationWithMatch(pendingMatchUser, matchId)
+
+      // Close dialog and reset state
+      setShowMatchConfirmation(false)
+      setPendingMatchUser(null)
+
+      toast({
+        title: "Match created!",
+        description: `You are now matched with ${pendingMatchUser.display_name}`,
+      })
+
+    } catch (error) {
+      console.error("Error creating match:", error)
+      toast({
+        title: "Error",
+        description: "Could not create match. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setCreatingMatch(false)
+    }
+  }
+
+  const handleCancelMatch = () => {
+    setShowMatchConfirmation(false)
+    setPendingMatchUser(null)
+  }
 
   // Initialize
   useEffect(() => {
@@ -140,6 +289,22 @@ export default function MessagesPage() {
           const data = await response.json()
           const convs = data.conversations || []
           setConversations(convs)
+
+          // Check for userId parameter to pre-select a conversation
+          const userIdParam = searchParams.get('userId')
+          if (userIdParam) {
+            const targetConversation = convs.find((conv: Conversation) => conv.userId === userIdParam)
+            if (targetConversation) {
+              setSelectedChat(targetConversation)
+              // Clear the URL parameter
+              const newUrl = new URL(window.location.href)
+              newUrl.searchParams.delete('userId')
+              window.history.replaceState({}, '', newUrl.toString())
+            } else {
+              // If no existing conversation, try to start a new one
+              await handleStartNewConversation(userIdParam)
+            }
+          }
         }
       } catch (err) {
         console.error("Initialize error:", err)
@@ -1134,6 +1299,90 @@ export default function MessagesPage() {
               </Button>
               <Button onClick={submitReport} className="flex-1 gradient-bg" disabled={!reportReason}>
                 Submit Report
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Match Confirmation Modal */}
+      <Dialog open={showMatchConfirmation} onOpenChange={setShowMatchConfirmation}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Match with User</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {pendingMatchUser && (
+              <div className="space-y-4">
+                {/* User Profile Section */}
+                <div className="flex items-start gap-3 p-4 bg-muted rounded-lg">
+                  <Avatar className="w-16 h-16">
+                    <AvatarImage src={pendingMatchUser.profile_picture} />
+                    <AvatarFallback className="text-lg">{pendingMatchUser.display_name[0]}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-semibold text-base truncate">{pendingMatchUser.display_name}</p>
+                      {pendingMatchUser.is_verified && (
+                        <Badge variant="secondary" className="text-xs px-1.5 py-0.5">
+                          ✓ Verified
+                        </Badge>
+                      )}
+                      {pendingMatchUser.is_premium && (
+                        <Badge className="text-xs px-1.5 py-0.5 bg-gradient-to-r from-yellow-400 to-orange-500">
+                          ⭐ Premium
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      📍 {pendingMatchUser.city}, {pendingMatchUser.country}
+                    </p>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <span>👥 {pendingMatchUser.followers_count} followers</span>
+                      <span>👤 {pendingMatchUser.following_count} following</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bio Section */}
+                {pendingMatchUser.bio && (
+                  <div className="p-3 bg-muted/50 rounded-lg">
+                    <p className="text-sm text-muted-foreground mb-1">About</p>
+                    <p className="text-sm">{pendingMatchUser.bio}</p>
+                  </div>
+                )}
+
+                {/* Match Benefits */}
+                <div className="p-3 bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-950/20 dark:to-purple-950/20 rounded-lg border border-pink-200 dark:border-pink-800">
+                  <p className="text-sm font-medium mb-2 text-pink-700 dark:text-pink-300">✨ What happens when you match?</p>
+                  <ul className="text-xs text-pink-600 dark:text-pink-400 space-y-1">
+                    <li>• Start private conversations</li>
+                    <li>• Share photos and media</li>
+                    <li>• Connect and build relationships</li>
+                    <li>• Access exclusive features together</li>
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            <div className="text-sm text-muted-foreground text-center">
+              <p>Ready to connect? Matching is the first step to meaningful conversations!</p>
+            </div>
+
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleCancelMatch} className="flex-1" disabled={creatingMatch}>
+                Cancel
+              </Button>
+              <Button onClick={handleConfirmMatch} className="flex-1 gradient-bg" disabled={creatingMatch}>
+                {creatingMatch ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Creating Match...
+                  </>
+                ) : (
+                  "Match & Message"
+                )}
               </Button>
             </div>
           </div>

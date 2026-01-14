@@ -17,14 +17,6 @@ import { ProductDetailsModal } from "@/components/product-details-modal"
 import { PaymentVerificationModal } from "@/components/payment-verification-modal"
 import { createClient } from "@/lib/supabase/client"
 
-const categories = [
-  { id: "all", label: "All", icon: Sparkles },
-  { id: "gifts", label: "Gifts", icon: Gift },
-  { id: "experiences", label: "Experiences", icon: Calendar },
-  { id: "tickets", label: "Tickets", icon: Ticket },
-  { id: "services", label: "Services", icon: ShoppingBag },
-]
-
 export default function MarketplacePage() {
   const searchParams = useSearchParams()
   const paymentReference = searchParams.get("reference")
@@ -32,6 +24,7 @@ export default function MarketplacePage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeCategory, setActiveCategory] = useState("all")
   const [products, setProducts] = useState<any[]>([])
+  const [productCategories, setProductCategories] = useState<any[]>([{ id: "all", label: "All", icon: Sparkles }])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedProduct, setSelectedProduct] = useState<any>(null)
@@ -55,6 +48,26 @@ export default function MarketplacePage() {
           setError("Failed to load products")
         } else {
           setProducts(data || [])
+          
+          // Extract unique categories from products
+          const categories = new Set<string>()
+          data?.forEach((product: any) => {
+            if (product.category) {
+              categories.add(product.category)
+            }
+          })
+          
+          // Create category objects with generic icons
+          const dynamicCategories = Array.from(categories).map((cat) => ({
+            id: cat.toLowerCase().replace(/\s+/g, "-"),
+            label: cat,
+            icon: ShoppingBag,
+          }))
+          
+          setProductCategories([
+            { id: "all", label: "All", icon: Sparkles },
+            ...dynamicCategories,
+          ])
         }
       } catch (err) {
         setError("Failed to load products")
@@ -69,7 +82,17 @@ export default function MarketplacePage() {
     const matchesSearch =
       product.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.description.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesCategory = activeCategory === "all" || product.category === activeCategory
+    
+    // Normalize category comparison (case-insensitive)
+    const productCategory = product.category?.toLowerCase() || ""
+    const selectedCategoryId = activeCategory.toLowerCase()
+    const selectedCategoryLabel = productCategories.find(c => c.id === selectedCategoryId)?.label?.toLowerCase() || ""
+    
+    const matchesCategory =
+      selectedCategoryId === "all" ||
+      productCategory === selectedCategoryLabel ||
+      productCategory === selectedCategoryId
+    
     return matchesSearch && matchesCategory
   })
 
@@ -138,7 +161,7 @@ export default function MarketplacePage() {
         <div className="sticky top-16 md:top-20 z-40 bg-background/80 backdrop-blur-lg border-b border-border">
           <div className="container mx-auto px-4">
             <div className="flex gap-2 overflow-x-auto no-scrollbar py-4">
-              {categories.map((category) => {
+              {productCategories.map((category) => {
                 const Icon = category.icon
                 return (
                   <Button
@@ -218,7 +241,7 @@ export default function MarketplacePage() {
             {/* Products Grid */}
             <div className="container mx-auto px-4 py-8">
               <h2 className="text-2xl font-bold mb-6">
-                {activeCategory === "all" ? "All Products" : categories.find((c) => c.id === activeCategory)?.label}
+                {activeCategory === "all" ? "All Products" : productCategories.find((c) => c.id === activeCategory)?.label}
               </h2>
               {filteredProducts.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">No products found</p>

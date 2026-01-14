@@ -206,6 +206,16 @@ export default function UserProfilePage({ params }: { params: Promise<{ userId: 
                       >
                         {isFollowing ? "Following" : "Follow"}
                       </Button>
+                      {isFollowing && (
+                        <Button
+                          variant="outline"
+                          onClick={() => router.push(`/dashboard/messages?userId=${user.id}`)}
+                          className="gap-2"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          Message
+                        </Button>
+                      )}
                     </>
                   )}
                   {currentUser?.id === user.id && !hasPremium && (

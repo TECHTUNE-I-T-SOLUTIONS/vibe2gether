@@ -62,6 +62,8 @@ export async function GET() {
 
     // Format notifications
     const formattedNotifications = (notifications || []).map((notif: any) => {
+      // Use actor_id from the notification directly, fall back to actor relationship if available
+      const actorId = notif.actor_id || notif.actor?.id
       const actorName = notif.actor?.display_name || notif.actor?.full_name || "System"
       const actorImage = notif.actor?.profile_picture || "/v2g-logo.png"
       
@@ -72,7 +74,7 @@ export async function GET() {
         message: notif.message,
         actor_name: actorName,
         actor_image: actorImage,
-        actor_id: notif.actor?.id,
+        actor_id: actorId,
         isRead: notif.is_read,
         created_at: notif.created_at,
         read: notif.is_read,

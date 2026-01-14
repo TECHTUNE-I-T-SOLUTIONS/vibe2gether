@@ -13,7 +13,7 @@ import { useI18n } from "@/lib/i18n/context"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { uploadProfilePicture, uploadCoverPicture } from "@/lib/supabase/storage"
 import { updateUserProfile } from "@/lib/supabase/queries"
-import { VerificationModal } from "@/components/verification-modal"
+import { VerificationModal } from "@/components/verification-modal-improved"
 import {
   Heart,
   MessageCircle,

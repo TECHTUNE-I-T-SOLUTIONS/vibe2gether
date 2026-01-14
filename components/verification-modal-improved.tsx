@@ -26,6 +26,9 @@ interface VerificationStatus {
   id?: string
   status: "pending" | "approved" | "rejected"
   idType?: string
+  idNumber?: string
+  idDocumentUrl?: string
+  selfieUrl?: string
   decisionReason?: string
   reviewedAt?: string
 }
@@ -45,7 +48,8 @@ export function VerificationModal({
 }: VerificationModalProps) {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
-  const [fetchingStatus, setFetchingStatus] = useState(true)
+  // Initialize to false - will be set to true only if status hasn't loaded yet
+  const [fetchingStatus, setFetchingStatus] = useState(false)
   const [idType, setIdType] = useState("passport")
   const [idNumber, setIdNumber] = useState("")
   const [idDocument, setIdDocument] = useState<File | null>(null)
@@ -64,8 +68,11 @@ export function VerificationModal({
 
   useEffect(() => {
     if (open) {
-      setFetchingStatus(true)
-      fetchVerificationStatus()
+      // Only fetch if status hasn't been passed in
+      if (!verificationStatus) {
+        setFetchingStatus(true)
+        fetchVerificationStatus()
+      }
     }
   }, [open])
 
@@ -266,21 +273,106 @@ export function VerificationModal({
         )}
 
         {!fetchingStatus && verificationState && verificationState.status === "pending" && (
-          <Alert className="border-yellow-500/50 bg-yellow-50">
-            <Clock className="h-4 w-4 text-yellow-600" />
-            <AlertDescription className="text-yellow-800">
-              <p className="font-semibold">Verification Pending</p>
-              <p className="text-sm mt-1">
-                Your verification request is being reviewed. This usually takes 24-48 hours.
-              </p>
-            </AlertDescription>
-          </Alert>
+          <div className="space-y-4">
+            <Alert className="border-yellow-500/50 bg-yellow-500 dark:bg-yellow-800/10">
+              <Clock className="h-4 w-4 text-yellow-800 dark:text-yellow-300" />
+              <AlertDescription className="text-yellow-800 dark:text-yellow-300">
+                <p className="font-semibold">Verification Pending Review</p>
+                <p className="text-sm mt-1">
+                  Your verification request is being reviewed. This usually takes 24-48 hours.
+                </p>
+              </AlertDescription>
+            </Alert>
+
+            {/* Show submitted information */}
+            <Card className="border-yellow-200 bg-yellow-50/50 dark:border-yellow-700 dark:bg-yellow-900/20">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg text-yellow-300 dark:text-yellow-300">Submitted Information</CardTitle>
+                <CardDescription className="text-yellow-700 dark:text-yellow-300">
+                  Review what you submitted for verification
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium text-yellow-800 dark:text-yellow-300">ID Type</Label>
+                    <p className="text-sm text-yellow-700 dark:text-yellow-300 capitalize">
+                      {verificationState.idType?.replace('_', ' ') || 'Not specified'}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium text-yellow-800 dark:text-yellow-300">ID Number</Label>
+                    <p className="text-sm text-yellow-700 dark:text-yellow-300 font-mono">
+                      {verificationState.idNumber || 'Not specified'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Show document previews if available */}
+                {(verificationState.idDocumentUrl || verificationState.selfieUrl) && (
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium text-yellow-800 dark:text-yellow-300">Uploaded Documents</Label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {verificationState.idDocumentUrl && (
+                        <div className="space-y-2">
+                          <p className="text-xs text-yellow-700 dark:text-yellow-300 font-medium">ID Document</p>
+                          <div className="relative w-full h-32 border border-yellow-300 rounded-lg overflow-hidden bg-white">
+                            <img
+                              src={verificationState.idDocumentUrl}
+                              alt="ID Document"
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                e.currentTarget.nextElementSibling!.style.display = 'flex';
+                              }}
+                            />
+                            <div className="hidden w-full h-full items-center justify-center text-yellow-600 dark:text-yellow-300 text-sm">
+                              <Upload className="w-6 h-6 mr-2" />
+                              Document uploaded
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {verificationState.selfieUrl && (
+                        <div className="space-y-2">
+                          <p className="text-xs text-yellow-700 dark:text-yellow-300 font-medium">Selfie Photo</p>
+                          <div className="relative w-full h-32 border border-yellow-300 dark:border-yellow-700 rounded-lg overflow-hidden bg-white dark:bg-yellow-900/20">
+                            <img
+                              src={verificationState.selfieUrl}
+                              alt="Selfie"
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                e.currentTarget.nextElementSibling!.style.display = 'flex';
+                              }}
+                            />
+                            <div className="hidden w-full h-full items-center justify-center text-yellow-600 dark:text-yellow-300 text-sm">
+                              <Upload className="w-6 h-6 mr-2" />
+                              Photo uploaded
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-900/10">
+                  <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-300" />
+                  <AlertDescription className="text-blue-800 dark:text-blue-300 text-sm">
+                    You cannot submit a new verification request while one is pending review.
+                    If you need to update your documents, please wait for the current review to complete.
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {!fetchingStatus && verificationState && verificationState.status === "approved" && (
-          <Alert className="border-green-500/50 bg-green-50">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">
+          <Alert className="border-green-500/50 bg-green-50 dark:bg-green-900/10">
+            <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-300" />
+            <AlertDescription className="text-green-800 dark:text-green-300 text-sm">
               <p className="font-semibold">Verified</p>
               <p className="text-sm mt-1">
                 Your identity has been verified. Enjoy all premium features!
@@ -290,9 +382,9 @@ export function VerificationModal({
         )}
 
         {!fetchingStatus && verificationState && verificationState.status === "rejected" && (
-          <Alert className="border-red-500/50 bg-red-50">
-            <AlertCircle className="h-4 w-4 text-red-600" />
-            <AlertDescription className="text-red-800">
+          <Alert className="border-red-500/50 bg-red-50 dark:bg-red-300">
+            <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-300" />
+            <AlertDescription className="text-red-800 dark:text-red-300 text-sm">
               <p className="font-semibold">Verification Rejected</p>
               <p className="text-sm mt-1">
                 {verificationState.decisionReason || "Your verification request was not approved."}
@@ -307,7 +399,7 @@ export function VerificationModal({
             {/* ID Type Selection */}
             <div className="space-y-2">
               <Label htmlFor="idType">
-                ID Type <span className="text-red-500">*</span>
+                ID Type <span className="text-red-500 dark:text-red-500">*</span>
               </Label>
               <Select value={idType} onValueChange={handleIdTypeChange}>
                 <SelectTrigger id="idType" className={errors.idType ? "border-red-500" : ""}>
@@ -320,13 +412,13 @@ export function VerificationModal({
                   <SelectItem value="international_passport">International Passport</SelectItem>
                 </SelectContent>
               </Select>
-              {errors.idType && <p className="text-sm text-red-500">{errors.idType}</p>}
+              {errors.idType && <p className="text-sm text-red-500 dark:text-red-200">{errors.idType}</p>}
             </div>
 
             {/* ID Number Input */}
             <div className="space-y-2">
               <Label htmlFor="idNumber">
-                ID Number <span className="text-red-500">*</span>
+                ID Number <span className="text-red-500 dark:text-red-500">*</span>
               </Label>
               <Input
                 id="idNumber"
@@ -336,13 +428,13 @@ export function VerificationModal({
                 disabled={loading}
                 className={errors.idNumber ? "border-red-500" : ""}
               />
-              {errors.idNumber && <p className="text-sm text-red-500">{errors.idNumber}</p>}
+              {errors.idNumber && <p className="text-sm text-red-500 dark:text-red-200">{errors.idNumber}</p>}
             </div>
 
             {/* ID Document Upload */}
             <div className="space-y-2">
               <Label>
-                ID Document (Front Side) <span className="text-red-500">*</span>
+                ID Document (Front Side) <span className="text-red-500 dark:text-red-500">*</span>
               </Label>
               <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition">
                 {!idDocumentPreview ? (
@@ -390,13 +482,13 @@ export function VerificationModal({
                   </div>
                 )}
               </div>
-              {errors.idDocument && <p className="text-sm text-red-500">{errors.idDocument}</p>}
+              {errors.idDocument && <p className="text-sm text-red-500 dark:text-red-200">{errors.idDocument}</p>}
             </div>
 
             {/* Selfie Upload */}
             <div className="space-y-2">
               <Label>
-                Selfie Photo <span className="text-red-500">*</span>
+                Selfie Photo <span className="text-red-500 dark:text-red-500">*</span>
               </Label>
               <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition">
                 {!selfiePreview ? (
@@ -431,7 +523,7 @@ export function VerificationModal({
                       </button>
                     </div>
                     <p className="text-sm text-green-600">✓ Photo selected</p>
-                    <label className="text-xs text-blue-600 cursor-pointer hover:underline">
+                    <label className="text-xs text-blue-600 cursor-pointer hover:underline dark:text-blue-300">
                       Change file
                       <input
                         type="file"
@@ -444,13 +536,13 @@ export function VerificationModal({
                   </div>
                 )}
               </div>
-              {errors.selfie && <p className="text-sm text-red-500">{errors.selfie}</p>}
+              {errors.selfie && <p className="text-sm text-red-500 dark:text-red-200">{errors.selfie}</p>}
             </div>
 
             {/* Info Message */}
-            <Alert className="bg-blue-50 border-blue-200">
-              <AlertCircle className="h-4 w-4 text-blue-600" />
-              <AlertDescription className="text-blue-800 text-sm">
+            <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-900/10">
+              <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-300" />
+              <AlertDescription className="text-blue-800 dark:text-blue-300 text-sm">
                 Make sure your documents are clear, well-lit, and fully visible. Verification typically takes 24-48 hours.
               </AlertDescription>
             </Alert>

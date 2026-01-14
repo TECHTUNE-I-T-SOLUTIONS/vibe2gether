@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { Search, Send, Loader, Phone, Video, MoreVertical } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -36,6 +37,7 @@ interface Message {
 }
 
 export default function AdminMessagesPage() {
+  const searchParams = useSearchParams()
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -47,6 +49,79 @@ export default function AdminMessagesPage() {
   useEffect(() => {
     fetchConversations()
   }, [])
+
+  // Handle user query parameter to open/create conversation with specific user
+  useEffect(() => {
+    const userId = searchParams.get("user")
+    if (userId && conversations.length > 0) {
+      const existingConversation = conversations.find((conv) => conv.user_id === userId)
+      if (existingConversation) {
+        setSelectedConversation(existingConversation)
+        fetchMessages(existingConversation.id)
+      } else {
+        // Create new conversation with this user
+        createConversation(userId)
+      }
+    }
+  }, [searchParams, conversations])
+
+  async function createConversation(userId: string) {
+    try {
+      const supabase = createClient()
+      const response = await fetch("/api/admin/auth/me")
+      const data = await response.json()
+      const adminData = data.admin || data
+      const adminId = adminData.id
+
+      // Check if conversation already exists
+      const { data: existing } = await supabase
+        .from("admin_messages_conversations")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("admin_id", adminId)
+        .single()
+
+      if (existing) {
+        setSelectedConversation(existing)
+        fetchMessages(existing.id)
+      } else {
+        // Create new conversation
+        const { data: newConversation, error } = await supabase
+          .from("admin_messages_conversations")
+          .insert({
+            user_id: userId,
+            admin_id: adminId,
+            last_message: null,
+            last_message_time: new Date().toISOString(),
+            is_resolved: false,
+          })
+          .select(
+            `
+            id,
+            user_id,
+            admin_id,
+            last_message,
+            last_message_time,
+            unread_count,
+            is_resolved,
+            users(full_name, profile_picture, email)
+          `
+          )
+          .single()
+
+        if (!error && newConversation) {
+          const conversation = {
+            ...newConversation,
+            user: newConversation.users,
+          }
+          setSelectedConversation(conversation)
+          setConversations([conversation, ...conversations])
+        }
+      }
+    } catch (error) {
+      console.error("Error creating conversation:", error)
+    }
+  }
 
   async function fetchConversations() {
     try {

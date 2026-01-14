@@ -27,18 +27,11 @@ import { getEvents } from "@/lib/supabase/queries"
 import { EventDetailsModal } from "@/components/event-details-modal"
 import { createClient } from "@/lib/supabase/client"
 
-const eventCategories = [
-  { id: "all", label: "All Events", icon: Sparkles },
-  { id: "music", label: "Music", icon: Music },
-  { id: "food", label: "Food & Wine", icon: Utensils },
-  { id: "art", label: "Art & Culture", icon: Palette },
-  { id: "social", label: "Social", icon: Users },
-]
-
 export default function EventsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeCategory, setActiveCategory] = useState("all")
   const [events, setEvents] = useState<any[]>([])
+  const [eventCategories, setEventCategories] = useState<any[]>([{ id: "all", label: "All Events", icon: Sparkles }])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedEvent, setSelectedEvent] = useState<any>(null)
@@ -54,6 +47,26 @@ export default function EventsPage() {
           setError("Failed to load events")
         } else {
           setEvents(data || [])
+          
+          // Extract unique categories from events
+          const categories = new Set<string>()
+          data?.forEach((event: any) => {
+            if (event.category) {
+              categories.add(event.category)
+            }
+          })
+          
+          // Create category objects with generic icons
+          const dynamicCategories = Array.from(categories).map((cat) => ({
+            id: cat.toLowerCase().replace(/\s+/g, "-"),
+            label: cat,
+            icon: Sparkles,
+          }))
+          
+          setEventCategories([
+            { id: "all", label: "All Events", icon: Sparkles },
+            ...dynamicCategories,
+          ])
         }
       } catch (err) {
         setError("Failed to load events")
@@ -68,7 +81,17 @@ export default function EventsPage() {
     const matchesSearch =
       event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       event.location_name.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesCategory = activeCategory === "all" || event.category === activeCategory
+
+    // Normalize category comparison (case-insensitive)
+    const eventCategory = event.category?.toLowerCase() || ""
+    const selectedCategoryId = activeCategory.toLowerCase()
+    const selectedCategoryLabel = eventCategories.find(c => c.id === selectedCategoryId)?.label?.toLowerCase() || ""
+    
+    const matchesCategory = 
+      selectedCategoryId === "all" || 
+      eventCategory === selectedCategoryLabel ||
+      eventCategory === selectedCategoryId
+
     return matchesSearch && matchesCategory
   })
 

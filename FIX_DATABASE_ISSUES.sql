@@ -418,7 +418,7 @@ CREATE OR REPLACE FUNCTION public.update_saved_count_on_save()
 RETURNS TRIGGER AS $$
 BEGIN
   UPDATE public.posts
-  SET saved_count = (
+  SET saves_count = (
     SELECT COUNT(*) FROM public.saved_posts WHERE post_id = NEW.post_id
   )
   WHERE id = NEW.post_id;
@@ -439,7 +439,7 @@ CREATE OR REPLACE FUNCTION public.update_saved_count_on_unsave()
 RETURNS TRIGGER AS $$
 BEGIN
   UPDATE public.posts
-  SET saved_count = (
+  SET saves_count = (
     SELECT COUNT(*) FROM public.saved_posts WHERE post_id = OLD.post_id
   )
   WHERE id = OLD.post_id;

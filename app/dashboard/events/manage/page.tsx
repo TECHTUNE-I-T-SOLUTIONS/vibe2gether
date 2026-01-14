@@ -816,9 +816,18 @@ export default function DashboardEventsManagePage() {
                   </label>
                 </div>
                 {thumbnail && (
-                  <p className="text-sm text-muted-foreground text-center">
-                    ✓ {thumbnail.name}
-                  </p>
+                  <div className="space-y-2">
+                    <div className="w-full aspect-video rounded-lg overflow-hidden bg-muted border border-border">
+                      <img 
+                        src={URL.createObjectURL(thumbnail)} 
+                        alt="Thumbnail preview"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <p className="text-sm text-muted-foreground text-center">
+                      ✓ {thumbnail.name}
+                    </p>
+                  </div>
                 )}
               </div>
             </form>

@@ -35,6 +35,7 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
   const [comments, setComments] = useState<any[]>([])
   const [newComment, setNewComment] = useState("")
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
+  const [isFollowingAuthor, setIsFollowingAuthor] = useState(false)
 
   useEffect(() => {
     fetchPost()
@@ -285,25 +286,41 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
         <CardContent className="p-6">
           {/* Post Header */}
           <div className="flex items-start justify-between mb-4">
-            <div
-              className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
-              onClick={() => router.push(`/user/${post.user_id}`)}
-            >
-              <Avatar className="w-12 h-12">
-                <AvatarImage src={post.user?.profile_picture} />
-                <AvatarFallback>{post.user?.display_name?.[0] || "U"}</AvatarFallback>
-              </Avatar>
-              <div>
-                <p className="font-semibold">{post.user?.display_name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(post.created_at).toLocaleDateString("en-US", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })}
-                </p>
+            <div className="flex items-center gap-3 flex-1">
+              <div
+                className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => router.push(`/user/${post.user_id}`)}
+              >
+                <Avatar className="w-12 h-12">
+                  <AvatarImage src={post.user?.profile_picture} />
+                  <AvatarFallback>{post.user?.display_name?.[0] || "U"}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-semibold">{post.user?.display_name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(post.created_at).toLocaleDateString("en-US", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </p>
+                </div>
               </div>
+              
+              {/* Message Button - Only show if following and not own post */}
+              {currentUser && currentUser.id !== post.user_id && isFollowingAuthor && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push(`/dashboard/messages?userId=${post.user_id}`)}
+                  className="ml-auto"
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  Message
+                </Button>
+              )}
             </div>
+            
             {currentUser && currentUser.id === post.user_id && (
               <PostMenu
                 postId={post.id}
