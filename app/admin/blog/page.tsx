@@ -99,22 +99,27 @@ export default function BlogAdminPage() {
 
     setUploading(true)
     try {
-      const supabase = createClient()
-      const fileName = `${Date.now()}-${selectedImage.name}`
+      const uploadFormData = new FormData()
+      uploadFormData.append('file', selectedImage)
 
-      const { data, error } = await supabase.storage
-        .from("blog-thumbnails")
-        .upload(fileName, selectedImage, { cacheControl: "3600", upsert: true })
+      const response = await fetch('/api/admin/upload-blog-image', {
+        method: 'POST',
+        body: uploadFormData,
+      })
 
-      if (error) throw error
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Upload failed')
+      }
 
-      const { data: urlData } = supabase.storage.from("blog-thumbnails").getPublicUrl(fileName)
+      const data = await response.json()
 
-      setFormData({ ...formData, thumbnail_url: urlData.publicUrl })
+      setFormData({ ...formData, thumbnail_url: data.url })
       setSelectedImage(null)
       setPreviewUrl("")
     } catch (error) {
       console.error("Image upload error:", error)
+      alert(error instanceof Error ? error.message : 'Failed to upload image')
     } finally {
       setUploading(false)
     }
@@ -235,23 +240,34 @@ export default function BlogAdminPage() {
       let thumbnailUrl = editingPost.thumbnail_url || editingPost.thumbnail
       if (editingPost.newThumbnail) {
         const file = editingPost.newThumbnail
-        const fileExt = file.name.split(".").pop()
-        const fileName = `${editingPost.id}-${Date.now()}.${fileExt}`
-        const { error: uploadError } = await createClient()
-          .storage
-          .from("blog-thumbnails")
-          .upload(fileName, file, { upsert: true })
+        const formData = new FormData()
+        formData.append('file', file)
 
-        if (uploadError) throw uploadError
-        const { data } = createClient().storage.from("blog-thumbnails").getPublicUrl(fileName)
-        thumbnailUrl = data.publicUrl
+        const response = await fetch('/api/admin/upload-blog-image', {
+          method: 'POST',
+          body: formData,
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'Image upload failed')
+        }
+
+        const data = await response.json()
+        thumbnailUrl = data.url
       }
 
-      // Parse tags from comma-separated string
-      const tagsArray = (editingPost.tagsText || editingPost.tags || "")
-        .split(",")
-        .map((tag: string) => tag.trim())
-        .filter((tag: string) => tag.length > 0)
+      // Parse tags - handle both string and array formats
+      let tagsArray: string[] = []
+      const tagsInput = editingPost.tagsText || editingPost.tags || ""
+      if (Array.isArray(tagsInput)) {
+        tagsArray = tagsInput.filter((tag: string) => tag && tag.length > 0)
+      } else if (typeof tagsInput === "string") {
+        tagsArray = tagsInput
+          .split(",")
+          .map((tag: string) => tag.trim())
+          .filter((tag: string) => tag.length > 0)
+      }
 
       const isPublished = editingPost.status === "published" || editingPost.is_published === true
 

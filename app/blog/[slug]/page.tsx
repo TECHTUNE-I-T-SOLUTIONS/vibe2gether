@@ -13,14 +13,16 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Image from "next/image"
-import { Loader2, Heart, MessageCircle, Share2, User, Clock, ArrowLeft, Send } from "lucide-react"
+import { Loader2, Heart, MessageCircle, Share2, User, Clock, ArrowLeft, Send, ThumbsUp, X } from "lucide-react"
 import { getBlogPost } from "@/lib/supabase/queries"
 import { createClient } from "@/lib/supabase/client"
+import { useToast } from "@/hooks/use-toast"
 
 export default function BlogDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
   const { data: session } = useSession()
   const router = useRouter()
+  const { toast } = useToast()
   const [post, setPost] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -30,6 +32,11 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
   const [commentText, setCommentText] = useState("")
   const [submittingComment, setSubmittingComment] = useState(false)
   const [loadingComments, setLoadingComments] = useState(false)
+  const [replyingTo, setReplyingTo] = useState<string | null>(null)
+  const [replyText, setReplyText] = useState("")
+  const [submittingReply, setSubmittingReply] = useState(false)
+  const [commentLikes, setCommentLikes] = useState<{ [key: string]: boolean }>({})
+  const [commentLikeCounts, setCommentLikeCounts] = useState<{ [key: string]: number }>({})
 
   useEffect(() => {
     async function loadPost() {
@@ -41,6 +48,17 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
         } else if (data) {
           setPost(data)
           setLikeCount(data.likes_count || 0)
+          
+          // Track view - increment views_count
+          try {
+            await createClient()
+              .from("blog_posts")
+              .update({ views_count: (data.views_count || 0) + 1 })
+              .eq("id", data.id)
+          } catch (err) {
+            console.error("Failed to track view:", err)
+          }
+          
           // Check if user has liked
           if (session?.user?.id) {
             checkUserLike(data.id)
@@ -80,6 +98,8 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
           id,
           content,
           created_at,
+          parent_id,
+          likes_count,
           user:user_id(
             id,
             display_name,
@@ -90,6 +110,11 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
         .eq("is_approved", true)
         .order("created_at", { ascending: false })
       setComments(data || [])
+      
+      // Load user's comment likes if logged in
+      if (session?.user?.id) {
+        loadCommentLikes(postId, session.user.id)
+      }
     } catch (err) {
       console.error("Failed to load comments:", err)
     } finally {
@@ -97,8 +122,31 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
     }
   }
 
+  const loadCommentLikes = async (postId: string, userId: string) => {
+    try {
+      const { data } = await createClient()
+        .from("blog_comment_likes")
+        .select("comment_id")
+        .eq("comment_id", postId)
+        .eq("user_id", userId)
+      
+      const likedCommentsMap: { [key: string]: boolean } = {}
+      data?.forEach((like: any) => {
+        likedCommentsMap[like.comment_id] = true
+      })
+      setCommentLikes(likedCommentsMap)
+    } catch (err) {
+      console.error("Failed to load comment likes:", err)
+    }
+  }
+
   const handleLike = async () => {
     if (!session?.user?.id) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to like this post",
+        variant: "destructive",
+      })
       router.push("/login")
       return
     }
@@ -132,16 +180,33 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
         .eq("id", post.id)
     } catch (err) {
       console.error("Failed to like post:", err)
+      toast({
+        title: "Error",
+        description: "Failed to update like. Please try again.",
+        variant: "destructive",
+      })
     }
   }
 
   const handleAddComment = async () => {
     if (!session?.user?.id) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to comment on this post",
+        variant: "destructive",
+      })
       router.push("/login")
       return
     }
 
-    if (!commentText.trim()) return
+    if (!commentText.trim()) {
+      toast({
+        title: "Empty Comment",
+        description: "Please enter a comment",
+        variant: "destructive",
+      })
+      return
+    }
 
     try {
       setSubmittingComment(true)
@@ -170,6 +235,8 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
             id: data.id,
             content: data.content,
             created_at: data.created_at,
+            parent_id: null,
+            likes_count: 0,
             user: userData,
           },
           ...comments,
@@ -180,11 +247,167 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
           .from("blog_posts")
           .update({ comments_count: (post.comments_count || 0) + 1 })
           .eq("id", post.id)
+        
+        toast({
+          title: "Success",
+          description: "Comment posted successfully!",
+        })
       }
     } catch (err) {
       console.error("Failed to add comment:", err)
+      toast({
+        title: "Error",
+        description: "Failed to post comment. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setSubmittingComment(false)
+    }
+  }
+
+  const handleAddReply = async (parentCommentId: string) => {
+    if (!session?.user?.id) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to reply to a comment",
+        variant: "destructive",
+      })
+      router.push("/login")
+      return
+    }
+
+    if (!replyText.trim()) {
+      toast({
+        title: "Empty Reply",
+        description: "Please enter a reply",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setSubmittingReply(true)
+      const { data, error } = await createClient()
+        .from("blog_comments")
+        .insert({
+          post_id: post.id,
+          user_id: session.user.id,
+          content: replyText,
+          parent_id: parentCommentId,
+          is_approved: true,
+        })
+        .select()
+        .single()
+
+      if (!error && data) {
+        setReplyText("")
+        setReplyingTo(null)
+        
+        // Add to comments list
+        const { data: userData } = await createClient()
+          .from("users")
+          .select("id, display_name, profile_picture")
+          .eq("id", session.user.id)
+          .single()
+
+        setComments([
+          ...comments,
+          {
+            id: data.id,
+            content: data.content,
+            created_at: data.created_at,
+            parent_id: parentCommentId,
+            likes_count: 0,
+            user: userData,
+          },
+        ])
+
+        // Increment comment count
+        await createClient()
+          .from("blog_posts")
+          .update({ comments_count: (post.comments_count || 0) + 1 })
+          .eq("id", post.id)
+        
+        toast({
+          title: "Success",
+          description: "Reply posted successfully!",
+        })
+      }
+    } catch (err) {
+      console.error("Failed to add reply:", err)
+      toast({
+        title: "Error",
+        description: "Failed to post reply. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setSubmittingReply(false)
+    }
+  }
+
+  const handleLikeComment = async (commentId: string, currentLikesCount: number) => {
+    if (!session?.user?.id) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to like a comment",
+        variant: "destructive",
+      })
+      router.push("/login")
+      return
+    }
+
+    try {
+      if (commentLikes[commentId]) {
+        // Unlike
+        await createClient()
+          .from("blog_comment_likes")
+          .delete()
+          .eq("comment_id", commentId)
+          .eq("user_id", session.user.id)
+        
+        setCommentLikes((prev) => ({
+          ...prev,
+          [commentId]: false,
+        }))
+        setCommentLikeCounts((prev) => ({
+          ...prev,
+          [commentId]: Math.max(0, (prev[commentId] || currentLikesCount) - 1),
+        }))
+      } else {
+        // Like
+        await createClient()
+          .from("blog_comment_likes")
+          .insert({
+            comment_id: commentId,
+            user_id: session.user.id,
+          })
+        
+        setCommentLikes((prev) => ({
+          ...prev,
+          [commentId]: true,
+        }))
+        setCommentLikeCounts((prev) => ({
+          ...prev,
+          [commentId]: (prev[commentId] || currentLikesCount) + 1,
+        }))
+      }
+
+      // Update comment likes count in database
+      const newLikesCount = commentLikes[commentId]
+        ? Math.max(0, currentLikesCount - 1)
+        : currentLikesCount + 1
+      
+      await createClient()
+        .from("blog_comments")
+        .update({ likes_count: newLikesCount })
+        .eq("id", commentId)
+    } catch (err) {
+      console.error("Failed to like comment:", err)
+      toast({
+        title: "Error",
+        description: "Failed to update like. Please try again.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -361,30 +584,147 @@ export default function BlogDetailPage({ params }: { params: Promise<{ slug: str
                 ) : comments.length === 0 ? (
                   <p className="text-center text-muted-foreground py-6">No comments yet. Be the first to comment!</p>
                 ) : (
-                  <div className="space-y-4">
-                    {comments.map((comment) => (
-                      <div key={comment.id} className="flex gap-4 pb-4 border-b border-border/50 last:border-0">
-                        {comment.user?.profile_picture && (
-                          <Image
-                            src={comment.user.profile_picture}
-                            alt={comment.user.display_name}
-                            width={40}
-                            height={40}
-                            className="w-10 h-10 rounded-full flex-shrink-0"
-                          />
-                        )}
-                        <div className="flex-1">
-                          <p className="font-semibold text-sm">{comment.user?.display_name || "User"}</p>
-                          <p className="text-xs text-muted-foreground mb-2">
-                            {new Date(comment.created_at).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                            })}
-                          </p>
-                          <p className="text-sm">{comment.content}</p>
+                  <div className="space-y-6">
+                    {comments.filter((c) => !c.parent_id).map((comment) => {
+                      const replies = comments.filter((c) => c.parent_id === comment.id)
+                      const likeCount = commentLikeCounts[comment.id] !== undefined ? commentLikeCounts[comment.id] : (comment.likes_count || 0)
+                      const isLiked = commentLikes[comment.id] || false
+
+                      return (
+                        <div key={comment.id}>
+                          {/* Parent comment */}
+                          <div className="flex gap-4 pb-4">
+                            {comment.user?.profile_picture && (
+                              <Image
+                                src={comment.user.profile_picture}
+                                alt={comment.user.display_name}
+                                width={40}
+                                height={40}
+                                className="w-10 h-10 rounded-full flex-shrink-0"
+                              />
+                            )}
+                            <div className="flex-1">
+                              <p className="font-semibold text-sm">{comment.user?.display_name || "User"}</p>
+                              <p className="text-xs text-muted-foreground mb-2">
+                                {new Date(comment.created_at).toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                })}
+                              </p>
+                              <p className="text-sm mb-3">{comment.content}</p>
+                              <div className="flex gap-3">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleLikeComment(comment.id, comment.likes_count || 0)}
+                                  className={`gap-2 h-8 text-xs ${isLiked ? "text-primary" : "text-muted-foreground"}`}
+                                >
+                                  <ThumbsUp className={`w-3 h-3 ${isLiked ? "fill-current" : ""}`} />
+                                  {likeCount > 0 && likeCount}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)}
+                                  className="gap-2 h-8 text-xs text-muted-foreground"
+                                >
+                                  <MessageCircle className="w-3 h-3" />
+                                  Reply
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Replies */}
+                          {replies.length > 0 && (
+                            <div className="ml-8 mt-4 space-y-4 border-l-2 border-border/50 pl-4">
+                              {replies.map((reply) => {
+                                const replyLikeCount = commentLikeCounts[reply.id] !== undefined ? commentLikeCounts[reply.id] : (reply.likes_count || 0)
+                                const isReplyLiked = commentLikes[reply.id] || false
+
+                                return (
+                                  <div key={reply.id} className="flex gap-4">
+                                    {reply.user?.profile_picture && (
+                                      <Image
+                                        src={reply.user.profile_picture}
+                                        alt={reply.user.display_name}
+                                        width={32}
+                                        height={32}
+                                        className="w-8 h-8 rounded-full flex-shrink-0"
+                                      />
+                                    )}
+                                    <div className="flex-1">
+                                      <p className="font-semibold text-sm">{reply.user?.display_name || "User"}</p>
+                                      <p className="text-xs text-muted-foreground mb-2">
+                                        {new Date(reply.created_at).toLocaleDateString("en-US", {
+                                          month: "short",
+                                          day: "numeric",
+                                        })}
+                                      </p>
+                                      <p className="text-sm mb-2">{reply.content}</p>
+                                      <div className="flex gap-3">
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleLikeComment(reply.id, reply.likes_count || 0)}
+                                          className={`gap-2 h-8 text-xs ${isReplyLiked ? "text-primary" : "text-muted-foreground"}`}
+                                        >
+                                          <ThumbsUp className={`w-3 h-3 ${isReplyLiked ? "fill-current" : ""}`} />
+                                          {replyLikeCount > 0 && replyLikeCount}
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+
+                          {/* Reply form */}
+                          {replyingTo === comment.id && (
+                            <div className="ml-8 mt-4 space-y-3 bg-muted/30 p-4 rounded-lg">
+                              <Textarea
+                                placeholder="Write a reply..."
+                                value={replyText}
+                                onChange={(e) => setReplyText(e.target.value)}
+                                className="resize-none text-sm"
+                                rows={3}
+                              />
+                              <div className="flex gap-2">
+                                <Button
+                                  onClick={() => handleAddReply(comment.id)}
+                                  disabled={!replyText.trim() || submittingReply}
+                                  size="sm"
+                                  className="gradient-bg gap-2"
+                                >
+                                  {submittingReply ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <Send className="w-3 h-3" />
+                                  )}
+                                  Reply
+                                </Button>
+                                <Button
+                                  onClick={() => {
+                                    setReplyingTo(null)
+                                    setReplyText("")
+                                  }}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="gap-2"
+                                >
+                                  <X className="w-3 h-3" />
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Divider */}
+                          <div className="border-b border-border/50 mt-4 last:border-0" />
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </CardContent>
