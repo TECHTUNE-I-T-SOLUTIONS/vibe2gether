@@ -3,15 +3,14 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Heart, X, MessageCircle, Loader2, Sparkles } from "lucide-react"
+import { Heart, X, MessageCircle, Loader2, Sparkles, Eye, User } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { useUserProfile } from "@/hooks/use-user-profile"
-import { getMatches, updateMatchStatus } from "@/lib/supabase/queries"
-import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
+import { useToast } from "@/hooks/use-toast"
 
 interface UserData {
   id: string
@@ -31,9 +30,14 @@ interface Match {
   user1_id: string
   user2_id: string
   status: string
+  initiated_by: string
   compatibility_score: number
+  otherUserId: string
+  initiatedByCurrentUser: boolean
+  currentUserIsUser1: boolean
   user1: UserData
   user2: UserData
+  otherUser: UserData
 }
 
 function calculateAge(dateOfBirth: string): number {
@@ -47,89 +51,13 @@ function calculateAge(dateOfBirth: string): number {
   return age
 }
 
-function calculateCompatibilityScore(
-  currentUser: any,
-  potentialMatch: UserData
-): number {
-  let score = 0
-
-  // Age proximity
-  const currentAge = calculateAge(currentUser.date_of_birth)
-  const matchAge = calculateAge(potentialMatch.date_of_birth)
-  const ageDiff = Math.abs(currentAge - matchAge)
-
-  if (ageDiff <= 5) score += 35
-  else if (ageDiff <= 10) score += 20
-  else if (ageDiff <= 15) score += 10
-
-  // Location match
-  if (currentUser.country && potentialMatch.country) {
-    if (currentUser.country === potentialMatch.country) score += 25
-    if (currentUser.city && potentialMatch.city && currentUser.city === potentialMatch.city)
-      score += 15
-  }
-
-  // Interests overlap
-  const currentInterests = Array.isArray(currentUser.interests) ? currentUser.interests : []
-  const matchInterests = Array.isArray(potentialMatch.interests) ? potentialMatch.interests : []
-  const commonInterests = currentInterests.filter((interest) =>
-    matchInterests.includes(interest)
-  )
-  score += commonInterests.length * 5
-
-  // Gender preference
-  if (currentUser.looking_for && potentialMatch.gender) {
-    if (
-      currentUser.looking_for.toLowerCase() === potentialMatch.gender.toLowerCase()
-    ) {
-      score += 20
-    }
-  }
-
-  return Math.min(score, 100) // Cap at 100
-}
-
-async function findPotentialMatches(
-  currentUser: any,
-  excludeIds: string[]
-) {
-  const supabase = createClient()
-
-  // Get all active users except current user and already matched
-  const { data: potentialMatches, error } = await supabase
-    .from("users")
-    .select(
-      "id, display_name, profile_picture, bio, gender, date_of_birth, country, city, interests, looking_for"
-    )
-    .neq("id", currentUser.id)
-    .eq("is_active", true)
-    .not("id", "in", `(${excludeIds.join(",")})`)
-    .limit(50)
-
-  if (error) {
-    console.error("Error fetching potential matches:", error)
-    return []
-  }
-
-  // Calculate compatibility scores
-  const matchesWithScores = (potentialMatches || []).map((match: UserData) => ({
-    ...match,
-    compatibilityScore: calculateCompatibilityScore(currentUser, match),
-  }))
-
-  // Sort by compatibility score (highest first)
-  return matchesWithScores.sort(
-    (a: any, b: any) => b.compatibilityScore - a.compatibilityScore
-  )
-}
-
 export default function MatchesPage() {
   const { user } = useUserProfile()
+  const { toast } = useToast()
   const [activeMatches, setActiveMatches] = useState<Match[]>([])
   const [potentialMatches, setPotentialMatches] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<"active" | "potential">("active")
-  const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     async function loadMatches() {
@@ -138,50 +66,83 @@ export default function MatchesPage() {
       try {
         setLoading(true)
 
-        // Get active matches
-        const { data: matches, error } = await getMatches(user.id)
-        if (!error && matches) {
-          setActiveMatches(matches)
+        // Fetch all matches using API
+        const matchesResponse = await fetch("/api/matches/user")
+        if (!matchesResponse.ok) throw new Error("Failed to fetch matches")
+        const matchesData = await matchesResponse.json()
+        setActiveMatches(matchesData.matches || [])
 
-          // Get IDs to exclude
-          const ids = new Set([user.id])
-          matches.forEach((match: Match) => {
-            ids.add(match.user1_id)
-            ids.add(match.user2_id)
-          })
-          setExcludedIds(ids)
-        }
-
-        // Get potential matches
-        const potential = await findPotentialMatches(user, Array.from(excludedIds || [user.id]))
-        setPotentialMatches(potential)
+        // Fetch potential matches using API
+        const potentialResponse = await fetch("/api/matches/potential")
+        if (!potentialResponse.ok) throw new Error("Failed to fetch potential matches")
+        const potentialData = await potentialResponse.json()
+        setPotentialMatches(potentialData.potentialMatches || [])
       } catch (err) {
         console.error("Failed to load matches:", err)
+        toast({
+          title: "Error",
+          description: "Failed to load matches",
+          variant: "destructive",
+        })
       } finally {
         setLoading(false)
       }
     }
 
     loadMatches()
-  }, [user])
+  }, [user, toast])
 
   const handleAcceptMatch = async (matchId: string) => {
     try {
-      await updateMatchStatus(matchId, "accepted")
+      const response = await fetch("/api/matches/status", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ matchId, status: "accepted" }),
+      })
+
+      if (!response.ok) throw new Error("Failed to accept match")
+
       setActiveMatches((prev) =>
         prev.map((m) => (m.id === matchId ? { ...m, status: "accepted" } : m))
       )
+
+      toast({
+        title: "Match Accepted!",
+        description: "You can now message each other",
+      })
     } catch (err) {
       console.error("Failed to accept match:", err)
+      toast({
+        title: "Error",
+        description: "Failed to accept match",
+        variant: "destructive",
+      })
     }
   }
 
   const handleRejectMatch = async (matchId: string) => {
     try {
-      await updateMatchStatus(matchId, "rejected")
+      const response = await fetch("/api/matches/status", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ matchId, status: "rejected" }),
+      })
+
+      if (!response.ok) throw new Error("Failed to reject match")
+
       setActiveMatches((prev) => prev.filter((m) => m.id !== matchId))
+
+      toast({
+        title: "Match Rejected",
+        description: "This match request has been declined",
+      })
     } catch (err) {
       console.error("Failed to reject match:", err)
+      toast({
+        title: "Error",
+        description: "Failed to reject match",
+        variant: "destructive",
+      })
     }
   }
 
@@ -192,8 +153,10 @@ export default function MatchesPage() {
   const handleLikePotential = async (match: any) => {
     if (!user) return
     try {
-      console.log(`[Matches Page] Creating match for user ${match.id} with compatibility ${match.compatibilityScore}%`)
-      
+      console.log(
+        `[Matches Page] Creating match for user ${match.id} with compatibility ${match.compatibilityScore}%`
+      )
+
       const response = await fetch("/api/matches", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -209,15 +172,22 @@ export default function MatchesPage() {
       }
 
       const newMatch = await response.json()
-      console.log("[Matches Page] Match created successfully:", newMatch.id)
-      
+      console.log("[Matches Page] Match created successfully:", newMatch.matchId)
+
       // Remove from potential matches
       setPotentialMatches((prev) => prev.filter((m) => m.id !== match.id))
-      
-      // Add to active matches
-      setActiveMatches((prev) => [...prev, newMatch])
+
+      toast({
+        title: "Match Created!",
+        description: "They'll see your request and can accept it",
+      })
     } catch (err) {
       console.error("[Matches Page] Error creating match:", err)
+      toast({
+        title: "Error",
+        description: "Failed to create match",
+        variant: "destructive",
+      })
     }
   }
 
@@ -332,12 +302,19 @@ export default function MatchesPage() {
                           </div>
                         )}
 
-                        <Link href={`/dashboard/messages?match=${match.id}`}>
-                          <Button className="w-full gradient-bg">
-                            <MessageCircle className="w-4 h-4 mr-2" />
-                            Send Message
-                          </Button>
-                        </Link>
+                        <div className="flex gap-2">
+                          <Link href={`/dashboard/messages?match=${match.id}`} className="flex-1">
+                            <Button className="w-full gradient-bg">
+                              <MessageCircle className="w-4 h-4 mr-2" />
+                              Message
+                            </Button>
+                          </Link>
+                          <Link href={`/profile/${otherUser.id}`} className="flex-1">
+                            <Button variant="outline" className="w-full">
+                              View Profile
+                            </Button>
+                          </Link>
+                        </div>
                       </CardContent>
                     </Card>
                   )
@@ -350,8 +327,9 @@ export default function MatchesPage() {
             <div className="mt-8">
               <h2 className="text-xl font-bold mb-4">Pending Match Requests</h2>
               <div className="space-y-4">
+                {/* Sent Requests */}
                 {activeMatches
-                  .filter((m) => m.status === "pending")
+                  .filter((m) => m.status === "pending" && m.initiated_by === user?.id)
                   .map((match) => {
                     const otherUser =
                       match.user1_id === user?.id ? match.user2 : match.user1
@@ -371,6 +349,55 @@ export default function MatchesPage() {
                               <p className="text-sm text-muted-foreground">
                                 {match.compatibility_score}% compatible
                               </p>
+                              <p className="text-xs text-amber-600 mt-1">
+                                ⏳ Waiting for response...
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleRejectMatch(match.id)}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                            <Link href={`/profile/${otherUser.id}`}>
+                              <Button size="sm" variant="ghost">
+                                View Profile
+                              </Button>
+                            </Link>
+                          </div>
+                        </div>
+                      </Card>
+                    )
+                  })}
+
+                {/* Received Requests */}
+                {activeMatches
+                  .filter((m) => m.status === "pending" && m.initiated_by !== user?.id)
+                  .map((match) => {
+                    const otherUser =
+                      match.user1_id === user?.id ? match.user2 : match.user1
+
+                    return (
+                      <Card key={match.id} className="border-border/50 p-4 border-primary/30 bg-primary/5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <Avatar className="w-12 h-12">
+                              <AvatarImage src={otherUser.profile_picture} />
+                              <AvatarFallback>
+                                {otherUser.display_name?.substring(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-semibold">{otherUser.display_name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {match.compatibility_score}% compatible
+                              </p>
+                              <p className="text-xs text-primary mt-1">
+                                💌 Wants to match with you
+                              </p>
                             </div>
                           </div>
                           <div className="flex gap-2">
@@ -386,8 +413,14 @@ export default function MatchesPage() {
                               className="gradient-bg"
                               onClick={() => handleAcceptMatch(match.id)}
                             >
-                              <Heart className="w-4 h-4" />
+                              <Heart className="w-4 h-4 mr-1" />
+                              Accept
                             </Button>
+                            <Link href={`/profile/${otherUser.id}`}>
+                              <Button size="sm" variant="ghost">
+                                View Profile
+                              </Button>
+                            </Link>
                           </div>
                         </div>
                       </Card>

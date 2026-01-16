@@ -26,6 +26,8 @@ import { cn } from "@/lib/utils"
 import { Textarea } from "@/components/ui/textarea"
 import { PostMenu } from "@/components/post-menu"
 
+const SCROLL_VIEW_TIMEOUT = 2000 // Track view after 2 seconds in viewport
+
 export default function FeedPage() {
   const router = useRouter()
   const { user } = useUserProfile()
@@ -45,6 +47,7 @@ export default function FeedPage() {
   const [newComments, setNewComments] = useState<Map<string, string>>(new Map())
   const [submittingComment, setSubmittingComment] = useState<Map<string, boolean>>(new Map())
   const observerTarget = useRef<HTMLDivElement>(null)
+  const viewTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map())
 
   const fetchPosts = useCallback(async (newOffset: number) => {
     try {
@@ -112,6 +115,84 @@ export default function FeedPage() {
       setLoading(false)
     }
   }, [])
+
+  // Track post views when scrolling into viewport
+  const trackPostView = useCallback(async (postId: string) => {
+    try {
+      const response = await fetch("/api/posts/scroll-view", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ postId }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        console.error(`[Feed] API error: ${error.error}`)
+        throw new Error(error.error || "Failed to track view")
+      }
+
+      const data = await response.json()
+      const newViewCount = data.newViewCount
+      
+      if (typeof newViewCount !== "number") {
+        console.error(`[Feed] Invalid view count received: ${newViewCount}`)
+        return
+      }
+      
+      // Update view count
+      setViewCounts((prev) => new Map(prev).set(postId, newViewCount))
+      console.log(`[Feed] View tracked for post ${postId}, new count: ${newViewCount}`)
+    } catch (err) {
+      console.error("[Feed] Failed to track view:", err)
+    }
+  }, [])
+
+  // Setup Intersection Observer for scroll-based view tracking
+  useEffect(() => {
+    const observerOptions = {
+      threshold: 0.5, // 50% of post must be visible
+      rootMargin: "0px",
+    }
+
+    const viewObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        const postId = entry.target.getAttribute("data-post-id")
+        if (!postId) return
+
+        if (entry.isIntersecting) {
+          // Clear any existing timeout for this post
+          const existingTimeout = viewTimeoutsRef.current.get(postId)
+          if (existingTimeout) clearTimeout(existingTimeout)
+
+          // Set a new timeout to track view after 2 seconds in viewport
+          const timeout = setTimeout(() => {
+            trackPostView(postId)
+            viewTimeoutsRef.current.delete(postId)
+          }, SCROLL_VIEW_TIMEOUT)
+
+          viewTimeoutsRef.current.set(postId, timeout)
+        } else {
+          // Clear timeout if post leaves viewport before 2 seconds
+          const timeout = viewTimeoutsRef.current.get(postId)
+          if (timeout) {
+            clearTimeout(timeout)
+            viewTimeoutsRef.current.delete(postId)
+          }
+        }
+      })
+    }, observerOptions)
+
+    // Observe all post cards
+    const postCards = document.querySelectorAll("[data-post-id]")
+    postCards.forEach((card) => viewObserver.observe(card))
+
+    return () => {
+      // Cleanup timeouts
+      viewTimeoutsRef.current.forEach((timeout) => clearTimeout(timeout))
+      viewTimeoutsRef.current.clear()
+      viewObserver.disconnect()
+    }
+  }, [posts, trackPostView])
 
   useEffect(() => {
     fetchPosts(0)
@@ -406,7 +487,11 @@ export default function FeedPage() {
           const displayedComments = comments.slice(0, 2)
 
           return (
-            <Card key={post.id} className="border-border/50 overflow-hidden hover:shadow-md transition-shadow">
+            <Card 
+              key={post.id} 
+              className="border-border/50 overflow-hidden hover:shadow-md transition-shadow"
+              data-post-id={post.id}
+            >
               {/* Post Header */}
               <CardContent className="p-4">
                 <div className="flex items-start justify-between mb-4">

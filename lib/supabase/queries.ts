@@ -216,6 +216,7 @@ export async function getMatches(userId: string) {
       user1_id,
       user2_id,
       status,
+      initiated_by,
       compatibility_score,
       last_message_at,
       created_at,
@@ -225,8 +226,9 @@ export async function getMatches(userId: string) {
         profile_picture,
         bio,
         gender,
-        age,
+        date_of_birth,
         country,
+        city,
         interests
       ),
       user2:users!matches_user2_id_fkey(
@@ -235,13 +237,14 @@ export async function getMatches(userId: string) {
         profile_picture,
         bio,
         gender,
-        age,
+        date_of_birth,
         country,
+        city,
         interests
       )
     `)
     .or(`user1_id.eq.${userId},user2_id.eq.${userId}`)
-    .eq('status', 'accepted')
+    .in('status', ['accepted', 'pending'])
 
   return { data, error }
 }
