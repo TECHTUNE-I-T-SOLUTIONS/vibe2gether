@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { Loader2, BookOpen, Search, User, Calendar as CalendarIcon } from "lucide-react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -23,6 +25,8 @@ const BLOG_CATEGORIES = [
 ]
 
 export default function BlogPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const { user, loading } = useUserProfile()
   const [posts, setPosts] = useState<any[]>([])
   const [loadingPosts, setLoadingPosts] = useState(true)
@@ -31,6 +35,14 @@ export default function BlogPage() {
   const [search, setSearch] = useState("")
   const [category, setCategory] = useState("All")
   const observerTarget = useRef<HTMLDivElement>(null)
+
+  // Auth check
+  useEffect(() => {
+    if (status === "loading") return
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
 
   useEffect(() => {
     fetchPosts(0)

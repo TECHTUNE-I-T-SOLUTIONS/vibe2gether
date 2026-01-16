@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
+import { usePremiumCheck } from "@/hooks/use-premium-check"
 import { createClient } from "@/lib/supabase/client"
 import Link from "next/link"
 
@@ -75,6 +76,7 @@ export default function MessagesPage() {
   const searchParams = useSearchParams()
   const { t } = useI18n()
   const { toast } = useToast()
+  const { checkPremium, isPremium } = usePremiumCheck()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
@@ -648,6 +650,12 @@ export default function MessagesPage() {
 
   const sendMessage = async (mediaUrl?: string, messageType?: string) => {
     if (!selectedChat || (!newMessage.trim() && !mediaUrl)) return
+
+    // Check if this is the first message (initiate a new conversation)
+    // If no existing messages and user is not premium, require premium
+    if (messages.length === 0 && !checkPremium("Send First Message")) {
+      return
+    }
 
     try {
       setSendingMessage(true)

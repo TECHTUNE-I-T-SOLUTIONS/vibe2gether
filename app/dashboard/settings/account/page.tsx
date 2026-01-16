@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { ArrowLeft, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -12,6 +14,8 @@ import { useUserProfile } from "@/hooks/use-user-profile"
 import { updateUserProfile } from "@/lib/supabase/queries"
 
 export default function AccountSettingsPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const { user, loading, refetch } = useUserProfile()
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -24,6 +28,14 @@ export default function AccountSettingsPage() {
     country: "",
     mobile_number: "",
   })
+
+  // Auth check
+  useEffect(() => {
+    if (status === "loading") return
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
 
   useEffect(() => {
     if (user) {

@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { ArrowLeft, Loader2, Lock, Eye, EyeOff, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -14,6 +16,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function SecuritySettingsPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const { user, loading } = useUserProfile()
   const [security, setSecurity] = useState<any>(null)
   const [saving, setSaving] = useState(false)
@@ -24,6 +28,14 @@ export default function SecuritySettingsPage() {
   const [passwords, setPasswords] = useState({ current: "", new: "", confirm: "" })
   const [passwordError, setPasswordError] = useState("")
   const [loginAttempts, setLoginAttempts] = useState<any[]>([])
+
+  // Auth check
+  useEffect(() => {
+    if (status === "loading") return
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
 
   useEffect(() => {
     if (user) {

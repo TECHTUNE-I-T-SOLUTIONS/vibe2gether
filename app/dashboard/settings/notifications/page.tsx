@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { ArrowLeft, Loader2, Bell } from "lucide-react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -11,8 +13,18 @@ import { useUserProfile } from "@/hooks/use-user-profile"
 import { getNotificationPreferences, updateNotificationPreferences } from "@/lib/supabase/queries"
 
 export default function NotificationSettingsPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const { user, loading } = useUserProfile()
   const [preferences, setPreferences] = useState<any>(null)
+
+  // Auth check
+  useEffect(() => {
+    if (status === "loading") return
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
   const [saving, setSaving] = useState(false)
   const [loadingPrefs, setLoadingPrefs] = useState(true)
 

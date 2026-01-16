@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { ArrowLeft, Loader2, Shield, Eye, EyeOff, MessageSquare, Lock } from "lucide-react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -12,7 +14,17 @@ import { getPrivacySettings, updatePrivacySettings } from "@/lib/supabase/querie
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 
 export default function PrivacySettingsPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const { user, loading } = useUserProfile()
+
+  // Auth check
+  useEffect(() => {
+    if (status === "loading") return
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
   const [privacy, setPrivacy] = useState<any>(null)
   const [saving, setSaving] = useState(false)
   const [loadingPrefs, setLoadingPrefs] = useState(true)

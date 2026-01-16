@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -15,9 +16,18 @@ import { useUserProfile } from "@/hooks/use-user-profile"
 import { LocationPicker } from "@/components/location-picker"
 
 export default function CreatePostPage() {
+  const { data: session, status } = useSession()
   const { user } = useUserProfile()
   const router = useRouter()
   const [content, setContent] = useState("")
+
+  // Auth check
+  useEffect(() => {
+    if (status === "loading") return
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
   const [files, setFiles] = useState<File[]>([])
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState("")

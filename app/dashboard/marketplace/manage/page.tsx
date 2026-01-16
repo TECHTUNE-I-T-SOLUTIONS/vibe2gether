@@ -1262,21 +1262,15 @@ export default function DashboardMarketplaceManagePage() {
                   Close
                 </Button>
                 <Button 
-                  className="bg-pink-600 hover:bg-pink-700"
-                  onClick={handleBuyProduct}
-                  disabled={processingPayment}
+                  className="bg-blue-600 hover:bg-blue-700"
+                  onClick={() => {
+                    if (selectedProduct) {
+                      window.location.href = `/dashboard/messages?userId=${selectedProduct.user_id}`
+                    }
+                  }}
                 >
-                  {processingPayment ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <MessageCircle className="w-4 h-4 mr-2" />
-                      Buy Now
-                    </>
-                  )}
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  Message Seller
                 </Button>
               </DialogFooter>
             </div>

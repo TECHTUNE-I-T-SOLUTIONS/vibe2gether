@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, Suspense } from "react"
+import { useSession } from "next-auth/react"
 import { Loader2, Crown, Check, Zap, Sparkles, AlertCircle, CheckCircle2, ArrowRight } from "lucide-react"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -12,12 +13,16 @@ import { createClient } from "@/lib/supabase/client"
 import { useRouter, useSearchParams } from "next/navigation"
 
 const PREMIUM_FEATURES = [
-  { name: "Unlimited Swipes", description: "No limits on who you can connect with" },
-  { name: "See Likes", description: "Know who's interested in you" },
-  { name: "Priority Matches", description: "Appear higher in search results" },
-  { name: "Message First", description: "Message without matching first" },
-  { name: "Rewind", description: "Undo your last swipe" },
-  { name: "Super Likes", description: "Show extra interest in someone" },
+  { name: "Unlimited Swipes", description: "Unlimited swipes on profiles", premium: false },
+  { name: "First Message", description: "Send a message to anyone and auto-match", premium: true },
+  { name: "See Likes", description: "Know exactly who's interested in you", premium: true },
+  { name: "View Matches", description: "See all your matches instantly", premium: true },
+  { name: "Priority Matches", description: "Appear higher in search results", premium: true },
+  { name: "Message First", description: "Message without matching first", premium: true },
+  { name: "Rewind", description: "Undo your last swipe", premium: true },
+  // { name: "Super Likes", description: "Show extra interest in someone", premium: true },
+  { name: "Advanced Filters", description: "Filter by multiple criteria", premium: true },
+  { name: "Profile Boost", description: "Get more visibility for 24 hours", premium: true },
 ]
 
 // Currency conversion rate: 1 USD = 1450 NGN
@@ -328,18 +333,28 @@ function PremiumUpgradePageContent() {
         <h2 className="text-2xl font-bold mb-6">Why Go Premium?</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {PREMIUM_FEATURES.map((feature, idx) => (
-            <Card key={idx} className="border-border/50">
+            <Card key={idx} className={`border-border/50 ${feature.premium ? 'border-primary/50 bg-primary/5' : ''}`}>
               <CardContent className="pt-6">
                 <div className="flex items-start gap-3">
-                  <Sparkles className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-semibold">{feature.name}</p>
+                  <div className="flex-shrink-0 mt-0.5">
+                    {feature.premium ? (
+                      <Crown className="w-5 h-5 text-yellow-500" />
+                    ) : (
+                      <Check className="w-5 h-5 text-green-600" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold">{feature.name}</p>
+                      {feature.premium && <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">Premium</span>}
+                    </div>
                     <p className="text-sm text-muted-foreground">{feature.description}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
           ))}
+
         </div>
       </div>
 

@@ -68,7 +68,7 @@ export function DashboardHeader() {
   }
 
   const handleSelectUser = (userId: string) => {
-    router.push(`/dashboard/user/${userId}`)
+    router.push(`/user/${userId}`)
     setSearchQuery("")
     setShowSearchResults(false)
     setShowMobileSearch(false)
@@ -235,21 +235,20 @@ export function DashboardHeader() {
             <span className="font-semibold hidden sm:inline">{(user?.coins_balance || 0).toLocaleString()}</span>
           </Button>
 
-          {/* Language */}
+          {/* Language
           <LanguageSwitcher />
 
           {/* Theme Toggle */}
-          {mounted && (
-            <Button
+          {/* {mounted && ( */}
+            {/* <Button
               variant="ghost"
               size="icon"
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               className="rounded-full"
             >
               {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </Button>
-          )}
-
+            </Button> */}
+          {/* )} */}
           {/* Messages */}
           {/* Removed - messaging available in bottom navigation and sidebar */}
 

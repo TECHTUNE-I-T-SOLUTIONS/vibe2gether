@@ -920,9 +920,13 @@ export default function DashboardEventsManagePage() {
                 <Button variant="outline" onClick={() => setShowDetailDialog(false)}>
                   Close
                 </Button>
-                <Button className="bg-pink-600 hover:bg-pink-700">
-                  <Users className="w-4 h-4 mr-2" />
-                  {selectedEvent.is_free ? "Register for Event" : "Book Now"}
+                <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => {
+                  if (selectedEvent && selectedEvent.users?.id) {
+                    window.location.href = `/dashboard/messages?userId=${selectedEvent.users.id}`
+                  }
+                }}>
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  Message Organizer
                 </Button>
               </DialogFooter>
             </div>

@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { ArrowLeft, Loader2, CreditCard, Plus, TrendingUp } from "lucide-react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -21,6 +23,8 @@ const COIN_PACKAGES = [
 ]
 
 export default function BillingSettingsPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const { user, loading } = useUserProfile()
   const [coinsBalance, setCoinsBalance] = useState(0)
   const [topups, setTopups] = useState<any[]>([])
@@ -35,6 +39,14 @@ export default function BillingSettingsPage() {
     cvc: "",
     name: "",
   })
+
+  // Auth check
+  useEffect(() => {
+    if (status === "loading") return
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [session, router])
 
   useEffect(() => {
     if (user) {

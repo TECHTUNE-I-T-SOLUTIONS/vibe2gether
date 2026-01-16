@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { ArrowLeft, Loader2, Users, UserMinus } from "lucide-react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -10,9 +12,19 @@ import { getFollowing, unfollowUser } from "@/lib/supabase/queries"
 import Image from "next/image"
 
 export default function FollowingPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const { user, loading } = useUserProfile()
   const [following, setFollowing] = useState<any[]>([])
   const [loadingFollowing, setLoadingFollowing] = useState(true)
+
+  // Auth check
+  useEffect(() => {
+    if (status === "loading") return
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
   const [unfollowing, setUnfollowing] = useState<string | null>(null)
 
   useEffect(() => {

@@ -1,14 +1,17 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
-import { Heart, X, MessageCircle, Loader2, Sparkles, Eye, User } from "lucide-react"
+import { Heart, X, MessageCircle, Loader2, Sparkles, Eye, User, Lock, Crown } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { useUserProfile } from "@/hooks/use-user-profile"
+import { usePremiumCheck } from "@/hooks/use-premium-check"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 
@@ -52,12 +55,23 @@ function calculateAge(dateOfBirth: string): number {
 }
 
 export default function MatchesPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const { user } = useUserProfile()
   const { toast } = useToast()
+  const { checkPremium, isPremium } = usePremiumCheck()
   const [activeMatches, setActiveMatches] = useState<Match[]>([])
   const [potentialMatches, setPotentialMatches] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<"active" | "potential">("active")
+
+  // Auth check
+  useEffect(() => {
+    if (status === "loading") return
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
 
   useEffect(() => {
     async function loadMatches() {
@@ -220,15 +234,23 @@ export default function MatchesPage() {
           Active Matches ({activeMatches.length})
         </button>
         <button
-          onClick={() => setTab("potential")}
+          onClick={() => {
+            if (!checkPremium("View Matches")) {
+              return
+            }
+            setTab("potential")
+          }}
           className={cn(
-            "px-4 py-2 font-semibold border-b-2 transition-colors",
+            "px-4 py-2 font-semibold border-b-2 transition-colors flex items-center gap-2",
             tab === "potential"
               ? "border-primary text-primary"
               : "border-transparent text-muted-foreground hover:text-foreground"
           )}
         >
           Potential Matches ({potentialMatches.length})
+          {!isPremium && (
+            <Lock className="w-4 h-4" />
+          )}
         </button>
       </div>
 
@@ -435,7 +457,21 @@ export default function MatchesPage() {
       {/* Potential Matches Tab */}
       {tab === "potential" && (
         <div>
-          {potentialMatches.length === 0 ? (
+          {!isPremium ? (
+            <Card className="border-border/50 p-12 text-center">
+              <Crown className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+              <h3 className="text-2xl font-bold mb-2">Premium Feature</h3>
+              <p className="text-muted-foreground mb-6">
+                Unlock Potential Matches and browse new profiles with a premium membership
+              </p>
+              <Button
+                onClick={() => router.push("/dashboard/premium?feature=View+Matches")}
+                className="gradient-bg"
+              >
+                Upgrade to Premium
+              </Button>
+            </Card>
+          ) : potentialMatches.length === 0 ? (
             <Card className="border-border/50 p-12 text-center">
               <Sparkles className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
               <p className="text-muted-foreground">

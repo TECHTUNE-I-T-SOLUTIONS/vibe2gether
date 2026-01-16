@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import {
   Coins,
   Wallet,
@@ -58,6 +60,8 @@ const redeemOptions = [
 
 export default function WalletPage() {
   const { t } = useI18n()
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const { user } = useUserProfile()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [coinRates, setCoinRates] = useState<CoinRate[]>([])
@@ -94,6 +98,14 @@ export default function WalletPage() {
   const [showVerificationModal, setShowVerificationModal] = useState(false)
   
   const { toast } = useToast()
+
+  // Auth check
+  useEffect(() => {
+    if (status === "loading") return
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
 
   useEffect(() => {
     // Fetch banks from Paystack

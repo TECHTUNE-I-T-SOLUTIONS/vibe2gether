@@ -4,10 +4,10 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
 import {
-  Home,
   ShoppingBag,
   MessageCircle,
   Bell,
+  Rss,
   Calendar,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -53,9 +53,9 @@ export function DashboardMobileBottomNav() {
 
   const navItems: NavItem[] = [
     {
-      icon: <Home className="w-5 h-5" />,
-      label: "Home",
-      href: "/dashboard",
+      icon: <Rss className="w-5 h-5" />,
+      label: "Feed",
+      href: "/dashboard/feed",
     },
     {
       icon: <ShoppingBag className="w-5 h-5" />,

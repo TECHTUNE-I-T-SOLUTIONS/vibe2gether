@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import {
   Heart,
   MessageCircle,
@@ -12,11 +13,13 @@ import {
   MapPin,
   Loader2,
   ChevronDown,
+  Lock,
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useUserProfile } from "@/hooks/use-user-profile"
+import { usePremiumCheck } from "@/hooks/use-premium-check"
 import { useToast } from "@/hooks/use-toast"
 import {
   getPostComments,
@@ -30,8 +33,10 @@ const SCROLL_VIEW_TIMEOUT = 2000 // Track view after 2 seconds in viewport
 
 export default function FeedPage() {
   const router = useRouter()
+  const { data: session, status } = useSession()
   const { user } = useUserProfile()
   const { toast } = useToast()
+  const { checkPremium, isPremium } = usePremiumCheck()
   const [posts, setPosts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [offset, setOffset] = useState(0)
@@ -147,6 +152,14 @@ export default function FeedPage() {
     }
   }, [])
 
+  // Auth check
+  useEffect(() => {
+    if (status === "loading") return // Wait for session to load
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
+
   // Setup Intersection Observer for scroll-based view tracking
   useEffect(() => {
     const observerOptions = {
@@ -218,6 +231,10 @@ export default function FeedPage() {
   const handleLikePost = async (postId: string) => {
     if (!user) {
       router.push("/login")
+      return
+    }
+
+    if (!checkPremium("See Likes")) {
       return
     }
 
@@ -595,6 +612,9 @@ export default function FeedPage() {
                   >
                     <Heart className={cn("w-4 h-4", isLiked && "fill-current")} />
                     <span className="hidden sm:inline text-xs">Like</span>
+                    {!isPremium && (
+                      <Lock className="w-3 h-3 ml-1" />
+                    )}
                   </Button>
 
                   <Button

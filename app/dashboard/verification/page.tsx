@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -8,13 +9,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
 
 export default function VerificationPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const [idType, setIdType] = useState('national_id')
   const [idNumber, setIdNumber] = useState('')
   const [idFile, setIdFile] = useState<File | null>(null)
   const [selfieFile, setSelfieFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
-  const router = useRouter()
+
+  // Auth check
+  useEffect(() => {
+    if (status === "loading") return
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
 
   const handleSubmit = async () => {
     if (!idFile || !selfieFile || !idNumber) return alert('Please complete all fields')

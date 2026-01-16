@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useSession } from "next-auth/react"
 import { Loader2, Calendar, MapPin, Users, Clock } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -24,6 +25,7 @@ const EVENT_CATEGORIES = [
 ]
 
 export default function EventsPage() {
+  const { data: session, status } = useSession()
   const { user, loading } = useUserProfile()
   const router = useRouter()
   const [events, setEvents] = useState<any[]>([])
@@ -37,6 +39,14 @@ export default function EventsPage() {
   const [userRegistrations, setUserRegistrations] = useState<string[]>([])
   const [registering, setRegistering] = useState(false)
   const observerTarget = useRef<HTMLDivElement>(null)
+
+  // Auth check
+  useEffect(() => {
+    if (status === "loading") return
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [session, router])
 
   useEffect(() => {
     if (user) {

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
+import { useSession } from "next-auth/react"
 import { Loader2, ShoppingBag, MapPin, Star, MessageSquare, DollarSign } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -26,6 +27,7 @@ const CATEGORIES = [
 ]
 
 export default function MarketplacePage() {
+  const { data: session, status } = useSession()
   const { user, loading } = useUserProfile()
   const router = useRouter()
   const [products, setProducts] = useState<any[]>([])
@@ -40,6 +42,14 @@ export default function MarketplacePage() {
   const [inquiryMessage, setInquiryMessage] = useState("")
   const [submittingInquiry, setSubmittingInquiry] = useState(false)
   const observerTarget = useRef<HTMLDivElement>(null)
+
+  // Auth check
+  useEffect(() => {
+    if (status === "loading") return
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
 
   useEffect(() => {
     fetchProducts(0)
