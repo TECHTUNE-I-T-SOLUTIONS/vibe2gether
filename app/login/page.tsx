@@ -29,7 +29,7 @@ export default function LoginPage() {
   const searchParams = useSearchParams()
   const { toast } = useToast()
   const { t } = useLanguage()
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard"
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard/feed"
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

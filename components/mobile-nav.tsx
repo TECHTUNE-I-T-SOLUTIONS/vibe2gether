@@ -10,7 +10,7 @@ const navItems = [
   { href: "/explore", icon: Users, label: "Explore" },
   { href: "/marketplace", icon: ShoppingBag, label: "Shop" },
   { href: "/events", icon: Calendar, label: "Events" },
-  { href: "/dashboard", icon: User, label: "Dashboard" },
+  { href: "/dashboard/feed", icon: User, label: "Feed" },
 ]
 
 export function MobileNav() {

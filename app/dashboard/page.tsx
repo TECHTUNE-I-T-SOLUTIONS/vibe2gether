@@ -13,7 +13,6 @@ import { useI18n } from "@/lib/i18n/context"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { uploadProfilePicture, uploadCoverPicture } from "@/lib/supabase/storage"
 import { updateUserProfile } from "@/lib/supabase/queries"
-import { VerificationModal } from "@/components/verification-modal-improved"
 import { DashboardAnnouncements } from "@/components/dashboard-announcements"
 import {
   Heart,
@@ -51,9 +50,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
-  const [isVerified, setIsVerified] = useState(false)
-  const [verificationStatus, setVerificationStatus] = useState<any>(null)
-  const [showVerificationModal, setShowVerificationModal] = useState(false)
   const [hasPremium, setHasPremium] = useState(false)
   const coverPictureInputRef = useRef<HTMLInputElement>(null)
   const profilePictureInputRef = useRef<HTMLInputElement>(null)
@@ -128,26 +124,6 @@ export default function DashboardPage() {
       }
     }
 
-    async function checkVerification() {
-      try {
-        console.log("[Dashboard] Checking verification status")
-        const response = await fetch("/api/user/verification-status")
-        if (response.ok) {
-          const data = await response.json()
-          console.log("[Dashboard] Verification status:", data)
-          setIsVerified(data.verified)
-          setVerificationStatus(data.verification)
-          
-          // Auto-open verification modal if not verified
-          if (!data.verified) {
-            setShowVerificationModal(true)
-          }
-        }
-      } catch (err) {
-        console.error("[Dashboard] Failed to check verification status:", err)
-      }
-    }
-
     async function checkPremium() {
       try {
         console.log("[Dashboard] Checking premium status")
@@ -165,7 +141,6 @@ export default function DashboardPage() {
     fetchDashboardData()
     fetchNotifications()
     fetchMessages()
-    checkVerification()
     checkPremium()
   }, [])
 
@@ -624,29 +599,6 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Verification Alert */}
-          {!isVerified && (
-            <Card className="border-yellow-500/50 bg-yellow-500/5">
-              <CardContent className="flex items-start gap-3 p-6">
-                <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="font-semibold text-yellow-900">Complete Your Verification</p>
-                  <p className="text-sm text-yellow-800 mb-3">
-                    Verify your identity to unlock premium features and build trust in the community.
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setShowVerificationModal(true)}
-                    className="border-yellow-600 text-yellow-600 hover:bg-yellow-500/10"
-                  >
-                    Verify Now
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Premium Upgrade */}
           {!hasPremium && (
             <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-accent/5">
@@ -666,27 +618,6 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
-
-      {/* Verification Modal */}
-      <VerificationModal
-        open={showVerificationModal}
-        onOpenChange={setShowVerificationModal}
-        verificationStatus={verificationStatus}
-        onVerificationSubmitted={() => {
-          setIsVerified(false) // Reset for new submission
-          setTimeout(() => {
-            // Re-check status after submission
-            fetch("/api/user/verification-status")
-              .then((res) => res.json())
-              .then((data) => {
-                setVerificationStatus(data.verification)
-                if (data.verified) {
-                  setIsVerified(true)
-                }
-              })
-          }, 1000)
-        }}
-      />
     </div>
   )
 }

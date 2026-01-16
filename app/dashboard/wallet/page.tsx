@@ -31,6 +31,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useToast } from "@/hooks/use-toast"
 import { useI18n } from "@/lib/i18n/context"
 import { useUserProfile } from "@/hooks/use-user-profile"
+import { VerificationModal } from "@/components/verification-modal-improved"
 import { PaystackPaymentModal } from "@/components/paystack-payment-modal"
 
 interface Transaction {
@@ -88,6 +89,9 @@ export default function WalletPage() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null)
   const [userProducts, setUserProducts] = useState<any[]>([])
   const [loadingProducts, setLoadingProducts] = useState(false)
+  const [isVerified, setIsVerified] = useState(false)
+  const [verificationStatus, setVerificationStatus] = useState<any>(null)
+  const [showVerificationModal, setShowVerificationModal] = useState(false)
   
   const { toast } = useToast()
 
@@ -102,6 +106,20 @@ export default function WalletPage() {
         }
       } catch (error) {
         console.error("Failed to fetch banks:", error)
+      }
+    }
+    
+    // Fetch verification status
+    const fetchVerificationStatus = async () => {
+      try {
+        const response = await fetch("/api/user/verification-status")
+        const data = await response.json()
+        setVerificationStatus(data.verification)
+        if (data.verified) {
+          setIsVerified(true)
+        }
+      } catch (error) {
+        console.error("Failed to fetch verification status:", error)
       }
     }
     
@@ -132,6 +150,7 @@ export default function WalletPage() {
     }
     
     fetchBanks()
+    fetchVerificationStatus()
     fetchPremiumTiers()
     fetchUserProducts()
   }, [])
@@ -507,7 +526,13 @@ export default function WalletPage() {
               <Button 
                 variant="secondary" 
                 className="rounded-full bg-white/20 text-white hover:bg-white/30 border-0"
-                onClick={() => setShowWithdrawalModal(true)}
+                onClick={() => {
+                  if (isVerified) {
+                    setShowWithdrawalModal(true)
+                  } else {
+                    setShowVerificationModal(true)
+                  }
+                }}
               >
                 <Wallet className="w-4 h-4 mr-2" />
                 {t("withdraw")}
@@ -618,7 +643,14 @@ export default function WalletPage() {
         <TabsContent value="withdrawals" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-semibold">Withdrawal Requests</h2>
-            <Button onClick={() => setShowWithdrawalModal(true)}>
+            <Button onClick={() => {
+              // Check if verified first
+              if (!isVerified) {
+                setShowVerificationModal(true)
+              } else {
+                setShowWithdrawalModal(true)
+              }
+            }}>
               Request Withdrawal
             </Button>
           </div>
@@ -1250,6 +1282,30 @@ export default function WalletPage() {
         amount={1500}
         itemType="coins"
         purpose="Buy Coins"
+      />
+
+      {/* Verification Modal */}
+      <VerificationModal
+        open={showVerificationModal}
+        onOpenChange={setShowVerificationModal}
+        verificationStatus={verificationStatus}
+        onVerificationSubmitted={() => {
+          setIsVerified(false) // Reset for new submission
+          setTimeout(() => {
+            // Re-check status after submission
+            fetch("/api/user/verification-status")
+              .then((res) => res.json())
+              .then((data) => {
+                setVerificationStatus(data.verification)
+                if (data.verified) {
+                  setIsVerified(true)
+                  // Auto-open withdrawal modal after verification
+                  setShowVerificationModal(false)
+                  setShowWithdrawalModal(true)
+                }
+              })
+          }, 1000)
+        }}
       />
     </div>
   )
