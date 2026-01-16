@@ -40,6 +40,7 @@ export default function BlogAdminPage() {
     excerpt: "",
     content: "",
     category: "tech",
+    tags: "",
     thumbnail_url: "",
     status: "draft",
     is_featured: false,
@@ -136,6 +137,13 @@ export default function BlogAdminPage() {
       return
     }
 
+    // Upload image first if selected
+    if (selectedImage && !formData.thumbnail_url) {
+      await uploadImage()
+      // Wait a moment for the state to update
+      await new Promise((resolve) => setTimeout(resolve, 500))
+    }
+
     // Get admin ID from session
     const sessionRes = await fetch("/api/admin/auth/me")
     const sessionData = await sessionRes.json()
@@ -149,20 +157,13 @@ export default function BlogAdminPage() {
     try {
       const supabase = createClient()
 
-      // Verify that the admin user exists in the users table
-      const { data: authorUser, error: userError } = await supabase
-        .from("users")
-        .select("id")
-        .eq("id", sessionData.id)
-        .single()
-
-      if (userError || !authorUser) {
-        console.error("User validation error:", userError)
-        alert("Your user account was not found. Your account may have been deactivated. Please contact support.")
-        return
-      }
-
       const slug = generateSlug(formData.title)
+      
+      // Convert tags string to array (comma-separated)
+      const tagsArray = formData.tags
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter((tag) => tag.length > 0)
 
       const { data, error } = await supabase
         .from("blog_posts")
@@ -171,17 +172,18 @@ export default function BlogAdminPage() {
             author_id: sessionData.id,
             title: formData.title,
             slug: slug,
-            excerpt: formData.excerpt,
+            excerpt: formData.excerpt || null,
             content: formData.content,
             category: formData.category,
-            thumbnail: formData.thumbnail_url,
-            tags: [],
+            thumbnail: formData.thumbnail_url || null,
+            tags: tagsArray,
             is_published: formData.status === "published",
             is_featured: formData.is_featured,
             published_at: formData.status === "published" ? new Date().toISOString() : null,
           },
         ])
         .select()
+        .single()
 
       if (error) {
         console.error("Error creating post:", error)
@@ -196,10 +198,13 @@ export default function BlogAdminPage() {
         excerpt: "",
         content: "",
         category: "tech",
+        tags: "",
         thumbnail_url: "",
         status: "draft",
         is_featured: false,
       })
+      setSelectedImage(null)
+      setPreviewUrl("")
     } catch (err) {
       console.error("Failed to create post:", err)
       alert("Failed to create post. Please try again.")
@@ -227,7 +232,7 @@ export default function BlogAdminPage() {
 
     setEditingLoading(true)
     try {
-      let thumbnailUrl = editingPost.thumbnail_url
+      let thumbnailUrl = editingPost.thumbnail_url || editingPost.thumbnail
       if (editingPost.newThumbnail) {
         const file = editingPost.newThumbnail
         const fileExt = file.name.split(".").pop()
@@ -242,14 +247,24 @@ export default function BlogAdminPage() {
         thumbnailUrl = data.publicUrl
       }
 
+      // Parse tags from comma-separated string
+      const tagsArray = (editingPost.tagsText || editingPost.tags || "")
+        .split(",")
+        .map((tag: string) => tag.trim())
+        .filter((tag: string) => tag.length > 0)
+
+      const isPublished = editingPost.status === "published" || editingPost.is_published === true
+
       await updateBlogPost(editingPost.id, {
         title: editingPost.title,
         excerpt: editingPost.excerpt,
         content: editingPost.content,
         category: editingPost.category,
-        status: editingPost.status,
         is_featured: editingPost.is_featured,
-        thumbnail_url: thumbnailUrl,
+        is_published: isPublished,
+        published_at: isPublished ? new Date().toISOString() : null,
+        thumbnail: thumbnailUrl,
+        tags: tagsArray,
       })
 
       setPosts((prev) =>
@@ -339,6 +354,17 @@ export default function BlogAdminPage() {
                     <SelectItem value="other">Other</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div>
+                <Label>Tags</Label>
+                <Input
+                  placeholder="Enter tags separated by commas (e.g., react, javascript, web)"
+                  value={formData.tags}
+                  onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+                  className="mt-2"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Separate multiple tags with commas</p>
               </div>
 
               <div>
@@ -544,6 +570,22 @@ export default function BlogAdminPage() {
               </div>
 
               <div>
+                <Label>Tags</Label>
+                <Input
+                  placeholder="Enter tags separated by commas"
+                  value={editingPost?.tagsText || (editingPost?.tags ? editingPost.tags.join(", ") : "")}
+                  onChange={(e) =>
+                    setEditingPost((prev: any) => ({
+                      ...prev,
+                      tagsText: e.target.value,
+                    }))
+                  }
+                  className="mt-2"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Separate multiple tags with commas</p>
+              </div>
+
+              <div>
                 <Label>Thumbnail Image</Label>
                 {editingPost?.thumbnailPreview ? (
                   <div className="mt-2 relative">
@@ -569,10 +611,10 @@ export default function BlogAdminPage() {
                       Remove New Image
                     </Button>
                   </div>
-                ) : editingPost?.thumbnail_url ? (
+                ) : (editingPost?.thumbnail_url || editingPost?.thumbnail) ? (
                   <div className="mt-2 relative">
                     <img
-                      src={editingPost.thumbnail_url}
+                      src={editingPost?.thumbnail_url || editingPost?.thumbnail}
                       alt="Current thumbnail"
                       className="max-h-48 rounded"
                     />
@@ -602,40 +644,6 @@ export default function BlogAdminPage() {
                     >
                       <Upload className="w-4 h-4 mr-2" />
                       Change Thumbnail
-                    </Button>
-                  </div>
-                ) : editingPost?.thumbnail_url ? (
-                  <div className="mt-2 relative">
-                    <img
-                      src={editingPost.thumbnail_url}
-                      alt="Current thumbnail"
-                      className="max-h-40 rounded"
-                    />
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="mt-2 w-full"
-                      onClick={() => {
-                        const input = document.createElement("input")
-                        input.type = "file"
-                        input.accept = "image/*"
-                        input.onchange = (e: any) => {
-                          const file = e.target.files[0]
-                          const reader = new FileReader()
-                          reader.onloadend = () => {
-                            setEditingPost((prev: any) => ({
-                              ...prev,
-                              newThumbnail: file,
-                              thumbnailPreview: reader.result as string,
-                            }))
-                          }
-                          reader.readAsDataURL(file)
-                        }
-                        input.click()
-                      }}
-                    >
-                      <Upload className="w-4 h-4 mr-2" />
-                      Change Image
                     </Button>
                   </div>
                 ) : (
@@ -685,10 +693,11 @@ export default function BlogAdminPage() {
               <div>
                 <Label>Status</Label>
                 <Select
-                  value={editingPost?.status || "draft"}
+                  value={editingPost?.is_published ? "published" : "draft"}
                   onValueChange={(value) =>
                     setEditingPost((prev: any) => ({
                       ...prev,
+                      is_published: value === "published",
                       status: value,
                     }))
                   }
@@ -785,12 +794,12 @@ export default function BlogAdminPage() {
                       <td className="py-3 px-4">
                         <Badge
                           className={
-                            post.status === "published"
+                            post.is_published
                               ? "bg-green-500/20 text-green-600"
                               : "bg-yellow-500/20 text-yellow-600"
                           }
                         >
-                          {post.status}
+                          {post.is_published ? "Published" : "Draft"}
                         </Badge>
                       </td>
                       <td className="py-3 px-4">

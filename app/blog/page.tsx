@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { MobileNav } from "@/components/mobile-nav"
@@ -15,6 +16,7 @@ import { getBlogPosts } from "@/lib/supabase/queries"
 const categories = ["All", "Relationships", "Dating Tips", "Profile Tips", "Industry", "Self Improvement"]
 
 export default function BlogPage() {
+  const router = useRouter()
   const [posts, setPosts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -128,14 +130,14 @@ export default function BlogPage() {
                         <div className="flex items-center gap-4 text-sm text-muted-foreground mb-6">
                           <span className="flex items-center gap-1">
                             <User className="w-4 h-4" />
-                            {featuredPost.author?.display_name || "Admin"}
+                            {featuredPost.author?.full_name || "Admin"}
                           </span>
                           <span className="flex items-center gap-1">
                             <Clock className="w-4 h-4" />
                             {new Date(featuredPost.published_at || featuredPost.created_at).toLocaleDateString()}
                           </span>
                         </div>
-                        <Button className="rounded-full gradient-bg w-fit">
+                        <Button className="rounded-full gradient-bg w-fit" onClick={() => router.push(`/blog/${featuredPost.slug}`)}>
                           Read Article
                           <ArrowRight className="w-4 h-4 ml-2" />
                         </Button>
@@ -157,7 +159,11 @@ export default function BlogPage() {
                 ) : (
                   <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredPosts.map((post) => (
-                      <Card key={post.id} className="border-border/50 overflow-hidden group cursor-pointer">
+                      <Card
+                        key={post.id}
+                        className="border-border/50 overflow-hidden group cursor-pointer transition-all hover:shadow-lg"
+                        onClick={() => router.push(`/blog/${post.slug}`)}
+                      >
                         <div className="relative aspect-video">
                           <Image
                             src={post.thumbnail || "/placeholder.svg"}
@@ -175,7 +181,7 @@ export default function BlogPage() {
                           </h3>
                           <p className="text-muted-foreground text-sm mb-4 line-clamp-2">{post.excerpt}</p>
                           <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>{post.author?.display_name || "Admin"}</span>
+                            <span>{post.author?.full_name || "Admin"}</span>
                             <span>{new Date(post.published_at || post.created_at).toLocaleDateString()}</span>
                           </div>
                         </CardContent>

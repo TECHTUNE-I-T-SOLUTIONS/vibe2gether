@@ -64,6 +64,11 @@ export function AdminMobileBottomNav({
       label: "marketplace",
       href: "/admin/marketplace",
     },
+    // {
+    //   icon: Bell,
+    //   label: "announcements",
+    //   href: "/admin/announcements",
+    // },
     {
       icon: Bell,
       label: "notifications",

@@ -516,21 +516,25 @@ export async function getBlogPosts(limit = 20, offset = 0) {
       id,
       title,
       slug,
+      content,
       excerpt,
       thumbnail,
       category,
       tags,
+      is_published,
+      is_featured,
       views_count,
       likes_count,
       comments_count,
       published_at,
       created_at,
+      updated_at,
       author_id,
-      author:users(
+      author:admins(
         id,
-        display_name,
+        full_name,
         profile_picture,
-        bio
+        email
       )
     `)
     .eq('is_published', true)
@@ -559,11 +563,11 @@ export async function getBlogPost(slug: string) {
       published_at,
       created_at,
       author_id,
-      author:users(
+      author:admins(
         id,
-        display_name,
+        full_name,
         profile_picture,
-        bio
+        email
       )
     `)
     .eq('slug', slug)

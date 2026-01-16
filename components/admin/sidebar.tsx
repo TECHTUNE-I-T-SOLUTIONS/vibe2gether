@@ -47,6 +47,7 @@ const secondaryItems: SidebarItem[] = [
   { icon: ShoppingBag, label: "marketplace", href: "/admin/marketplace" },
   { icon: Calendar, label: "events", href: "/admin/events" },
   { icon: BookOpen, label: "blog", href: "/admin/blog" },
+  { icon: Bell, label: "announcements", href: "/admin/announcements" },
   { icon: MessageSquare, label: "messages", href: "/admin/messages" },
   { icon: CreditCard, label: "transactions", href: "/admin/transactions" },
   { icon: CreditCard, label: "withdrawals", href: "/admin/withdrawals" },

@@ -85,6 +85,7 @@ export function AdminMobileSidebar({ onLogoutClick }: AdminMobileSidebarProps) {
     { icon: Users, label: "users", href: "/admin/users" },
     { icon: FileText, label: "posts", href: "/admin/posts" },
     { icon: Flag, label: "reports", href: "/admin/reports", badge: counts.reports },
+    { icon: Bell, label: "announcements", href: "/admin/announcements" },
   ]
 
   const secondaryItems: NavItem[] = [

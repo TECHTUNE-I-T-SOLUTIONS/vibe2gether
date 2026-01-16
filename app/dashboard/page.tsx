@@ -14,6 +14,7 @@ import { useUserProfile } from "@/hooks/use-user-profile"
 import { uploadProfilePicture, uploadCoverPicture } from "@/lib/supabase/storage"
 import { updateUserProfile } from "@/lib/supabase/queries"
 import { VerificationModal } from "@/components/verification-modal-improved"
+import { DashboardAnnouncements } from "@/components/dashboard-announcements"
 import {
   Heart,
   MessageCircle,
@@ -386,6 +387,9 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Announcements Section */}
+      <DashboardAnnouncements />
 
       <div className="grid lg:grid-cols-3 gap-8">
         {/* Main Content */}
