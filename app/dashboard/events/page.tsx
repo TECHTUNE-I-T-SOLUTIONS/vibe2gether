@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useSession } from "next-auth/react"
-import { Loader2, Calendar, MapPin, Users, Clock } from "lucide-react"
+import { Loader2, Calendar, MapPin, Users, Clock, MessageSquare } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -123,6 +123,17 @@ export default function EventsPage() {
       console.error("Failed to toggle registration:", err)
     } finally {
       setRegistering(false)
+    }
+  }
+
+  const handleMessageOrganizer = () => {
+    if (!selectedEvent) return
+    
+    // Get organizer info from event object
+    const organizerId = selectedEvent.created_by
+    if (organizerId) {
+      router.push(`/dashboard/messages?userId=${organizerId}`)
+      setShowDetailDialog(false)
     }
   }
 
@@ -309,10 +320,23 @@ export default function EventsPage() {
             </div>
           )}
 
-          <DialogFooter className="flex gap-2">
+          <DialogFooter className="flex gap-2 flex-col sm:flex-row">
             <Button variant="outline" onClick={() => setShowDetailDialog(false)}>
               Close
             </Button>
+            
+            {/* Message Button */}
+            {selectedEvent && selectedEvent.created_by && (
+              <Button 
+                className="gap-2 rounded-full gradient-bg"
+                onClick={handleMessageOrganizer}
+              >
+                <MessageSquare className="w-4 h-4" />
+                Message Organizer
+              </Button>
+            )}
+            
+            {/* Register Button */}
             {selectedEvent && isUpcoming(selectedEvent.event_date) && (
               <Button
                 onClick={handleToggleRegistration}

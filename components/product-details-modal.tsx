@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import Image from "next/image"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -8,11 +8,10 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { MapPin, Mail, Phone, Copy, ExternalLink, Loader2, AlertCircle, ChevronLeft, ChevronRight, MessageSquare, ShoppingCart } from "lucide-react"
+import { MapPin, Mail, Phone, Copy, AlertCircle, ChevronLeft, ChevronRight, MessageSquare } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { PaystackPaymentModal } from "@/components/paystack-payment-modal"
 
 interface ProductDetailsModalProps {
   isOpen: boolean
@@ -25,39 +24,8 @@ export function ProductDetailsModal({ isOpen, onClose, product, seller }: Produc
   const { toast } = useToast()
   const { data: session } = useSession()
   const router = useRouter()
-  const [showPayment, setShowPayment] = useState(false)
-  const [paymentType, setPaymentType] = useState<"contact" | "buy">("contact")
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
-  const [hasPurchased, setHasPurchased] = useState(false)
-  const [verifying, setVerifying] = useState(false)
   const isOwnProduct = product?.seller_id === session?.user?.id
-
-  // Check if user has already purchased this product
-  const checkPurchaseStatus = async () => {
-    if (!session?.user?.id || !product?.id) {
-      return
-    }
-
-    try {
-      setVerifying(true)
-      const response = await fetch(`/api/marketplace/check-purchase?productId=${product.id}`)
-      if (response.ok) {
-        const data = await response.json()
-        setHasPurchased(data.purchased)
-      }
-    } catch (error) {
-      console.error("Failed to check purchase status:", error)
-    } finally {
-      setVerifying(false)
-    }
-  }
-
-  // Check purchase status when modal opens or product changes
-  useEffect(() => {
-    if (isOpen && product?.id && session?.user?.id) {
-      checkPurchaseStatus()
-    }
-  }, [isOpen, product?.id, session?.user?.id])
 
   const handleMessageSeller = async () => {
     if (!session?.user?.id) {
@@ -67,25 +35,7 @@ export function ProductDetailsModal({ isOpen, onClose, product, seller }: Produc
 
     // Navigate to messages with seller
     router.push(`/dashboard/messages?userId=${seller.id}`)
-  }
-
-  const handleBuyProduct = () => {
-    if (!session?.user?.id) {
-      router.push("/login")
-      return
-    }
-
-    setPaymentType("buy")
-    setShowPayment(true)
-  }
-
-  const handlePaymentSuccess = () => {
-    setHasPurchased(true)
-    toast({
-      title: "Success",
-      description: "Payment successful! Product purchased.",
-    })
-    setShowPayment(false)
+    onClose()
   }
 
   // Image navigation
@@ -163,7 +113,7 @@ export function ProductDetailsModal({ isOpen, onClose, product, seller }: Produc
                 {/* Thumbnail Indicator */}
                 {totalImages > 1 && (
                   <div className="flex gap-2 overflow-x-auto pb-2">
-                    {product.media.map((_, index) => (
+                    {product.media.map((media: any, index: number) => (
                       <button
                         key={index}
                         onClick={() => setCurrentImageIndex(index)}
@@ -172,7 +122,7 @@ export function ProductDetailsModal({ isOpen, onClose, product, seller }: Produc
                         }`}
                       >
                         <Image
-                          src={_?.url || _ || "/placeholder.svg"}
+                          src={media?.url || media || "/placeholder.svg"}
                           alt={`Thumbnail ${index + 1}`}
                           width={48}
                           height={48}
@@ -223,50 +173,7 @@ export function ProductDetailsModal({ isOpen, onClose, product, seller }: Produc
                     <div className="flex-1">
                       <p className="font-semibold">{seller.full_name || "Unknown Seller"}</p>
                       <p className="text-sm text-muted-foreground mb-2">{seller.city || "N/A"}, {seller.country || "N/A"}</p>
-                      
-                      {hasAccessDetails ? (
-                        <div className="space-y-2 text-sm">
-                          {seller.email && (
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                              <Mail className="w-4 h-4" />
-                              <span>{seller.email}</span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(seller.email)
-                                  toast({ title: "Copied", description: "Email copied to clipboard" })
-                                }}
-                              >
-                                <Copy className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          )}
-                          {seller.mobile_number && (
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                              <Phone className="w-4 h-4" />
-                              <span>{seller.mobile_number}</span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(seller.mobile_number)
-                                  toast({ title: "Copied", description: "Phone copied to clipboard" })
-                                }}
-                              >
-                                <Copy className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <Alert className="border-amber-200 bg-amber-50 text-amber-900">
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertDescription>
-                            Pay ₦1,500 to unlock seller details and send a message
-                          </AlertDescription>
-                        </Alert>
-                      )}
+                      <p className="text-sm text-muted-foreground">Message the seller to connect and negotiate</p>
                     </div>
                   </div>
                 </CardContent>
@@ -296,35 +203,20 @@ export function ProductDetailsModal({ isOpen, onClose, product, seller }: Produc
             
             {!session?.user?.id ? (
               <Button className="rounded-full gradient-bg gap-2" onClick={() => router.push("/login")}>
-                <ShoppingCart className="w-4 h-4" />
-                Login to Buy
+                <MessageSquare className="w-4 h-4" />
+                Login to Message Seller
               </Button>
             ) : isOwnProduct ? (
               <div className="text-sm text-muted-foreground">This is your product</div>
-            ) : hasPurchased ? (
+            ) : (
               <>
-                {/* Show Paid Badge and Message Button */}
-                <Badge variant="default" className="bg-green-500">
-                  ✓ Paid
-                </Badge>
+                {/* Message Seller Button - Only action now */}
                 <Button 
-                  variant="outline" 
-                  className="gap-2"
+                  className="rounded-full gradient-bg gap-2"
                   onClick={handleMessageSeller}
                 >
                   <MessageSquare className="w-4 h-4" />
                   Message Seller
-                </Button>
-              </>
-            ) : (
-              <>
-                {/* Buy Button */}
-                <Button 
-                  className="rounded-full gradient-bg gap-2"
-                  onClick={handleBuyProduct}
-                >
-                  <ShoppingCart className="w-4 h-4" />
-                  Buy {priceDisplay}
                 </Button>
               </>
             )}
@@ -332,19 +224,7 @@ export function ProductDetailsModal({ isOpen, onClose, product, seller }: Produc
         </DialogContent>
       </Dialog>
 
-      {/* Payment Modal */}
-      <PaystackPaymentModal
-        isOpen={showPayment}
-        onClose={() => setShowPayment(false)}
-        amount={paymentType === "contact" ? 1500 : product.currency === "USD" ? Math.round(product.price * 1670) : product.price}
-        currency="NGN"
-        itemType="product"
-        itemData={{
-          id: product.id,
-          title: paymentType === "contact" ? `Contact Seller: ${product.title}` : `Buy: ${product.title}`,
-        }}
-        onPaymentSuccess={handlePaymentSuccess}
-      />
+      {/* Payment Modal removed - messaging only */}
     </>
   )
 }

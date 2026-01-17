@@ -538,6 +538,14 @@ export default function WalletPage() {
               <Button 
                 variant="secondary" 
                 className="rounded-full bg-white/20 text-white hover:bg-white/30 border-0"
+                onClick={() => setShowVerificationModal(true)}
+              >
+                <BadgeCheck className="w-4 h-4 mr-2" />
+                Verify
+              </Button>
+              <Button 
+                variant="secondary" 
+                className="rounded-full bg-white/20 text-white hover:bg-white/30 border-0"
                 onClick={() => {
                   if (isVerified) {
                     setShowWithdrawalModal(true)

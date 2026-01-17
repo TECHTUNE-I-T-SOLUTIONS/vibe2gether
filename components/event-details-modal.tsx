@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { MapPin, Mail, Phone, Copy, ExternalLink, Loader2, AlertCircle, Calendar, Clock, Users } from "lucide-react"
+import { MapPin, Mail, Phone, Copy, ExternalLink, Loader2, AlertCircle, Calendar, Clock, Users, MessageSquare } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
@@ -57,6 +57,27 @@ export function EventDetailsModal({ isOpen, onClose, event, creator }: EventDeta
     } finally {
       setVerifying(false)
     }
+  }
+
+  const handleMessageCreator = async () => {
+    if (!session?.user?.id) {
+      router.push("/login")
+      return
+    }
+
+    // Guard against null creator
+    if (!creator || !creator.id) {
+      toast({
+        title: "Error",
+        description: "Organizer information not available",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Navigate to messages with event creator
+    router.push(`/dashboard/messages?userId=${creator.id}`)
+    onClose()
   }
 
   const handleRegister = async () => {
@@ -113,7 +134,7 @@ export function EventDetailsModal({ isOpen, onClose, event, creator }: EventDeta
     })
   }
 
-  const isRestaurant = event?.type === "restaurant"
+  const isRestaurant = event?.type === "restaurant" || event?.type === "Food & Drink" || event?.category === "restaurant" || "Food & Drink" || event?.title.toLowerCase().includes("restaurant")
   const bookingPrice = event?.ticket_price || 1500
   const priceDisplay = event?.currency === "NGN" ? `₦${bookingPrice.toLocaleString()}` : `$${bookingPrice}`
   const eventDate = event ? new Date(event.event_date) : new Date()
@@ -242,7 +263,8 @@ export function EventDetailsModal({ isOpen, onClose, event, creator }: EventDeta
                         <Alert className="border-amber-200 bg-amber-50 text-amber-900">
                           <AlertCircle className="h-4 w-4" />
                           <AlertDescription>
-                            Pay {priceDisplay} to {isRestaurant ? "book a table" : "register"} and get organizer details
+                            Price: {priceDisplay}, <br /> 
+                            Message {creator.full_name} to {isRestaurant ? "book a table" : "register"} and get organizer details
                           </AlertDescription>
                         </Alert>
                       )}
@@ -268,15 +290,28 @@ export function EventDetailsModal({ isOpen, onClose, event, creator }: EventDeta
             )}
           </div>
 
-          <DialogFooter className="flex gap-2">
+          <DialogFooter className="flex gap-2 flex-col sm:flex-row">
             <Button variant="outline" onClick={onClose}>
               Close
             </Button>
+            
+            {/* Message Button - Only show if creator exists and user is logged in */}
+            {session?.user?.id && creator && creator.id && (
+              <Button 
+                className="gap-2 rounded-full gradient-bg"
+                onClick={handleMessageCreator}
+              >
+                <MessageSquare className="w-4 h-4" />
+                Message Organizer
+              </Button>
+            )}
+
+            {/* Register Button - Payment is handled by organizer */}
             {!session?.user?.id ? (
               <Button className="rounded-full gradient-bg" onClick={() => router.push("/login")}>
                 Login to {isRestaurant ? "Book" : "Register"}
               </Button>
-            ) : hasAccessDetails ? (
+            ) : (
               <Button
                 className="rounded-full gradient-bg"
                 onClick={handleRegister}
@@ -284,15 +319,6 @@ export function EventDetailsModal({ isOpen, onClose, event, creator }: EventDeta
               >
                 {registering ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                 {isRestaurant ? "Book Table" : "Register Now"}
-              </Button>
-            ) : (
-              <Button
-                className="rounded-full gradient-bg"
-                onClick={checkAccessDetails}
-                disabled={verifying}
-              >
-                {verifying ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                Pay {priceDisplay}
               </Button>
             )}
           </DialogFooter>

@@ -98,17 +98,20 @@ export default function EventsPage() {
   const handleViewDetails = async (event: any) => {
     setSelectedEvent(event)
 
-    // Fetch creator info
+    // Fetch creator info using created_by field
     try {
-      const supabase = await createClient()
-      const { data } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", event.creator_id)
-        .single()
+      const creatorId = event.created_by || event.creator_id
+      if (creatorId) {
+        const supabase = await createClient()
+        const { data } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", creatorId)
+          .single()
 
-      if (data) {
-        setCreatorInfo(data)
+        if (data) {
+          setCreatorInfo(data)
+        }
       }
     } catch (error) {
       console.error("Failed to fetch creator info:", error)

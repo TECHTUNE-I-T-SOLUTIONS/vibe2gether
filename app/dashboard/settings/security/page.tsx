@@ -14,11 +14,13 @@ import { useUserProfile } from "@/hooks/use-user-profile"
 import { getSecuritySettings, updateSecuritySettings } from "@/lib/supabase/queries"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useToast } from "@/hooks/use-toast"
 
 export default function SecuritySettingsPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const { user, loading } = useUserProfile()
+  const { toast } = useToast()
   const [security, setSecurity] = useState<any>(null)
   const [saving, setSaving] = useState(false)
   const [loadingPrefs, setLoadingPrefs] = useState(true)
@@ -82,7 +84,7 @@ export default function SecuritySettingsPage() {
   async function handleChangePassword() {
     setPasswordError("")
 
-    if (!passwords.new || !passwords.confirm) {
+    if (!passwords.current || !passwords.new || !passwords.confirm) {
       setPasswordError("Please fill in all password fields")
       return
     }
@@ -99,14 +101,39 @@ export default function SecuritySettingsPage() {
 
     try {
       setSaving(true)
-      // In a real app, you'd call an API endpoint to change the password
-      // For now, we'll just show success
+      const response = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          currentPassword: passwords.current,
+          newPassword: passwords.new,
+          confirmPassword: passwords.confirm,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setPasswordError(data.error || "Failed to change password")
+        return
+      }
+
       setPasswords({ current: "", new: "", confirm: "" })
       setShowPasswordDialog(false)
-      alert("Password changed successfully!")
+      toast({
+        title: "Success",
+        description: "Your password has been changed successfully",
+      })
     } catch (err) {
-      setPasswordError("Failed to change password")
+      setPasswordError("Failed to change password. Please try again.")
       console.error(err)
+      toast({
+        title: "Error",
+        description: "Failed to change password",
+        variant: "destructive",
+      })
     } finally {
       setSaving(false)
     }
