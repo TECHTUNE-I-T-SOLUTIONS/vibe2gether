@@ -16,7 +16,7 @@ export default function VerificationPage() {
   const [idFile, setIdFile] = useState<File | null>(null)
   const [selfieFile, setSelfieFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
-  const [status, setStatus] = useState<string | null>(null)
+  const [verificationStatus, setVerificationStatus] = useState<string | null>(null)
 
   // Auth check
   useEffect(() => {
@@ -46,15 +46,15 @@ export default function VerificationPage() {
       const res = await fetch('/api/user/submit-verification', { method: 'POST', body: formData })
       const json = await res.json()
       if (res.ok) {
-        setStatus(json.status)
+        setVerificationStatus(json.status)
         // navigate to profile or show success
         setTimeout(() => router.push('/dashboard/profile'), 1500)
       } else {
-        setStatus(json.error || 'Failed')
+        setVerificationStatus(json.error || 'Failed')
       }
     } catch (err) {
       console.error(err)
-      setStatus('Failed')
+      setVerificationStatus('Failed')
     } finally {
       setLoading(false)
     }
@@ -97,7 +97,7 @@ export default function VerificationPage() {
             <Button className="rounded-full gradient-bg" onClick={handleSubmit} disabled={loading}>
               {loading ? 'Submitting...' : 'Submit for verification'}
             </Button>
-            {status && <span className="text-sm text-muted-foreground">Status: {status}</span>}
+            {verificationStatus && <span className="text-sm text-muted-foreground">Status: {verificationStatus}</span>}
           </div>
         </CardContent>
       </Card>
