@@ -234,10 +234,6 @@ export default function FeedPage() {
       return
     }
 
-    if (!checkPremium("See Likes")) {
-      return
-    }
-
     const wasLiked = likedPosts.get(postId) || false
     const currentCount = likeCounts.get(postId) || 0
 
@@ -612,9 +608,6 @@ export default function FeedPage() {
                   >
                     <Heart className={cn("w-4 h-4", isLiked && "fill-current")} />
                     <span className="hidden sm:inline text-xs">Like</span>
-                    {!isPremium && (
-                      <Lock className="w-3 h-3 ml-1" />
-                    )}
                   </Button>
 
                   <Button

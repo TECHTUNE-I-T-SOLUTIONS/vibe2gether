@@ -123,6 +123,9 @@ export default function MessagesPage() {
   const [sendingMessage, setSendingMessage] = useState(false)
   const [mediaCaption, setMediaCaption] = useState("")
   const [justSentMessageIds, setJustSentMessageIds] = useState<Set<string>>(new Set())
+  const [messagesCount, setMessagesCount] = useState(0)
+  const [messagesRemaining, setMessagesRemaining] = useState(4)
+  const [dailyLimitReached, setDailyLimitReached] = useState(false)
 
   // Match confirmation dialog state
   const [showMatchConfirmation, setShowMatchConfirmation] = useState(false)
@@ -131,6 +134,20 @@ export default function MessagesPage() {
 
   // Realtime subscription ref
   const realtimeSubscriptionRef = useRef<any>(null)
+
+  const fetchDailyMessageCount = async () => {
+    try {
+      const response = await fetch("/api/messages/count-today")
+      if (response.ok) {
+        const data = await response.json()
+        setMessagesCount(data.count)
+        setMessagesRemaining(data.remaining)
+        setDailyLimitReached(data.limitReached)
+      }
+    } catch (err) {
+      console.error("Error fetching message count:", err)
+    }
+  }
 
   const handleStartNewConversation = async (userId: string) => {
     try {
@@ -285,6 +302,9 @@ export default function MessagesPage() {
         if (sessionData.user?.id) {
           setCurrentUserId(sessionData.user.id)
         }
+
+        // Fetch daily message count
+        await fetchDailyMessageCount()
 
         const response = await fetch("/api/messages")
         if (response.ok) {
@@ -651,9 +671,13 @@ export default function MessagesPage() {
   const sendMessage = async (mediaUrl?: string, messageType?: string) => {
     if (!selectedChat || (!newMessage.trim() && !mediaUrl)) return
 
-    // Check if this is the first message (initiate a new conversation)
-    // If no existing messages and user is not premium, require premium
-    if (messages.length === 0 && !checkPremium("Send First Message")) {
+    // Check daily message limit
+    if (messagesCount >= 4 && !isPremium) {
+      toast({
+        title: "Daily message limit reached",
+        description: "You've sent 4 messages today. Upgrade to Premium to send more messages.",
+        variant: "destructive",
+      })
       return
     }
 
@@ -664,8 +688,7 @@ export default function MessagesPage() {
       let messageContent: string
       if (mediaUrl) {
         // For media messages, use caption or fallback
-        messageContent = mediaCaption.trim() || `[${messageType === "audio" ? "Audio" : messageType === "image" ? "Image" : "Media"}]
-`
+        messageContent = mediaCaption.trim() || `[${messageType === "audio" ? "Audio" : messageType === "image" ? "Image" : "Media"}]`
       } else {
         // For text messages, use the actual text
         messageContent = newMessage.trim()
@@ -730,6 +753,19 @@ export default function MessagesPage() {
       setMediaCaption("")
       setSelectedImage(null)
       setAudioPreview(null)
+      
+      // Refetch message count
+      await fetchDailyMessageCount()
+      
+      // Show warning if approaching limit
+      if (messagesCount + 1 >= 4 && !isPremium) {
+        toast({
+          title: "Limit warning",
+          description: "You've reached your daily message limit. Upgrade to Premium to continue.",
+          variant: "destructive",
+        })
+      }
+      
       toast({ title: "Success", description: "Message sent" })
     } catch (err) {
       console.error("Send message error:", err)
@@ -1056,14 +1092,34 @@ export default function MessagesPage() {
 
             {/* Input - Hidden when showing media preview */}
             {!selectedImage && !audioPreview && (
-            <div className="p-4 border-t border-border bg-background">
+            <div className="p-4 border-t border-border bg-background space-y-3">
+              {/* Daily Message Limit Warning */}
+              {messagesCount > 0 && !isPremium && (
+                <div className={cn(
+                  "px-3 py-2 rounded-lg text-sm",
+                  messagesCount >= 4
+                    ? "bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300"
+                    : "bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-300"
+                )}>
+                  <div className="font-medium mb-1">
+                    {messagesCount >= 4
+                      ? "Daily message limit reached"
+                      : `${messagesRemaining} message${messagesRemaining !== 1 ? 's' : ''} remaining today`
+                    }
+                  </div>
+                  <p className="text-xs opacity-90">
+                    Free users can send 4 messages per day. Upgrade to Premium to send unlimited messages.
+                  </p>
+                </div>
+              )}
+
               <div className="flex items-center gap-2">
                 <Button
                   variant="ghost"
                   size="icon"
                   className="rounded-full text-muted-foreground hover:bg-muted active:scale-95 flex-shrink-0"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingImage}
+                  disabled={uploadingImage || (messagesCount >= 4 && !isPremium)}
                 >
                   {uploadingImage ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImagePlus className="w-5 h-5" />}
                 </Button>
@@ -1084,14 +1140,14 @@ export default function MessagesPage() {
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyPress={(e) => {
-                      if (e.key === "Enter" && newMessage.trim() && !sendingMessage) {
+                      if (e.key === "Enter" && newMessage.trim() && !sendingMessage && !(messagesCount >= 4 && !isPremium)) {
                         e.preventDefault()
                         sendMessage()
                       }
                     }}
-                    placeholder="Type a message..."
+                    placeholder={messagesCount >= 4 && !isPremium ? "Daily limit reached. Upgrade to Premium to continue." : "Type a message..."}
                     className="pr-10 rounded-full bg-muted/50 border-0 text-base"
-                    disabled={sendingMessage}
+                    disabled={sendingMessage || (messagesCount >= 4 && !isPremium)}
                   />
                   <div className="absolute right-1 top-1/2 -translate-y-1/2">
                     <Button
@@ -1122,7 +1178,7 @@ export default function MessagesPage() {
                   size="icon"
                   className="rounded-full gradient-bg hover:opacity-90 active:scale-95 flex-shrink-0"
                   onClick={() => sendMessage()}
-                  disabled={sendingMessage || (!newMessage.trim() && !selectedImage && !audioPreview)}
+                  disabled={sendingMessage || (!newMessage.trim() && !selectedImage && !audioPreview) || (messagesCount >= 4 && !isPremium)}
                 >
                   {sendingMessage ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                 </Button>

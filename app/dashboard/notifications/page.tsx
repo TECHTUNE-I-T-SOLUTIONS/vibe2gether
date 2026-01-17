@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Heart, MessageCircle, Users, Eye, Coins, Star, Gift, Calendar, CheckCheck, Bell, Trash2, Loader2 } from "lucide-react"
+import { Heart, MessageCircle, Users, Eye, Coins, Star, Gift, Calendar, CheckCheck, Bell, Trash2, Loader2, Check, X } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -244,6 +244,28 @@ export default function NotificationsPage() {
     }
   }
 
+  const handleMarkAsRead = async (notificationId: string) => {
+    try {
+      const response = await fetch(`/api/notifications/${notificationId}/read`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to mark notification as read")
+      }
+
+      // Update local state immediately
+      setNotifications((prev) =>
+        prev.map((n) =>
+          n.id === notificationId ? { ...n, read: true } : n
+        )
+      )
+    } catch (err) {
+      console.error("Error marking notification as read:", err)
+    }
+  }
+
   return (
     <div className="p-4 md:p-6 lg:p-8">
       <div className="flex items-center justify-between mb-8">
@@ -377,6 +399,18 @@ export default function NotificationsPage() {
                         {new Date(notification.created_at).toLocaleDateString()}
                       </p>
                     </div>
+                    <div className="flex items-center gap-2">
+                      {!notification.read && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleMarkAsRead(notification.id)}
+                          className="h-8 px-2"
+                        >
+                          <Check className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
                     {!notification.read && <div className="w-2 h-2 rounded-full gradient-bg" />}
                   </div>
                 ))}
@@ -410,6 +444,18 @@ export default function NotificationsPage() {
                         </p>
                         <p className="text-sm text-muted-foreground">{new Date(notification.created_at).toLocaleDateString()}</p>
                       </div>
+                      <div className="flex items-center gap-2">
+                        {!notification.read && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleMarkAsRead(notification.id)}
+                            className="h-8 px-2"
+                          >
+                            <Check className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   ))
               )}
@@ -442,14 +488,26 @@ export default function NotificationsPage() {
                         </p>
                         <p className="text-sm text-muted-foreground">{new Date(notification.created_at).toLocaleDateString()}</p>
                       </div>
-                      <Button 
-                        size="sm" 
-                        className="rounded-full gradient-bg"
-                        onClick={() => handleFollowBack(notification)}
-                        disabled={actionLoading}
-                      >
-                        {followingStates[notification.id] ? "Following" : "Follow Back"}
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        {!notification.read && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleMarkAsRead(notification.id)}
+                            className="h-8 px-2"
+                          >
+                            <Check className="w-4 h-4" />
+                          </Button>
+                        )}
+                        <Button 
+                          size="sm" 
+                          className="rounded-full gradient-bg"
+                          onClick={() => handleFollowBack(notification)}
+                          disabled={actionLoading}
+                        >
+                          {followingStates[notification.id] ? "Following" : "Follow Back"}
+                        </Button>
+                      </div>
                     </div>
                   ))
               )}
@@ -482,9 +540,21 @@ export default function NotificationsPage() {
                         </p>
                         <p className="text-sm text-muted-foreground">{new Date(notification.created_at).toLocaleDateString()}</p>
                       </div>
-                      <Button size="sm" variant="outline" className="rounded-full bg-transparent">
-                        Reply
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        {!notification.read && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleMarkAsRead(notification.id)}
+                            className="h-8 px-2"
+                          >
+                            <Check className="w-4 h-4" />
+                          </Button>
+                        )}
+                        <Button size="sm" variant="outline" className="rounded-full bg-transparent">
+                          Reply
+                        </Button>
+                      </div>
                     </div>
                   ))
               )}

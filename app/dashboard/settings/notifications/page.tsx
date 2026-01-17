@@ -9,14 +9,20 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { getNotificationPreferences, updateNotificationPreferences } from "@/lib/supabase/queries"
+import { useToast } from "@/hooks/use-toast"
 
 export default function NotificationSettingsPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const { user, loading } = useUserProfile()
+  const { toast } = useToast()
   const [preferences, setPreferences] = useState<any>(null)
+  const [pushNotificationEnabled, setPushNotificationEnabled] = useState(false)
+  const [pushBlockedDialog, setPushBlockedDialog] = useState(false)
+  const [pushLoading, setPushLoading] = useState(false)
 
   // Auth check
   useEffect(() => {
@@ -31,12 +37,46 @@ export default function NotificationSettingsPage() {
   useEffect(() => {
     if (user) {
       fetchPreferences()
+      checkPushSubscriptionStatus()
     }
   }, [user])
+
+  async function checkPushSubscriptionStatus() {
+    try {
+      // First check the database for user's subscriptions
+      const dbResponse = await fetch("/api/push/check");
+      
+      if (dbResponse.ok) {
+        const dbData = await dbResponse.json();
+        
+        if (dbData.hasSubscription) {
+          // User has active subscription in database
+          setPushNotificationEnabled(true);
+          return;
+        }
+      }
+
+      // If no database subscription, check browser status
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        setPushNotificationEnabled(false);
+        return;
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      
+      setPushNotificationEnabled(!!subscription);
+    } catch (err) {
+      console.error("Error checking push subscription:", err);
+      setPushNotificationEnabled(false);
+    }
+  }
 
   async function fetchPreferences() {
     try {
       setLoadingPrefs(true)
+      if (!user) return
+      
       const { data } = await getNotificationPreferences(user.id)
       setPreferences(data || {
         likes_notifications: true,
@@ -66,6 +106,166 @@ export default function NotificationSettingsPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handlePushNotificationToggle = async (value: boolean) => {
+    setPushLoading(true)
+    try {
+      // Check if browser supports push notifications
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        toast({
+          title: "Not Supported",
+          description: "Your browser doesn't support push notifications",
+          variant: "destructive",
+        })
+        setPushLoading(false)
+        return
+      }
+
+      if (!value) {
+        // Unsubscribe from push notifications
+        const registration = await navigator.serviceWorker.ready
+        const subscription = await registration.pushManager.getSubscription()
+        
+        if (subscription) {
+          // Unsubscribe from browser
+          await subscription.unsubscribe()
+          
+          // Notify backend to remove subscription
+          try {
+            await fetch("/api/push/subscribe", {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                endpoint: subscription.endpoint,
+              }),
+            })
+          } catch (err) {
+            console.error("Error notifying backend of unsubscribe:", err)
+          }
+          
+          setPushNotificationEnabled(false)
+          toast({
+            title: "Success",
+            description: "Push notifications disabled",
+          })
+        }
+        setPushLoading(false)
+        return
+      }
+
+      // Subscribe to push notifications
+      const registration = await navigator.serviceWorker.ready
+      const existingSubscription = await registration.pushManager.getSubscription()
+      
+      if (existingSubscription) {
+        // Already subscribed
+        setPushNotificationEnabled(true)
+        toast({
+          title: "Already Subscribed",
+          description: "You're already receiving push notifications",
+        })
+        setPushLoading(false)
+        return
+      }
+
+      const permission = Notification.permission
+      
+      if (permission === "denied") {
+        setPushBlockedDialog(true)
+        setPushLoading(false)
+        return
+      }
+
+      if (permission === "granted") {
+        // Permission already granted, subscribe
+        await subscribeToPushNotifications()
+        setPushLoading(false)
+        return
+      }
+
+      // Request permission
+      const newPermission = await Notification.requestPermission()
+      
+      if (newPermission === "granted") {
+        await subscribeToPushNotifications()
+      } else if (newPermission === "denied") {
+        setPushBlockedDialog(true)
+      }
+    } catch (err) {
+      console.error("Error toggling push notifications:", err)
+      toast({
+        title: "Error",
+        description: "Failed to toggle push notifications",
+        variant: "destructive",
+      })
+    } finally {
+      setPushLoading(false)
+    }
+  }
+
+  const subscribeToPushNotifications = async () => {
+    try {
+      const registration = await navigator.serviceWorker.ready
+
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+      })
+
+      // Send subscription to backend
+      const response = await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subscription: subscription.toJSON(),
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to save subscription")
+      }
+
+      // Verify subscription was saved to database
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const checkResponse = await fetch("/api/push/check");
+      
+      if (checkResponse.ok) {
+        const checkData = await checkResponse.json();
+        if (checkData.hasSubscription) {
+          setPushNotificationEnabled(true);
+          toast({
+            title: "Success",
+            description: "Push notifications enabled",
+          });
+          return;
+        }
+      }
+
+      // If verification failed, still set local state but warn user
+      setPushNotificationEnabled(true);
+      toast({
+        title: "Subscribed",
+        description: "Push notifications have been enabled",
+      });
+    } catch (err) {
+      console.error("Error subscribing to push notifications:", err)
+      setPushNotificationEnabled(false);
+      toast({
+        title: "Error",
+        description: "Failed to enable push notifications",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleEnablePushInBrowser = () => {
+    setPushBlockedDialog(false)
+    // Open browser settings hint
+    toast({
+      title: "Enable Notifications",
+      description: "Go to your browser settings and allow notifications for this site",
+    })
   }
 
   if (loading || loadingPrefs) {
@@ -127,24 +327,64 @@ export default function NotificationSettingsPage() {
           <CardDescription>Notifications outside of the app</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {[
-            { key: "email_notifications", label: "Email Notifications", description: "Important updates via email" },
-            { key: "push_notifications", label: "Push Notifications", description: "Browser push notifications" },
-          ].map((item) => (
-            <div key={item.key} className="flex items-center justify-between">
-              <div>
-                <Label className="text-base font-semibold cursor-pointer">{item.label}</Label>
-                <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
-              </div>
-              <Switch
-                checked={preferences?.[item.key] ?? false}
-                onCheckedChange={(value) => handleUpdate(item.key, value)}
-                disabled={saving}
-              />
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-base font-semibold cursor-pointer">Email Notifications</Label>
+              <p className="text-sm text-muted-foreground mt-1">Important updates via email</p>
             </div>
-          ))}
+            <Switch
+              checked={preferences?.email_notifications ?? false}
+              onCheckedChange={(value) => handleUpdate("email_notifications", value)}
+              disabled={saving}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-base font-semibold cursor-pointer">Push Notifications</Label>
+              <p className="text-sm text-muted-foreground mt-1">Browser push notifications on this device</p>
+            </div>
+            <Switch
+              checked={pushNotificationEnabled}
+              onCheckedChange={handlePushNotificationToggle}
+              disabled={pushLoading}
+            />
+          </div>
         </CardContent>
       </Card>
+
+      {/* Push Notifications Blocked Dialog */}
+      <Dialog open={pushBlockedDialog} onOpenChange={setPushBlockedDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Push Notifications Blocked</DialogTitle>
+            <DialogDescription>
+              You've blocked notifications for this site. To enable push notifications, you need to allow them in your browser settings.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="p-4 bg-muted rounded-lg text-sm space-y-2">
+              <p className="font-semibold">To enable notifications:</p>
+              <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                <li>Click the lock icon next to the URL</li>
+                <li>Find "Notifications" in the permissions</li>
+                <li>Change it from "Block" to "Allow"</li>
+                <li>Refresh the page</li>
+              </ol>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPushBlockedDialog(false)}>
+              Close
+            </Button>
+            <Button className="gradient-bg" onClick={handleEnablePushInBrowser}>
+              Got it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

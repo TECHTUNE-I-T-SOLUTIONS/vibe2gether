@@ -138,3 +138,47 @@ self.addEventListener('notificationclick', (event) => {
     })
   )
 })
+
+// Push notification event
+self.addEventListener('push', (event) => {
+  const data = event.data?.json() ?? {}
+  const title = data.title || 'Vibe2Gether'
+  const options = {
+    body: data.body || '',
+    icon: data.icon || '/logo.png',
+    badge: data.badge || '/badge-icon.png',
+    tag: data.tag || 'default',
+    data: data.data || {},
+  }
+
+  event.waitUntil(self.registration.showNotification(title, options))
+})
+
+// Notification click event
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+
+  const url = event.notification.data?.url || '/'
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window' }).then((windowClients) => {
+      // Check if there's already a window open
+      for (let i = 0; i < windowClients.length; i++) {
+        const client = windowClients[i]
+        if (client.url === url && 'focus' in client) {
+          return client.focus()
+        }
+      }
+      // If not, open a new window
+      if (clients.openWindow) {
+        return clients.openWindow(url)
+      }
+    })
+  )
+})
+
+// Notification close event
+self.addEventListener('notificationclose', (event) => {
+  console.log('Notification closed:', event.notification.tag)
+})
+

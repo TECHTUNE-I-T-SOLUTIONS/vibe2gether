@@ -331,7 +331,7 @@ export default function MatchesPage() {
                               Message
                             </Button>
                           </Link>
-                          <Link href={`/profile/${otherUser.id}`} className="flex-1">
+                          <Link href={`/user/${otherUser.id}`} className="flex-1">
                             <Button variant="outline" className="w-full">
                               View Profile
                             </Button>
@@ -384,7 +384,7 @@ export default function MatchesPage() {
                             >
                               <X className="w-4 h-4" />
                             </Button>
-                            <Link href={`/profile/${otherUser.id}`}>
+                            <Link href={`/user/${otherUser.id}`}>
                               <Button size="sm" variant="ghost">
                                 View Profile
                               </Button>
@@ -438,7 +438,7 @@ export default function MatchesPage() {
                               <Heart className="w-4 h-4 mr-1" />
                               Accept
                             </Button>
-                            <Link href={`/profile/${otherUser.id}`}>
+                            <Link href={`/user/${otherUser.id}`}>
                               <Button size="sm" variant="ghost">
                                 View Profile
                               </Button>
