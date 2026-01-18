@@ -41,6 +41,83 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
     fetchPost()
   }, [unwrappedParams.postId])
 
+  // Preload all media for the post
+  useEffect(() => {
+    if (!post || !post.media || post.media.length === 0) return
+
+    const mediaList = post.media.map((m: any) => (typeof m === 'string' ? m : m.url || m))
+    
+    // Preload current media
+    const currentMedia = mediaList[mediaIndex]
+    if (currentMedia) {
+      if (!currentMedia.match(/\.(mp4|webm|ogg)$/i)) {
+        // Preload image
+        const img = new window.Image()
+        img.src = currentMedia
+      } else {
+        // Preload video metadata
+        const video = document.createElement('video')
+        video.src = currentMedia
+        video.preload = 'metadata'
+      }
+    }
+
+    // Prefetch next media
+    if (mediaList[mediaIndex + 1]) {
+      const nextMedia = mediaList[mediaIndex + 1]
+      if (!nextMedia.match(/\.(mp4|webm|ogg)$/i)) {
+        const img = new window.Image()
+        img.src = nextMedia
+      } else {
+        const video = document.createElement('video')
+        video.src = nextMedia
+        video.preload = 'metadata'
+      }
+    }
+
+    // Prefetch previous media
+    if (mediaIndex > 0 && mediaList[mediaIndex - 1]) {
+      const prevMedia = mediaList[mediaIndex - 1]
+      if (!prevMedia.match(/\.(mp4|webm|ogg)$/i)) {
+        const img = new window.Image()
+        img.src = prevMedia
+      } else {
+        const video = document.createElement('video')
+        video.src = prevMedia
+        video.preload = 'metadata'
+      }
+    }
+
+    // Aggressively preload all media in idle time
+    mediaList.forEach((url: string, index: number) => {
+      if (url && index !== mediaIndex) {
+        if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+          requestIdleCallback(() => {
+            if (!url.match(/\.(mp4|webm|ogg)$/i)) {
+              const img = new window.Image()
+              img.src = url
+            } else {
+              const video = document.createElement('video')
+              video.src = url
+              video.preload = 'metadata'
+            }
+          }, { timeout: 2000 })
+        } else {
+          setTimeout(() => {
+            if (!url.match(/\.(mp4|webm|ogg)$/i)) {
+              const img = new window.Image()
+              img.src = url
+            } else {
+              const video = document.createElement('video')
+              video.src = url
+              video.preload = 'metadata'
+            }
+          }, 500)
+        }
+      }
+    })
+  }, [post, mediaIndex])
+
   async function fetchPost() {
     try {
       setLoading(true)

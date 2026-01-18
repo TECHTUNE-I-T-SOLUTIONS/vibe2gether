@@ -29,17 +29,17 @@ export function DashboardMobileBottomNav() {
   useEffect(() => {
     async function fetchCounts() {
       try {
-        const notifRes = await fetch("/api/notifications")
-        if (notifRes.ok) {
-          const notifData = await notifRes.json()
-          setUnreadNotifications(notifData.unreadCount || 0)
+        const notificationRes = await fetch("/api/notifications")
+        if (notificationRes.ok) {
+          const notificationData = await notificationRes.json()
+          setUnreadNotifications(notificationData.unreadCount || 0)
         }
 
         const messagesRes = await fetch("/api/messages")
         if (messagesRes.ok) {
           const messagesData = await messagesRes.json()
           const unreadCount = (messagesData.conversations || []).reduce(
-            (total: number, conv: any) => total + (conv.unreadCount || 0),
+            (total: number, conversation: any) => total + (conversation.unreadCount || 0),
             0
           )
           setUnreadMessages(unreadCount)
@@ -53,27 +53,27 @@ export function DashboardMobileBottomNav() {
 
   const navItems: NavItem[] = [
     {
-      icon: <Rss className="w-5 h-5" />,
+      icon: <Rss className="w-4 h-4" />,
       label: "Feed",
       href: "/dashboard/feed",
     },
     {
-      icon: <ShoppingBag className="w-5 h-5" />,
+      icon: <ShoppingBag className="w-4 h-4" />,
       label: "Marketplace",
       href: "/dashboard/marketplace/manage",
     },
     {
-      icon: <Calendar className="w-5 h-5" />,
+      icon: <Calendar className="w-4 h-4" />,
       label: "Events",
       href: "/dashboard/events/manage",
     },
     {
-      icon: <MessageCircle className="w-5 h-5" />,
+      icon: <MessageCircle className="w-4 h-4" />,
       label: "Messages",
       href: "/dashboard/messages",
     },
     {
-      icon: <Bell className="w-5 h-5" />,
+      icon: <Bell className="w-4 h-4" />,
       label: "Notifications",
       href: "/dashboard/notifications",
     },
@@ -91,7 +91,7 @@ export function DashboardMobileBottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 md:hidden bg-background/95 backdrop-blur-md border-t border-border/50 z-40 safe-area-inset-bottom">
-      <div className="flex items-center justify-around h-20 px-0.5 gap-1">
+      <div className="flex items-center justify-around h-14 px-1 gap-1">
         {navItems.map((item) => {
           const isActive = isActiveRoute(item.href)
           
@@ -107,27 +107,24 @@ export function DashboardMobileBottomNav() {
             <Link key={item.href} href={item.href} className="flex-1">
               <Button
                 variant="ghost"
+                size="sm"
                 className={cn(
-                  "relative rounded-lg w-full h-16 flex flex-col items-center justify-center gap-1 transition-all duration-200",
+                  "relative rounded-lg w-full h-12 flex items-center justify-center transition-all duration-200",
                   isActive 
                     ? "gradient-bg text-primary-foreground" 
                     : "text-muted-foreground hover:text-foreground"
                 )}
+                title={item.label}
               >
                 <span className={cn(
-                  "p-1.5 rounded-lg transition-all duration-200",
+                  "p-1.5 rounded-md transition-all duration-200 flex items-center justify-center",
                   isActive && "bg-white/20"
                 )}>
+                  {/* Render smaller icons */}
                   {item.icon}
                 </span>
-                <span className={cn(
-                  "text-xs font-medium transition-all duration-200",
-                  isActive ? "text-primary-foreground font-semibold" : "text-muted-foreground"
-                )}>
-                  {item.label}
-                </span>
                 {badgeCount > 0 && (
-                  <Badge className="absolute top-2 right-2 w-4 h-4 p-0 flex items-center justify-center gradient-bg text-xs text-white">
+                  <Badge className="absolute top-1 right-1 w-5 h-5 p-0 flex items-center justify-center gradient-bg text-xs font-bold text-white">
                     {badgeCount > 9 ? "9+" : badgeCount}
                   </Badge>
                 )}

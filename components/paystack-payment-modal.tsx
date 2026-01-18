@@ -282,7 +282,7 @@ export function PaystackPaymentModal({
                     min="1500"
                     step="100"
                     value={paymentAmount}
-                    onChange={(e) => setPaymentAmount(Math.max(1500, parseInt(e.target.value) || 1500))}
+                    onChange={(e) => setPaymentAmount(Math.max(0, parseInt(e.target.value) || 1500))}
                     disabled={isProcessing}
                     className="font-semibold"
                   />
@@ -308,7 +308,7 @@ export function PaystackPaymentModal({
           )}
 
           {/* Form */}
-          {paymentStatus !== "success" && (
+          {(paymentStatus === "idle" || paymentStatus === "processing" || paymentStatus === "error") && (
             <div className="space-y-4">
               {isLoading ? (
                 <div className="flex items-center justify-center py-4">
@@ -390,7 +390,7 @@ export function PaystackPaymentModal({
               >
                 Cancel
               </Button>
-              {paymentStatus !== "success" && paymentReference && (
+              {(paymentStatus === "idle" || paymentStatus === "processing" || paymentStatus === "error") && paymentReference && (
                 <Button
                   onClick={() => verifyPayment(paymentReference)}
                   disabled={isProcessing}
@@ -401,7 +401,7 @@ export function PaystackPaymentModal({
                   Verify Payment
                 </Button>
               )}
-              {paymentStatus !== "success" && !paymentReference && (
+              {(paymentStatus === "idle" || paymentStatus === "processing" || paymentStatus === "error") && !paymentReference && (
                 <Button
                   onClick={handlePayment}
                   disabled={isProcessing || !email || !fullName || isLoading || paymentAmount < 1500}

@@ -77,13 +77,40 @@ export default function FeedPage() {
       setHasMore(posts.length === 20)
       setOffset(newOffset + 20)
 
-      // Prefetch images for all fetched posts
+      // Aggressive prefetch: Load all images immediately and videos with preload
       posts.forEach((post: any) => {
         const mediaArray = getMediaArray(post.media)
-        mediaArray.forEach((url) => {
-          if (url && typeof url === 'string' && !isVideo(url)) {
-            const img = new window.Image()
-            img.src = url
+        mediaArray.forEach((url, index) => {
+          if (url && typeof url === 'string') {
+            if (!isVideo(url)) {
+              // Preload images immediately
+              const img = new window.Image()
+              img.src = url
+              console.log(`[Feed] Preloading image: ${url}`)
+            } else {
+              // Preload video metadata with priority
+              if (index === 0) {
+                const video = document.createElement('video')
+                video.src = url
+                video.preload = 'metadata'
+                console.log(`[Feed] Preloading first video: ${url}`)
+              } else {
+                // Queue other videos for idle time loading
+                if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+                  requestIdleCallback(() => {
+                    const video = document.createElement('video')
+                    video.src = url
+                    video.preload = 'metadata'
+                  }, { timeout: 3000 })
+                } else {
+                  setTimeout(() => {
+                    const video = document.createElement('video')
+                    video.src = url
+                    video.preload = 'metadata'
+                  }, 1000)
+                }
+              }
+            }
           }
         })
       })
@@ -478,29 +505,104 @@ export default function FeedPage() {
     return url.match(/\.(mp4|webm|ogg)$/i)
   }
 
-  // Prefetch images for carousel
+  // Aggressive media preloading strategy
   const prefetchMediaUrl = useCallback((url: string) => {
-    if (url && !isVideo(url)) {
+    if (!url) return
+    
+    if (isVideo(url)) {
+      // Preload video metadata and first frame
+      try {
+        const video = document.createElement('video')
+        video.src = url
+        video.preload = 'metadata'
+        // Trigger metadata load for thumbnail
+        video.addEventListener('loadedmetadata', () => {
+          // Video metadata loaded
+        })
+      } catch (e) {
+        console.log('[Feed] Video preload setup error:', e)
+      }
+    } else {
+      // Preload image
       const img = new window.Image()
       img.src = url
+      img.onerror = () => console.log('[Feed] Image preload failed:', url)
     }
   }, [])
 
-  // Prefetch next media when carousel index changes
+  // Prefetch all media for all posts on page load and when index changes
   useEffect(() => {
+    if (posts.length === 0) return
+    
     posts.forEach((post) => {
       const mediaArray = getMediaArray(post.media)
       const currentIndex = mediaCarouselIndex.get(post.id) || 0
       
-      // Prefetch current and next media
+      // Prefetch current media (already visible)
       if (mediaArray[currentIndex]) {
         prefetchMediaUrl(mediaArray[currentIndex])
       }
+      
+      // Prefetch next media (user might click next)
       if (mediaArray[currentIndex + 1]) {
         prefetchMediaUrl(mediaArray[currentIndex + 1])
       }
+      
+      // Prefetch previous media (user might click prev)
+      if (currentIndex > 0 && mediaArray[currentIndex - 1]) {
+        prefetchMediaUrl(mediaArray[currentIndex - 1])
+      }
+      
+      // Aggressively prefetch all other media in the carousel
+      mediaArray.forEach((url, index) => {
+        if (url && index !== currentIndex) {
+          // Use requestIdleCallback for lower priority background loading
+          if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+            requestIdleCallback(() => prefetchMediaUrl(url), { timeout: 2000 })
+          } else {
+            // Fallback for browsers without requestIdleCallback
+            setTimeout(() => prefetchMediaUrl(url), 500)
+          }
+        }
+      })
     })
   }, [posts, mediaCarouselIndex, prefetchMediaUrl])
+
+  // Prefetch media for posts that will come into view (infinite scroll)
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const postElement = entry.target as HTMLElement
+            const postId = postElement.getAttribute('data-post-id')
+            if (postId) {
+              const post = posts.find(p => p.id === postId)
+              if (post) {
+                const mediaArray = getMediaArray(post.media)
+                // Prefetch first 3 media items for soon-to-be-visible posts
+                mediaArray.slice(0, 3).forEach((url) => {
+                  if (url) {
+                    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+                      requestIdleCallback(() => prefetchMediaUrl(url), { timeout: 3000 })
+                    } else {
+                      setTimeout(() => prefetchMediaUrl(url), 1000)
+                    }
+                  }
+                })
+              }
+            }
+          }
+        })
+      },
+      { rootMargin: '500px' }
+    )
+
+    const postCards = document.querySelectorAll('[data-post-id]')
+    postCards.forEach((card) => observer.observe(card))
+
+    return () => observer.disconnect()
+  }, [posts, prefetchMediaUrl])
 
   return (
     <div className="p-4 md:p-6 max-w-8xl mx-auto w-auto">
