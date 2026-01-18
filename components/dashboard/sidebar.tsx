@@ -24,6 +24,7 @@ import {
   Sparkles,
   Rss,
   Copy,
+  Star,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -53,6 +54,7 @@ const secondaryItems: SidebarItem[] = [
   { icon: Wallet, label: "wallet", href: "/dashboard/wallet" },
   { icon: ShoppingBag, label: "marketplace", href: "/dashboard/marketplace/manage" },
   { icon: Calendar, label: "events", href: "/dashboard/events/manage" },
+  { icon: Star, label: "testimonies", href: "/dashboard/testimonies" },
   { icon: Bookmark, label: "saved", href: "/dashboard/saved" },
 ]
 

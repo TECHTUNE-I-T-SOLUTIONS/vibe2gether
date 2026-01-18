@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions)
 
     // Fetch public posts with all engagement counts
+    // Order by random to show different posts to different users
     const { data: posts, error: postsError, count } = await supabase
       .from("posts")
       .select(
@@ -55,15 +56,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch posts" }, { status: 500 })
     }
 
-    console.log(`[GET /api/posts/get-feed] Fetched ${posts?.length || 0} posts`)
+    console.log(`[GET /api /posts/get-feed] Fetched ${posts?.length || 0} posts`)
+
+    // Randomize the posts order to show different posts to different users
+    const randomizedPosts = posts ? [...posts].sort(() => Math.random() - 0.5) : []
 
     // If user is logged in, get their interaction status
     let userInteractions: {
       [postId: string]: { liked: boolean; saved: boolean }
     } = {}
 
-    if (session?.user?.id && posts?.length) {
-      const postIds = posts.map((p) => p.id)
+    if (session?.user?.id && randomizedPosts?.length) {
+      const postIds = randomizedPosts.map((p) => p.id)
       console.log(`[GET /api/posts/get-feed] Checking interactions for user ${session.user.id}`)
 
       // Get likes
@@ -97,7 +101,7 @@ export async function GET(request: NextRequest) {
       console.log(`[GET /api/posts/get-feed] User interactions found: ${Object.keys(userInteractions).length}`)
     }
 
-    const formattedPosts = posts?.map((post) => ({
+    const formattedPosts = randomizedPosts?.map((post) => ({
       ...post,
       userLiked: userInteractions[post.id]?.liked || false,
       userSaved: userInteractions[post.id]?.saved || false,

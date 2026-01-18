@@ -60,7 +60,7 @@ export default function GuidelinesPage() {
                 Community <span className="gradient-text">Guidelines</span>
               </h1>
               <p className="text-xl text-muted-foreground">
-                Our rules for creating a safe, respectful, and authentic dating experience for everyone.
+                Our rules for creating a safe, respectful, and authentic social experience for everyone.
               </p>
             </div>
           </div>
@@ -192,12 +192,17 @@ export default function GuidelinesPage() {
               Help us keep the community safe by reporting any behavior that violates our guidelines.
             </p>
             <div className="flex flex-wrap justify-center gap-4">
-              <button className="px-6 py-3 rounded-full bg-white text-primary font-semibold hover:bg-white/90 transition-colors">
+              <a href="/dashboard/matches">
+              <button type="button" className="px-6 py-3 rounded-full bg-white text-primary font-semibold hover:bg-white/90 transition-colors">
                 Report a User
               </button>
-              <button className="px-6 py-3 rounded-full border-2 border-white text-white font-semibold hover:bg-white/10 transition-colors">
+              </a>
+              
+              <a href="mailto:officialvibe2gether@gmail.com">
+              <button type="button" className="px-6 py-3 rounded-full border-2 border-white text-white font-semibold hover:bg-white/10 transition-colors">
                 Contact Support
               </button>
+              </a>
             </div>
           </div>
         </section>

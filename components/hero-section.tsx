@@ -115,15 +115,15 @@ export function HeroSection() {
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-3xl mx-auto">
             <div className="p-4 rounded-2xl bg-card/50 backdrop-blur-sm border border-border">
-              <div className="text-2xl md:text-3xl font-bold gradient-text">2M+</div>
+              <div className="text-2xl md:text-3xl font-bold gradient-text">1k+</div>
               <div className="text-sm text-foreground/70 dark:text-foreground/75">{t("activeUsers")}</div>
             </div>
             <div className="p-4 rounded-2xl bg-card/50 backdrop-blur-sm border border-border">
-              <div className="text-2xl md:text-3xl font-bold gradient-text">150+</div>
+              <div className="text-2xl md:text-3xl font-bold gradient-text">Different</div>
               <div className="text-sm text-foreground/70 dark:text-foreground/75">{t("countries")}</div>
             </div>
             <div className="p-4 rounded-2xl bg-card/50 backdrop-blur-sm border border-border">
-              <div className="text-2xl md:text-3xl font-bold gradient-text">50K+</div>
+              <div className="text-2xl md:text-3xl font-bold gradient-text">Up to 10K+</div>
               <div className="text-sm text-foreground/70 dark:text-foreground/75">{t("matchesDaily")}</div>
             </div>
             <div className="p-4 rounded-2xl bg-card/50 backdrop-blur-sm border border-border">

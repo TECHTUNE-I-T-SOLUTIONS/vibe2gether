@@ -97,10 +97,12 @@ export default function SafetyPage() {
               <p className="text-xl text-muted-foreground mb-8">
                 Learn how we protect our community and how you can stay safe while connecting with others.
               </p>
+              <link rel="stylesheet" href="/contact" />
               <Button size="lg" className="rounded-full gradient-bg">
                 <Flag className="w-5 h-5 mr-2" />
                 Report an Issue
               </Button>
+              <link/>
             </div>
           </div>
         </section>
@@ -187,7 +189,7 @@ export default function SafetyPage() {
         </section>
 
         {/* Emergency */}
-        <section className="py-20 gradient-bg">
+        {/* <section className="py-20 gradient-bg">
           <div className="container mx-auto px-4 text-center">
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">In Case of Emergency</h2>
             <p className="text-white/80 mb-8 max-w-xl mx-auto">
@@ -208,7 +210,7 @@ export default function SafetyPage() {
               </Button>
             </div>
           </div>
-        </section>
+        </section> */}
       </main>
       <Footer />
       <MobileNav />

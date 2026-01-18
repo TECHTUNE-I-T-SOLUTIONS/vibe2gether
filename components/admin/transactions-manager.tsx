@@ -27,6 +27,7 @@ interface Transaction {
   id: string
   user_id: string
   amount: number
+  currency: string
   type: string
   status: "pending" | "completed" | "failed"
   payment_method: string
@@ -53,20 +54,73 @@ export function AdminTransactionsManager() {
   const [limit, setLimit] = useState(20)
   const [status, setStatus] = useState("all")
   const [stats, setStats] = useState({
-    total_revenue: 0,
-    pending_amount: 0,
+    total_revenue_usd: 0,
+    total_revenue_ngn: 0,
+    pending_amount_usd: 0,
+    pending_amount_ngn: 0,
     marketplace_count: 0,
     event_count: 0,
   })
   const [totalPages, setTotalPages] = useState(1)
 
+  // Conversion rate
+  const CONVERSION_RATE = 1450 // $1 = N1450
+  const KOBO_TO_NAIRA = 100 // 100 kobo = 1 Naira
+
+  // Normalize currency names
+  const normalizeCurrency = (currency: string): "NGN" | "USD" => {
+    const normalized = currency?.toUpperCase() || "NGN"
+    if (normalized === "US" || normalized === "NIGERIA") {
+      return "USD"
+    }
+    return normalized === "USD" ? "USD" : "NGN"
+  }
+
+  // Convert amount from kobo to proper currency unit
+  const convertFromKobo = (amount: number, currency: string): number => {
+    const normalizedCurrency = normalizeCurrency(currency)
+    // Amounts are stored in kobo, convert to actual currency
+    return amount / KOBO_TO_NAIRA
+  }
+
+  // Convert amount to USD
+  const convertToUSD = (amount: number, currency: string): number => {
+    const normalizedCurrency = normalizeCurrency(currency)
+    const amountInUnit = convertFromKobo(amount, currency)
+    
+    if (normalizedCurrency === "USD") {
+      return amountInUnit
+    }
+    // Convert NGN to USD
+    return amountInUnit / CONVERSION_RATE
+  }
+
+  // Convert amount to NGN
+  const convertToNGN = (amount: number, currency: string): number => {
+    const normalizedCurrency = normalizeCurrency(currency)
+    const amountInUnit = convertFromKobo(amount, currency)
+    
+    if (normalizedCurrency === "NGN") {
+      return amountInUnit
+    }
+    // Convert USD to NGN
+    return amountInUnit * CONVERSION_RATE
+  }
+
   const calculateStats = (txns: Transaction[]) => {
     const completed = txns.filter((t) => t.status === "completed")
     const pending = txns.filter((t) => t.status === "pending")
     
+    const totalRevenueUSD = completed.reduce((sum, t) => sum + convertToUSD(t.amount, t.currency), 0)
+    const totalRevenueNGN = completed.reduce((sum, t) => sum + convertToNGN(t.amount, t.currency), 0)
+    const pendingUSD = pending.reduce((sum, t) => sum + convertToUSD(t.amount, t.currency), 0)
+    const pendingNGN = pending.reduce((sum, t) => sum + convertToNGN(t.amount, t.currency), 0)
+
     return {
-      total_revenue: completed.reduce((sum, t) => sum + t.amount, 0),
-      pending_amount: pending.reduce((sum, t) => sum + t.amount, 0),
+      total_revenue_usd: totalRevenueUSD,
+      total_revenue_ngn: totalRevenueNGN,
+      pending_amount_usd: pendingUSD,
+      pending_amount_ngn: pendingNGN,
       marketplace_count: txns.filter((t) => t.type === "marketplace_purchase").length,
       event_count: txns.filter((t) => t.type === "event_registration").length,
     }
@@ -104,8 +158,10 @@ export function AdminTransactionsManager() {
       console.error("[AdminTransactionsManager] Error fetching transactions:", error)
       setTransactions([])
       setStats({
-        total_revenue: 0,
-        pending_amount: 0,
+        total_revenue_usd: 0,
+        total_revenue_ngn: 0,
+        pending_amount_usd: 0,
+        pending_amount_ngn: 0,
         marketplace_count: 0,
         event_count: 0,
       })
@@ -120,8 +176,39 @@ export function AdminTransactionsManager() {
     }
   }, [page, status, isAuthenticated])
 
-  const formatCurrency = (amount: number) => {
-    return `₦${(amount / 100).toFixed(2)}`
+  const formatCurrency = (amount: number, currency: "USD" | "NGN" = "NGN") => {
+    if (currency === "USD") {
+      return `$${amount.toFixed(2)}`
+    }
+    return `₦${amount.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  }
+
+  const getCurrencySymbol = (currency: string): string => {
+    const normalized = normalizeCurrency(currency)
+    return normalized === "USD" ? "$" : "₦"
+  }
+
+  const getAmountWithConversion = (amount: number, currency: string) => {
+    const normalized = normalizeCurrency(currency)
+    const amountInUnit = convertFromKobo(amount, currency)
+    
+    if (normalized === "USD") {
+      const ngnAmount = convertToNGN(amount, currency)
+      return {
+        primary: `$${amountInUnit.toFixed(2)}`,
+        secondary: `(₦${ngnAmount.toLocaleString("en-NG", { minimumFractionDigits: 0, maximumFractionDigits: 0 })})`,
+        primaryCurrency: "USD",
+        secondaryCurrency: "NGN"
+      }
+    } else {
+      const usdAmount = convertToUSD(amount, currency)
+      return {
+        primary: `₦${amountInUnit.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        secondary: `($${usdAmount.toFixed(2)})`,
+        primaryCurrency: "NGN",
+        secondaryCurrency: "USD"
+      }
+    }
   }
 
   const getStatusBadge = (status: string) => {
@@ -146,8 +233,16 @@ export function AdminTransactionsManager() {
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(stats.total_revenue)}</div>
-            <p className="text-xs text-muted-foreground">Completed transactions</p>
+            <div className="space-y-2">
+              <div>
+                <div className="text-xs text-muted-foreground mb-1">USD</div>
+                <div className="text-2xl font-bold text-blue-600">{formatCurrency(stats.total_revenue_usd, "USD")}</div>
+              </div>
+              <div className="pt-2 border-t">
+                <div className="text-xs text-muted-foreground mb-1">NGN Equivalent</div>
+                <div className="text-lg font-semibold text-green-600">{formatCurrency(stats.total_revenue_ngn, "NGN")}</div>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -156,8 +251,16 @@ export function AdminTransactionsManager() {
             <CardTitle className="text-sm font-medium">Pending Amount</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(stats.pending_amount)}</div>
-            <p className="text-xs text-muted-foreground">Awaiting verification</p>
+            <div className="space-y-2">
+              <div>
+                <div className="text-xs text-muted-foreground mb-1">USD</div>
+                <div className="text-2xl font-bold text-blue-600">{formatCurrency(stats.pending_amount_usd, "USD")}</div>
+              </div>
+              <div className="pt-2 border-t">
+                <div className="text-xs text-muted-foreground mb-1">NGN Equivalent</div>
+                <div className="text-lg font-semibold text-green-600">{formatCurrency(stats.pending_amount_ngn, "NGN")}</div>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -225,30 +328,42 @@ export function AdminTransactionsManager() {
                       <TableHead>ID</TableHead>
                       <TableHead>Type</TableHead>
                       <TableHead>Amount</TableHead>
+                      <TableHead>Currency</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Payment Method</TableHead>
                       <TableHead>Date</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {transactions.map((transaction) => (
-                      <TableRow key={transaction.id}>
-                        <TableCell className="font-mono text-xs">
-                          {transaction.id.substring(0, 8)}...
-                        </TableCell>
-                        <TableCell className="capitalize">
-                          {transaction.type.replace(/_/g, " ")}
-                        </TableCell>
-                        <TableCell className="font-semibold">
-                          {formatCurrency(transaction.amount)}
-                        </TableCell>
-                        <TableCell>{getStatusBadge(transaction.status)}</TableCell>
-                        <TableCell className="capitalize">{transaction.payment_method}</TableCell>
-                        <TableCell className="text-sm">
-                          {new Date(transaction.created_at).toLocaleDateString()}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {transactions.map((transaction) => {
+                      const amountDisplay = getAmountWithConversion(transaction.amount, transaction.currency)
+                      return (
+                        <TableRow key={transaction.id}>
+                          <TableCell className="font-mono text-xs">
+                            {transaction.id.substring(0, 8)}...
+                          </TableCell>
+                          <TableCell className="capitalize">
+                            {transaction.type.replace(/_/g, " ")}
+                          </TableCell>
+                          <TableCell className="font-semibold">
+                            <div className="flex flex-col gap-0.5">
+                              <span>{amountDisplay.primary}</span>
+                              <span className="text-xs text-muted-foreground">{amountDisplay.secondary}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="font-semibold">
+                              {normalizeCurrency(transaction.currency)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{getStatusBadge(transaction.status)}</TableCell>
+                          <TableCell className="capitalize">{transaction.payment_method}</TableCell>
+                          <TableCell className="text-sm">
+                            {new Date(transaction.created_at).toLocaleDateString()}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </div>

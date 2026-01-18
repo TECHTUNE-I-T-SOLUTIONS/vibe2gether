@@ -126,7 +126,7 @@ export default function TermsPage() {
                 Please read these terms carefully before using Vibe2Gether.
               </p>
               <p className="text-sm text-muted-foreground">
-                Effective Date: December 1, 2025 | Last Updated: December 1, 2025
+                Effective Date: January 1, 2026 | Last Updated: January 10, 2026
               </p>
             </div>
           </div>
@@ -179,10 +179,12 @@ export default function TermsPage() {
             <p className="text-white/80 mb-8 max-w-xl mx-auto">
               If you have any questions about these Terms of Service, please contact our legal team.
             </p>
+            <link href="mailto:officialvibe2gether@gmail.com" />
             <button className="px-8 py-3 rounded-full bg-white text-primary font-semibold hover:bg-white/90 transition-colors flex items-center gap-2 mx-auto">
               <Mail className="w-5 h-5" />
-              legal@vibe2gether.com
+              officialvibe2gether@gmail.com
             </button>
+            <link/>
           </div>
         </section>
       </main>

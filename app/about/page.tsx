@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Heart, Globe2, Shield, Sparkles, ArrowRight, CheckCircle } from "lucide-react"
 
 const stats = [
-  { value: "2M+", label: "Active Users" },
+  { value: "1000+", label: "Active Users" },
   { value: "150+", label: "Countries" },
   { value: "500K+", label: "Successful Matches" },
   { value: "4.9", label: "App Rating" },
@@ -286,38 +286,6 @@ export default function AboutPage() {
             </div>
           </div>
         </section>
-
-        {/* Team */}
-        {/* <section className="py-20 md:py-32 bg-muted/30">
-          <div className="container mx-auto px-4">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                Meet the <span className="gradient-text">Team</span>
-              </h2>
-              <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                The passionate people behind Vibe2Gether, working to bring hearts together.
-              </p>
-            </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {team.map((member, i) => (
-                <Card key={i} className="border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden group">
-                  <div className="relative aspect-square">
-                    <Image
-                      src={member.image || "/placeholder.svg"}
-                      alt={member.name}
-                      fill
-                      className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                  </div>
-                  <CardContent className="p-4 text-center">
-                    <h3 className="font-semibold text-lg">{member.name}</h3>
-                    <p className="text-muted-foreground">{member.role}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </section> */}
 
         {/* CTA */}
         <section className="py-20 md:py-32 relative overflow-hidden">

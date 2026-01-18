@@ -111,7 +111,7 @@ const baseTranslations = {
   // Hero
   findYourPerfect: "Vibe Together",
   matchToday: "Start Connecting",
-  heroBadge: "Join 2M+ people — meet, sell, create events, post & trade",
+  heroBadge: "Join and meet other people — meet, sell, create events, post & trade",
   heroDescription: "Discover people, create events, buy & sell, post content, earn coins, and boost recognition — Vibe2Gether is a social app for everyone.",
   startYourJourney: "Start Your Journey",
   watchHowItWorks: "Watch How It Works",
@@ -159,7 +159,7 @@ const baseTranslations = {
 
   // Auth Pages
   loginDescription: "Sign in to continue your journey to connecting with people.",
-  joinCommunity: "Join 2 Million+ People Connecting Together",
+  joinCommunity: "Join other People Connecting Together",
   signupDescription: "Create your free account and start your journey to meaningful connections.",
   language: "Language",
 

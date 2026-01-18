@@ -24,6 +24,7 @@ import {
   Calendar,
   BookOpen,
   Bell,
+  Mail,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -48,6 +49,8 @@ const secondaryItems: SidebarItem[] = [
   { icon: Calendar, label: "events", href: "/admin/events" },
   { icon: BookOpen, label: "blog", href: "/admin/blog" },
   { icon: Bell, label: "announcements", href: "/admin/announcements" },
+  { icon: Star, label: "testimonies", href: "/admin/testimonies" },
+  { icon: Mail, label: "contacts", href: "/admin/contacts" },
   { icon: MessageSquare, label: "messages", href: "/admin/messages" },
   { icon: CreditCard, label: "transactions", href: "/admin/transactions" },
   { icon: CreditCard, label: "withdrawals", href: "/admin/withdrawals" },

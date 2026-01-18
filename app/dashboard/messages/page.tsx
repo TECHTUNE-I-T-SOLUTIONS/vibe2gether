@@ -125,7 +125,9 @@ export default function MessagesPage() {
   const [justSentMessageIds, setJustSentMessageIds] = useState<Set<string>>(new Set())
   const [messagesCount, setMessagesCount] = useState(0)
   const [messagesRemaining, setMessagesRemaining] = useState(4)
-  const [dailyLimitReached, setDailyLimitReached] = useState(false)
+  const [monthlyLimitReached, setMonthlyLimitReached] = useState(false)
+  const [isUserTyping, setIsUserTyping] = useState(false)
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Match confirmation dialog state
   const [showMatchConfirmation, setShowMatchConfirmation] = useState(false)
@@ -135,14 +137,14 @@ export default function MessagesPage() {
   // Realtime subscription ref
   const realtimeSubscriptionRef = useRef<any>(null)
 
-  const fetchDailyMessageCount = async () => {
+  const fetchMonthlyMessageCount = async () => {
     try {
       const response = await fetch("/api/messages/count-today")
       if (response.ok) {
         const data = await response.json()
         setMessagesCount(data.count)
         setMessagesRemaining(data.remaining)
-        setDailyLimitReached(data.limitReached)
+        setMonthlyLimitReached(data.limitReached)
       }
     } catch (err) {
       console.error("Error fetching message count:", err)
@@ -303,8 +305,8 @@ export default function MessagesPage() {
           setCurrentUserId(sessionData.user.id)
         }
 
-        // Fetch daily message count
-        await fetchDailyMessageCount()
+        // Fetch monthly message count
+        await fetchMonthlyMessageCount()
 
         const response = await fetch("/api/messages")
         if (response.ok) {
@@ -360,7 +362,7 @@ export default function MessagesPage() {
     loadMessages()
   }, [selectedChat?.id])
 
-  // Realtime subscription for messages
+  // Realtime subscription for messages and presence
   useEffect(() => {
     if (!selectedChat || !currentUserId) return
 
@@ -413,7 +415,38 @@ export default function MessagesPage() {
               }
             }
           )
-          .subscribe()
+          // Subscribe to typing indicators
+          .on(
+            "broadcast",
+            {
+              event: "typing",
+            },
+            (payload) => {
+              if (payload.payload?.userId !== currentUserId) {
+                setIsUserTyping(true)
+                // Clear the typing indicator after 3 seconds
+                if (typingTimeoutRef.current) {
+                  clearTimeout(typingTimeoutRef.current)
+                }
+                typingTimeoutRef.current = setTimeout(() => {
+                  setIsUserTyping(false)
+                }, 3000)
+              }
+            }
+          )
+          .subscribe((status) => {
+            if (status === "SUBSCRIBED") {
+              // Update online status
+              setConversations((prev) =>
+                prev.map((conv) =>
+                  conv.id === selectedChat.id ? { ...conv, online: true } : conv
+                )
+              )
+              setSelectedChat((prev) =>
+                prev ? { ...prev, online: true } : prev
+              )
+            }
+          })
       } catch (err) {
         console.error("Realtime subscription error:", err)
       }
@@ -424,6 +457,9 @@ export default function MessagesPage() {
     return () => {
       if (realtimeSubscriptionRef.current) {
         realtimeSubscriptionRef.current.unsubscribe()
+      }
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
       }
     }
   }, [selectedChat, currentUserId])
@@ -671,11 +707,11 @@ export default function MessagesPage() {
   const sendMessage = async (mediaUrl?: string, messageType?: string) => {
     if (!selectedChat || (!newMessage.trim() && !mediaUrl)) return
 
-    // Check daily message limit
+    // Check monthly message limit
     if (messagesCount >= 4 && !isPremium) {
       toast({
-        title: "Daily message limit reached",
-        description: "You've sent 4 messages today. Upgrade to Premium to send more messages.",
+        title: "Monthly message limit reached",
+        description: "You've sent 4 messages this month. Upgrade to Premium to send more messages.",
         variant: "destructive",
       })
       return
@@ -755,13 +791,13 @@ export default function MessagesPage() {
       setAudioPreview(null)
       
       // Refetch message count
-      await fetchDailyMessageCount()
+      await fetchMonthlyMessageCount()
       
       // Show warning if approaching limit
       if (messagesCount + 1 >= 4 && !isPremium) {
         toast({
           title: "Limit warning",
-          description: "You've reached your daily message limit. Upgrade to Premium to continue.",
+          description: "You've reached your monthly message limit. Upgrade to Premium to continue.",
           variant: "destructive",
         })
       }
@@ -947,7 +983,18 @@ export default function MessagesPage() {
                 </Avatar>
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold truncate">{selectedChat.name}</p>
-                  <p className="text-xs text-green-500">{selectedChat.online ? t("online") : t("offline")}</p>
+                  {isUserTyping ? (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <span>typing</span>
+                      <span className="flex gap-0.5">
+                        <span className="w-1 h-1 bg-current rounded-full animate-bounce" style={{ animationDelay: "0s" }}></span>
+                        <span className="w-1 h-1 bg-current rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></span>
+                        <span className="w-1 h-1 bg-current rounded-full animate-bounce" style={{ animationDelay: "0.4s" }}></span>
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-green-500">{selectedChat.online ? t("online") : t("offline")}</p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
@@ -1093,7 +1140,7 @@ export default function MessagesPage() {
             {/* Input - Hidden when showing media preview */}
             {!selectedImage && !audioPreview && (
             <div className="p-4 border-t border-border bg-background space-y-3">
-              {/* Daily Message Limit Warning */}
+              {/* Monthly Message Limit Warning */}
               {messagesCount > 0 && !isPremium && (
                 <div className={cn(
                   "px-3 py-2 rounded-lg text-sm",
@@ -1103,12 +1150,12 @@ export default function MessagesPage() {
                 )}>
                   <div className="font-medium mb-1">
                     {messagesCount >= 4
-                      ? "Daily message limit reached"
-                      : `${messagesRemaining} message${messagesRemaining !== 1 ? 's' : ''} remaining today`
+                      ? "Monthly message limit reached"
+                      : `${messagesRemaining} message${messagesRemaining !== 1 ? 's' : ''} remaining this month`
                     }
                   </div>
                   <p className="text-xs opacity-90">
-                    Free users can send 4 messages per day. Upgrade to Premium to send unlimited messages.
+                    Free users can send 4 messages per month. Upgrade to Premium to send unlimited messages.
                   </p>
                 </div>
               )}
@@ -1138,7 +1185,17 @@ export default function MessagesPage() {
                 <div className="flex-1 relative min-w-0">
                   <Input
                     value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
+                    onChange={(e) => {
+                      setNewMessage(e.target.value)
+                      // Broadcast typing status
+                      if (selectedChat && realtimeSubscriptionRef.current) {
+                        realtimeSubscriptionRef.current.send({
+                          type: "broadcast",
+                          event: "typing",
+                          payload: { userId: currentUserId },
+                        })
+                      }
+                    }}
                     onKeyPress={(e) => {
                       if (e.key === "Enter" && newMessage.trim() && !sendingMessage && !(messagesCount >= 4 && !isPremium)) {
                         e.preventDefault()

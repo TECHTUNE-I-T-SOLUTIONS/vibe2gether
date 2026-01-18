@@ -8,7 +8,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const DAILY_MESSAGE_LIMIT = 4;
+const MONTHLY_MESSAGE_LIMIT = 4;
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,16 +37,21 @@ export async function GET(request: NextRequest) {
 
     const userId = userData.id;
 
-    // Get today's date (start of day in user's timezone)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Get the start of the current month (start of day)
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    monthStart.setHours(0, 0, 0, 0);
 
-    // Count messages sent by user today using count instead of fetching all records
+    // Get the start of next month for reset calculation
+    const nextMonth = new Date(monthStart);
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+
+    // Count messages sent by user this month using count instead of fetching all records
     const { count, error: messagesError } = await supabase
       .from('messages')
       .select('*', { count: 'exact', head: true })
       .eq('sender_id', userId)
-      .gte('created_at', today.toISOString());
+      .gte('created_at', monthStart.toISOString());
 
     if (messagesError) {
       console.error('Error counting messages:', messagesError);
@@ -57,15 +62,15 @@ export async function GET(request: NextRequest) {
     }
 
     const messageCount = count || 0;
-    const remaining = Math.max(0, DAILY_MESSAGE_LIMIT - messageCount);
-    const limitReached = messageCount >= DAILY_MESSAGE_LIMIT;
+    const remaining = Math.max(0, MONTHLY_MESSAGE_LIMIT - messageCount);
+    const limitReached = messageCount >= MONTHLY_MESSAGE_LIMIT;
 
     return NextResponse.json({
       count: messageCount,
       remaining,
       limitReached,
-      dailyLimit: DAILY_MESSAGE_LIMIT,
-      resetsAt: new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString()
+      monthlyLimit: MONTHLY_MESSAGE_LIMIT,
+      resetsAt: nextMonth.toISOString()
     });
   } catch (error) {
     console.error('Error in count-today route:', error);
@@ -75,3 +80,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+

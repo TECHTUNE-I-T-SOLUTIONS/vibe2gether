@@ -37,13 +37,80 @@ interface Transaction {
 
 interface TransactionStats {
   totalRevenue: number
+  totalRevenueUSD: number
+  totalRevenueNGN: number
   successfulTx: number
   pendingTx: number
+  pendingAmountUSD: number
+  pendingAmountNGN: number
   failedTx: number
 }
 
-function formatCurrency(amount: number) {
-  return `₦${(amount || 0).toLocaleString()}`
+// Conversion rate
+const CONVERSION_RATE = 1450 // $1 = N1450
+const KOBO_TO_NAIRA = 100 // 100 kobo = 1 Naira
+
+// Normalize currency names
+function normalizeCurrency(currency: string): "NGN" | "USD" {
+  const normalized = currency?.toUpperCase() || "NGN"
+  if (normalized === "US" || normalized === "NIGERIA") {
+    return "USD"
+  }
+  return normalized === "USD" ? "USD" : "NGN"
+}
+
+// Convert amount from database format to naira
+// NGN amounts are stored as plain naira (1500 = 1500 NGN)
+// USD amounts are stored as cents of naira equivalent (1448550 cents = 14485.50 NGN)
+function convertFromKobo(amount: number, currency: string): number {
+  const normalized = normalizeCurrency(currency)
+  
+  if (normalized === "USD") {
+    // USD amounts are in cents of naira equivalent, convert to naira
+    return amount / 100
+  } else {
+    // NGN amounts are already in naira
+    return amount
+  }
+}
+
+// Convert amount to USD
+function convertToUSD(amount: number, currency: string): number {
+  const normalizedCurrency = normalizeCurrency(currency)
+  
+  if (normalizedCurrency === "USD") {
+    // USD: amount is in cents of naira, convert to naira first, then to USD
+    const amountInNaira = amount / 100
+    return amountInNaira / CONVERSION_RATE
+  } else {
+    // NGN: amount is already in naira
+    return amount / CONVERSION_RATE
+  }
+}
+
+// Convert amount to NGN
+function convertToNGN(amount: number, currency: string): number {
+  const normalizedCurrency = normalizeCurrency(currency)
+  
+  if (normalizedCurrency === "USD") {
+    // USD: amount is in cents of naira, convert to naira
+    return amount / 100
+  } else {
+    // NGN: already in naira
+    return amount
+  }
+}
+
+function formatCurrency(amount: number, currency: "USD" | "NGN" = "NGN") {
+  if (currency === "USD") {
+    return `$${amount.toFixed(2)}`
+  }
+  return `₦${amount.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+function getCurrencySymbol(currency: string): string {
+  const normalized = normalizeCurrency(currency)
+  return normalized === "USD" ? "$" : "₦"
 }
 
 function formatDate(date: string | null | undefined) {
@@ -84,8 +151,12 @@ export default function AdminTransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [stats, setStats] = useState<TransactionStats>({
     totalRevenue: 0,
+    totalRevenueUSD: 0,
+    totalRevenueNGN: 0,
     successfulTx: 0,
     pendingTx: 0,
+    pendingAmountUSD: 0,
+    pendingAmountNGN: 0,
     failedTx: 0,
   })
   const [loading, setLoading] = useState(true)
@@ -126,12 +197,19 @@ export default function AdminTransactionsPage() {
         const pending = enrichedTx.filter((t: any) => t.status === "pending")
         const failed = enrichedTx.filter((t: any) => t.status === "failed")
 
-        const totalRevenue = completed.reduce((sum: number, t: any) => sum + (t.amount || 0), 0)
+        const totalRevenueUSD = completed.reduce((sum: number, t: any) => sum + convertToUSD(t.amount || 0, t.currency || "NGN"), 0)
+        const totalRevenueNGN = completed.reduce((sum: number, t: any) => sum + convertToNGN(t.amount || 0, t.currency || "NGN"), 0)
+        const pendingAmountUSD = pending.reduce((sum: number, t: any) => sum + convertToUSD(t.amount || 0, t.currency || "NGN"), 0)
+        const pendingAmountNGN = pending.reduce((sum: number, t: any) => sum + convertToNGN(t.amount || 0, t.currency || "NGN"), 0)
 
         setStats({
-          totalRevenue,
+          totalRevenue: totalRevenueUSD,
+          totalRevenueUSD,
+          totalRevenueNGN,
           successfulTx: completed.length,
           pendingTx: pending.length,
+          pendingAmountUSD,
+          pendingAmountNGN,
           failedTx: failed.length,
         })
       } catch (error) {
@@ -256,10 +334,28 @@ export default function AdminTransactionsPage() {
   }
 
   const statItems = [
-    { label: "Total Revenue", value: formatCurrency(stats.totalRevenue), change: "+15%" },
-    { label: "Successful", value: stats.successfulTx.toString(), change: "+8%" },
-    { label: "Pending", value: stats.pendingTx.toString(), change: "-2%" },
-    { label: "Failed", value: stats.failedTx.toString(), change: "+3%" },
+    { 
+      label: "Total Revenue", 
+      value: formatCurrency(stats.totalRevenueUSD, "USD"),
+      subValue: formatCurrency(stats.totalRevenueNGN, "NGN"),
+      change: "+15%" 
+    },
+    { 
+      label: "Successful", 
+      value: stats.successfulTx.toString(),
+      change: "+8%" 
+    },
+    { 
+      label: "Pending Amount", 
+      value: formatCurrency(stats.pendingAmountUSD, "USD"),
+      subValue: formatCurrency(stats.pendingAmountNGN, "NGN"),
+      change: "-2%" 
+    },
+    { 
+      label: "Failed", 
+      value: stats.failedTx.toString(),
+      change: "+3%" 
+    },
   ]
 
   if (loading) {
@@ -281,7 +377,7 @@ export default function AdminTransactionsPage() {
 
       {/* Stats */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {statItems.map((stat, i) => (
+        {statItems.map((stat: any, i) => (
           <Card key={i} className="border-border/50">
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">{stat.label}</p>
@@ -289,6 +385,9 @@ export default function AdminTransactionsPage() {
                 <span className="text-2xl font-bold">{stat.value}</span>
                 <span className="text-sm text-green-500">{stat.change}</span>
               </div>
+              {stat.subValue && (
+                <p className="text-xs text-muted-foreground mt-1">{stat.subValue}</p>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -325,7 +424,7 @@ export default function AdminTransactionsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="subscription">Subscription</SelectItem>
+                  <SelectItem value="premium_subscription">Subscription</SelectItem>
                   <SelectItem value="coin_purchase">Coin Purchase</SelectItem>
                   <SelectItem value="boost">Boost</SelectItem>
                 </SelectContent>
@@ -390,8 +489,27 @@ export default function AdminTransactionsPage() {
                           <td className="py-4 px-6">
                             <div className="flex items-center gap-1">
                               <TrendingUp className="w-4 h-4 text-green-500" />
-                              <span className="font-semibold">{formatCurrency(tx.amount / 100)}</span>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-semibold">
+                                  {getCurrencySymbol(tx.currency)}
+                                  {convertFromKobo(tx.amount || 0, tx.currency || "NGN").toLocaleString("en-NG", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {normalizeCurrency(tx.currency) === "USD" 
+                                    ? formatCurrency(convertToNGN(tx.amount || 0, tx.currency), "NGN")
+                                    : formatCurrency(convertToUSD(tx.amount || 0, tx.currency), "USD")
+                                  }
+                                </span>
+                              </div>
                             </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <Badge variant="outline" className="text-xs font-semibold">
+                              {normalizeCurrency(tx.currency)}
+                            </Badge>
                           </td>
                           <td className="py-4 px-6">
                             <Badge variant="secondary" className="text-xs">
@@ -467,6 +585,7 @@ export default function AdminTransactionsPage() {
                       <tr className="border-b border-border bg-muted/30">
                         <th className="text-left py-4 px-6 font-medium text-muted-foreground">User</th>
                         <th className="text-left py-4 px-6 font-medium text-muted-foreground">Amount</th>
+                        <th className="text-left py-4 px-6 font-medium text-muted-foreground">Currency</th>
                         <th className="text-left py-4 px-6 font-medium text-muted-foreground">Type</th>
                         <th className="text-left py-4 px-6 font-medium text-muted-foreground">Status</th>
                         <th className="text-left py-4 px-6 font-medium text-muted-foreground">Date</th>
@@ -494,8 +613,27 @@ export default function AdminTransactionsPage() {
                           <td className="py-4 px-6">
                             <div className="flex items-center gap-1">
                               <TrendingUp className="w-4 h-4 text-green-500" />
-                              <span className="font-semibold">{formatCurrency(tx.amount / 100)}</span>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-semibold">
+                                  {getCurrencySymbol(tx.currency)}
+                                  {convertFromKobo(tx.amount || 0, tx.currency || "NGN").toLocaleString("en-NG", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {normalizeCurrency(tx.currency) === "USD" 
+                                    ? formatCurrency(convertToNGN(tx.amount || 0, tx.currency), "NGN")
+                                    : formatCurrency(convertToUSD(tx.amount || 0, tx.currency), "USD")
+                                  }
+                                </span>
+                              </div>
                             </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <Badge variant="outline" className="text-xs font-semibold">
+                              {normalizeCurrency(tx.currency)}
+                            </Badge>
                           </td>
                           <td className="py-4 px-6">
                             <Badge variant="secondary" className="text-xs">
@@ -549,6 +687,7 @@ export default function AdminTransactionsPage() {
                       <tr className="border-b border-border bg-muted/30">
                         <th className="text-left py-4 px-6 font-medium text-muted-foreground">User</th>
                         <th className="text-left py-4 px-6 font-medium text-muted-foreground">Amount</th>
+                        <th className="text-left py-4 px-6 font-medium text-muted-foreground">Currency</th>
                         <th className="text-left py-4 px-6 font-medium text-muted-foreground">Type</th>
                         <th className="text-left py-4 px-6 font-medium text-muted-foreground">Status</th>
                         <th className="text-left py-4 px-6 font-medium text-muted-foreground">Date</th>
@@ -576,8 +715,27 @@ export default function AdminTransactionsPage() {
                           <td className="py-4 px-6">
                             <div className="flex items-center gap-1">
                               <TrendingUp className="w-4 h-4 text-green-500" />
-                              <span className="font-semibold">{formatCurrency(tx.amount / 100)}</span>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-semibold">
+                                  {getCurrencySymbol(tx.currency)}
+                                  {convertFromKobo(tx.amount || 0, tx.currency || "NGN").toLocaleString("en-NG", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {normalizeCurrency(tx.currency) === "USD" 
+                                    ? formatCurrency(convertToNGN(tx.amount || 0, tx.currency), "NGN")
+                                    : formatCurrency(convertToUSD(tx.amount || 0, tx.currency), "USD")
+                                  }
+                                </span>
+                              </div>
                             </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <Badge variant="outline" className="text-xs font-semibold">
+                              {normalizeCurrency(tx.currency)}
+                            </Badge>
                           </td>
                           <td className="py-4 px-6">
                             <Badge variant="secondary" className="text-xs">

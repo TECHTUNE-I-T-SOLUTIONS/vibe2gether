@@ -58,7 +58,7 @@ export default function CookiesPage() {
               <p className="text-xl text-muted-foreground mb-4">
                 Learn about the cookies we use and manage your preferences.
               </p>
-              <p className="text-sm text-muted-foreground">Last updated: December 1, 2025</p>
+              <p className="text-sm text-muted-foreground">Last updated: January 1, 2026</p>
             </div>
           </div>
         </section>

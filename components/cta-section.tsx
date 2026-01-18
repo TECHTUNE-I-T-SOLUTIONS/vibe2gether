@@ -43,7 +43,7 @@ export function CTASection() {
             <span className="block">Perfect Match?</span>
           </h2>
           <p className="text-lg md:text-xl text-white/80 mb-10 max-w-2xl mx-auto">
-            Join millions of people who have already found meaningful connections on Vibe2Gether. Your journey to love
+            Join other people who have already found meaningful connections on Vibe2Gether. Your journey to love
             starts here.
           </p>
 
@@ -85,7 +85,7 @@ export function CTASection() {
                   </div>
                 ))}
               </div>
-              <span className="text-sm">2M+ active users</span>
+              <span className="text-sm">Growing active users</span>
             </div>
             <div className="flex items-center gap-2 text-white/80">
               <div className="flex">

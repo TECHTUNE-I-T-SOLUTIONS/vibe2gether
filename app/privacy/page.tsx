@@ -97,7 +97,7 @@ export default function PrivacyPage() {
               <p className="text-xl text-muted-foreground mb-4">
                 We&apos;re committed to protecting your personal information and being transparent about how we use it.
               </p>
-              <p className="text-sm text-muted-foreground">Last updated: December 1, 2025</p>
+              <p className="text-sm text-muted-foreground">Last updated: January 10, 2026</p>
             </div>
           </div>
         </section>
@@ -168,9 +168,11 @@ export default function PrivacyPage() {
               If you have any questions about this Privacy Policy or your data, please contact our Data Protection
               Officer.
             </p>
+            <a href="mailto:officialvibe2gether@gmail.com">
             <button className="px-8 py-3 rounded-full bg-white text-primary font-semibold hover:bg-white/90 transition-colors">
-              privacy@vibe2gether.com
+              officialvibe2gether@gmail.com
             </button>
+            </a>
           </div>
         </section>
       </main>

@@ -1,9 +1,13 @@
+"use client"
+
+import Link from "next/link"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { MobileNav } from "@/components/mobile-nav"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import {
   Search,
@@ -16,7 +20,17 @@ import {
   Mail,
   Phone,
   ChevronRight,
+  Loader,
+  CheckCircle,
 } from "lucide-react"
+import { useState } from "react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 const categories = [
   { icon: User, title: "Account & Profile", description: "Manage your account and profile settings", count: 12 },
@@ -61,6 +75,71 @@ const faqs = [
 ]
 
 export default function HelpPage() {
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    subject: "",
+    category: "general",
+    message: "",
+  })
+  const [loading, setLoading] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState("")
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    })
+  }
+
+  const handleCategoryChange = (value: string) => {
+    setFormData({
+      ...formData,
+      category: value,
+    })
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError("")
+
+    try {
+      const response = await fetch("/api/contacts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to submit form")
+      }
+
+      setSubmitted(true)
+      setFormData({
+        name: "",
+        email: "",
+        phone: "",
+        subject: "",
+        category: "general",
+        message: "",
+      })
+
+      // Reset success message after 5 seconds
+      setTimeout(() => setSubmitted(false), 5000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen">
       <Header />
@@ -139,12 +218,144 @@ export default function HelpPage() {
         </section>
 
         {/* Contact Support */}
-        <section className="py-16">
+        <section className="py-16 bg-muted/30">
           <div className="container mx-auto px-4">
             <h2 className="text-2xl font-bold text-center mb-4">Still Need Help?</h2>
             <p className="text-muted-foreground text-center mb-8 max-w-2xl mx-auto">
-              Our support team is available 24/7 to assist you
+              Send us a message and our support team will get back to you as soon as possible
             </p>
+
+            <div className="max-w-2xl mx-auto">
+              <Card className="border-border/50">
+                <CardContent className="pt-6">
+                  {submitted ? (
+                    <div className="text-center py-12">
+                      <div className="w-16 h-16 rounded-full gradient-bg flex items-center justify-center mx-auto mb-4">
+                        <CheckCircle className="w-8 h-8 text-white" />
+                      </div>
+                      <h3 className="text-xl font-semibold mb-2">Thank You!</h3>
+                      <p className="text-muted-foreground mb-4">
+                        Your message has been submitted successfully. We'll get back to you within 24 hours.
+                      </p>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                      {error && (
+                        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                          {error}
+                        </div>
+                      )}
+
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold mb-2">Name *</label>
+                          <Input
+                            type="text"
+                            name="name"
+                            value={formData.name}
+                            onChange={handleChange}
+                            placeholder="Your name"
+                            required
+                            disabled={loading}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold mb-2">Email *</label>
+                          <Input
+                            type="email"
+                            name="email"
+                            value={formData.email}
+                            onChange={handleChange}
+                            placeholder="your@email.com"
+                            required
+                            disabled={loading}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold mb-2">Phone</label>
+                          <Input
+                            type="tel"
+                            name="phone"
+                            value={formData.phone}
+                            onChange={handleChange}
+                            placeholder="+1 (555) 000-0000"
+                            disabled={loading}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold mb-2">Category</label>
+                          <Select value={formData.category} onValueChange={handleCategoryChange} disabled={loading}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="general">General Inquiry</SelectItem>
+                              <SelectItem value="account">Account & Profile</SelectItem>
+                              <SelectItem value="technical">Technical Issues</SelectItem>
+                              <SelectItem value="billing">Billing & Payments</SelectItem>
+                              <SelectItem value="safety">Safety & Privacy</SelectItem>
+                              <SelectItem value="feature-request">Feature Request</SelectItem>
+                              <SelectItem value="bug-report">Bug Report</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold mb-2">Subject *</label>
+                        <Input
+                          type="text"
+                          name="subject"
+                          value={formData.subject}
+                          onChange={handleChange}
+                          placeholder="What is this about?"
+                          required
+                          disabled={loading}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold mb-2">Message *</label>
+                        <Textarea
+                          name="message"
+                          value={formData.message}
+                          onChange={handleChange}
+                          placeholder="Tell us more about your issue or question..."
+                          required
+                          rows={6}
+                          disabled={loading}
+                        />
+                      </div>
+
+                      <Button
+                        type="submit"
+                        className="w-full rounded-full gradient-bg text-white font-semibold h-12"
+                        disabled={loading}
+                      >
+                        {loading ? (
+                          <>
+                            <Loader className="w-4 h-4 mr-2 animate-spin" />
+                            Submitting...
+                          </>
+                        ) : (
+                          "Send Message"
+                        )}
+                      </Button>
+                    </form>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </section>
+
+        {/* Alternative Contact Methods */}
+        <section className="py-16">
+          <div className="container mx-auto px-4">
+            <h2 className="text-2xl font-bold text-center mb-4">Other Ways to Reach Us</h2>
             <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
               <Card className="border-border/50 text-center">
                 <CardContent className="pt-6">
@@ -153,7 +364,9 @@ export default function HelpPage() {
                   </div>
                   <h3 className="font-semibold mb-2">Live Chat</h3>
                   <p className="text-sm text-muted-foreground mb-4">Chat with our support team in real-time</p>
-                  <Button className="rounded-full gradient-bg">Start Chat</Button>
+                  <a href="/contact">
+                    <Button className="rounded-full gradient-bg">Start Chat</Button>
+                  </a>
                 </CardContent>
               </Card>
               <Card className="border-border/50 text-center">
@@ -161,23 +374,13 @@ export default function HelpPage() {
                   <div className="w-14 h-14 rounded-full gradient-bg flex items-center justify-center mx-auto mb-4">
                     <Mail className="w-7 h-7 text-white" />
                   </div>
-                  <h3 className="font-semibold mb-2">Email Us</h3>
+                  <h3 className="font-semibold mb-2">Email</h3>
                   <p className="text-sm text-muted-foreground mb-4">We&apos;ll respond within 24 hours</p>
-                  <Button variant="outline" className="rounded-full bg-transparent">
-                    support@vibe2gether.com
-                  </Button>
-                </CardContent>
-              </Card>
-              <Card className="border-border/50 text-center">
-                <CardContent className="pt-6">
-                  <div className="w-14 h-14 rounded-full gradient-bg flex items-center justify-center mx-auto mb-4">
-                    <Phone className="w-7 h-7 text-white" />
-                  </div>
-                  <h3 className="font-semibold mb-2">Call Us</h3>
-                  <p className="text-sm text-muted-foreground mb-4">Mon-Fri, 9am-6pm EST</p>
-                  <Button variant="outline" className="rounded-full bg-transparent">
-                    1-800-VIBE-247
-                  </Button>
+                  <a href="mailto:officialvibe2gether@gmail.com">
+                    <Button variant="outline" className="rounded-full bg-transparent">
+                      officialvibe2gether@gmail.com
+                    </Button>
+                  </a>
                 </CardContent>
               </Card>
             </div>
