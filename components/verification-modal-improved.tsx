@@ -17,7 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useToast } from "@/hooks/use-toast"
 import { Upload, CheckCircle, Clock, AlertCircle, Loader2, X } from "lucide-react"
@@ -68,30 +67,49 @@ export function VerificationModal({
 
   useEffect(() => {
     if (open) {
+      // Reset form when modal opens
+      setIdType("passport")
+      setIdNumber("")
+      setIdDocument(null)
+      setSelfie(null)
+      setIdDocumentPreview("")
+      setSelfiePreview("")
+      setErrors({})
+      
       // Only fetch if status hasn't been passed in
       if (!verificationStatus) {
         setFetchingStatus(true)
         fetchVerificationStatus()
+      } else {
+        setVerificationState(verificationStatus)
+        setFetchingStatus(false)
       }
-    }
-  }, [open])
-
-  useEffect(() => {
-    if (verificationStatus) {
-      setVerificationState(verificationStatus)
+    } else {
+      // Clear state when modal closes
       setFetchingStatus(false)
     }
-  }, [verificationStatus])
+  }, [open, verificationStatus])
 
   const fetchVerificationStatus = async () => {
     try {
       const response = await fetch("/api/user/verification-status")
       if (response.ok) {
         const data = await response.json()
-        setVerificationState(data)
+        // If no data or no status, set to null to show form
+        if (data && data.status) {
+          setVerificationState(data)
+        } else {
+          setVerificationState(null)
+        }
+      } else {
+        // If response is not ok, set to null to show form
+        console.log("[Verification Modal] No verification status found, showing form")
+        setVerificationState(null)
       }
     } catch (error) {
       console.error("[Verification Modal] Error fetching status:", error)
+      // On error, set to null to show form
+      setVerificationState(null)
     } finally {
       setFetchingStatus(false)
     }
@@ -220,7 +238,7 @@ export function VerificationModal({
         throw new Error(error.message || "Failed to submit verification")
       }
 
-      const data = await response.json()
+      await response.json()
       console.log("[Verification Modal] Verification submitted successfully")
 
       toast({
@@ -257,7 +275,7 @@ export function VerificationModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-auto">
         <DialogHeader>
           <DialogTitle>Identity Verification</DialogTitle>
           <DialogDescription>
@@ -272,7 +290,7 @@ export function VerificationModal({
           </div>
         )}
 
-        {!fetchingStatus && verificationState && verificationState.status === "pending" && (
+        {!fetchingStatus && verificationState?.status === "pending" && (
           <div className="space-y-4">
             <Alert className="border-yellow-500/50 bg-yellow-500 dark:bg-yellow-800/10">
               <Clock className="h-4 w-4 text-yellow-800 dark:text-yellow-300" />
@@ -323,7 +341,7 @@ export function VerificationModal({
                               className="w-full h-full object-cover"
                               onError={(e) => {
                                 e.currentTarget.style.display = 'none';
-                                e.currentTarget.nextElementSibling!.style.display = 'flex';
+                                (e.currentTarget.nextElementSibling as HTMLElement)?.style?.setProperty('display', 'flex');
                               }}
                             />
                             <div className="hidden w-full h-full items-center justify-center text-yellow-600 dark:text-yellow-300 text-sm">
@@ -343,7 +361,7 @@ export function VerificationModal({
                               className="w-full h-full object-cover"
                               onError={(e) => {
                                 e.currentTarget.style.display = 'none';
-                                e.currentTarget.nextElementSibling!.style.display = 'flex';
+                                (e.currentTarget.nextElementSibling as HTMLElement)?.style?.setProperty('display', 'flex');
                               }}
                             />
                             <div className="hidden w-full h-full items-center justify-center text-yellow-600 dark:text-yellow-300 text-sm">
@@ -369,7 +387,7 @@ export function VerificationModal({
           </div>
         )}
 
-        {!fetchingStatus && verificationState && verificationState.status === "approved" && (
+        {!fetchingStatus && verificationState?.status === "approved" && (
           <Alert className="border-green-500/50 bg-green-50 dark:bg-green-900/10">
             <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-300" />
             <AlertDescription className="text-green-800 dark:text-green-300 text-sm">
@@ -381,20 +399,20 @@ export function VerificationModal({
           </Alert>
         )}
 
-        {!fetchingStatus && verificationState && verificationState.status === "rejected" && (
-          <Alert className="border-red-500/50 bg-red-50 dark:bg-red-300">
+        {!fetchingStatus && verificationState?.status === "rejected" && (
+          <Alert className="border-red-500/50 bg-red-50 dark:bg-red-900/10">
             <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-300" />
             <AlertDescription className="text-red-800 dark:text-red-300 text-sm">
               <p className="font-semibold">Verification Rejected</p>
               <p className="text-sm mt-1">
-                {verificationState.decisionReason || "Your verification request was not approved."}
+                {verificationState?.decisionReason || "Your verification request was not approved."}
               </p>
               <p className="text-xs mt-2">You can resubmit with updated documents.</p>
             </AlertDescription>
           </Alert>
         )}
 
-        {!fetchingStatus && (!verificationState || verificationState.status === "rejected") && (
+        {!fetchingStatus && (!verificationState || verificationState?.status === "rejected") && (
           <div className="space-y-6">
             {/* ID Type Selection */}
             <div className="space-y-2">

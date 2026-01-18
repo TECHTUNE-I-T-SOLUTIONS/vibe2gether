@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Heart, MessageCircle, Bookmark, MapPin, Loader2, ArrowLeft, Share2, Eye } from "lucide-react"
+import { Heart, MessageCircle, Bookmark, MapPin, Loader2, ArrowLeft, Share2, ChevronLeft, ChevronRight } from "lucide-react"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -35,7 +35,7 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
   const [comments, setComments] = useState<any[]>([])
   const [newComment, setNewComment] = useState("")
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
-  const [isFollowingAuthor, setIsFollowingAuthor] = useState(false)
+  const [mediaIndex, setMediaIndex] = useState(0)
 
   useEffect(() => {
     fetchPost()
@@ -145,7 +145,7 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
       setLikeCount(likesCount)
       
       toast({
-        title: liked ? "Liked" : "Unliked",
+        title: liked ? "Liked" : "Disliked",
         description: liked ? "Post added to likes" : "Post removed from likes",
       })
     } catch (err) {
@@ -248,6 +248,14 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
     }
   }
 
+  function handlePrevMedia() {
+    setMediaIndex((prev) => (prev === 0 ? mediaList.length - 1 : prev - 1))
+  }
+
+  function handleNextMedia() {
+    setMediaIndex((prev) => (prev === mediaList.length - 1 ? 0 : prev + 1))
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -270,8 +278,12 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
     )
   }
 
-  const mediaUrl =
-    post.media && post.media.length > 0 ? (post.media[0].url || post.media[0]) : null
+  const mediaList = post.media && post.media.length > 0 
+    ? post.media.map((m: any) => (typeof m === 'string' ? m : m.url || m))
+    : []
+  
+  const currentMedia = mediaList[mediaIndex] || null
+  const isVideo = currentMedia?.match(/\.(mp4|webm|ogg)$/i)
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
@@ -306,19 +318,6 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
                   </p>
                 </div>
               </div>
-              
-              {/* Message Button - Only show if following and not own post */}
-              {currentUser && currentUser.id !== post.user_id && isFollowingAuthor && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => router.push(`/dashboard/messages?userId=${post.user_id}`)}
-                  className="ml-auto"
-                >
-                  <MessageCircle className="w-4 h-4 mr-2" />
-                  Message
-                </Button>
-              )}
             </div>
             
             {currentUser && currentUser.id === post.user_id && (
@@ -352,34 +351,60 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
             </div>
           )}
 
-          {/* Media */}
-                {mediaUrl && (
-                  <div
-                  className="relative w-full rounded-lg overflow-hidden mb-4 bg-muted"
+          {/* Media Carousel */}
+          {currentMedia && (
+            <div className="relative w-full rounded-lg overflow-hidden mb-4 bg-muted">
+              {isVideo ? (
+                <video
+                  className="w-full h-96 object-cover"
+                  controls
+                  autoPlay
+                  muted
+                  onClick={(e) => e.stopPropagation()}
+                  controlsList="nofullscreen"
+                >
+                  <source src={currentMedia} />
+                  Your browser does not support the video tag.
+                </video>
+              ) : (
+                <div className="relative w-full h-96 cursor-pointer hover:opacity-90 transition-opacity">
+                  <Image
+                    src={currentMedia}
+                    alt="Post media"
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+              )}
+
+              {/* Navigation Arrows - Only show if multiple media items */}
+              {mediaList.length > 1 && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50"
+                    onClick={handlePrevMedia}
                   >
-                  {mediaUrl.match(/\.(mp4|webm|ogg)$/i) ? (
-                    <video
-                    className="w-full h-96 object-cover"
-                    controls
-                    autoPlay
-                    muted
-                    onClick={(e) => e.stopPropagation()}
-                    >
-                    <source src={mediaUrl} />
-                    Your browser does not support the video tag.
-                    </video>
-                  ) : (
-                    <div className="relative w-full h-96 cursor-pointer hover:opacity-90 transition-opacity">
-                    <Image
-                      src={mediaUrl}
-                      alt="Post media"
-                      fill
-                      className="object-cover"
-                    />
-                    </div>
-                  )}
+                    <ChevronLeft className="w-5 h-5 text-white" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50"
+                    onClick={handleNextMedia}
+                  >
+                    <ChevronRight className="w-5 h-5 text-white" />
+                  </Button>
+
+                  {/* Media Counter */}
+                  <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded">
+                    {mediaIndex + 1} / {mediaList.length}
                   </div>
-                )}
+                </>
+              )}
+            </div>
+          )}
 
           {/* Stats */}
           <div className="grid grid-cols-4 gap-4 text-center mb-6 pb-6 border-b border-border/50">

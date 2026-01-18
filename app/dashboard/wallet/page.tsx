@@ -60,7 +60,7 @@ const redeemOptions = [
 
 export default function WalletPage() {
   const { t } = useI18n()
-  const { data: session, status } = useSession()
+  const { status } = useSession()
   const router = useRouter()
   const { user } = useUserProfile()
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -77,7 +77,6 @@ export default function WalletPage() {
   const [accountNumber, setAccountNumber] = useState("")
   const [accountName, setAccountName] = useState("")
   const [withdrawalLoading, setWithdrawalLoading] = useState(false)
-  const [balance, setBalance] = useState(0)
   const [banks, setBanks] = useState<any[]>([])
   const [bankCode, setBankCode] = useState("")
   const [verifyingAccount, setVerifyingAccount] = useState(false)
@@ -92,7 +91,6 @@ export default function WalletPage() {
   const [redeeming, setRedeeming] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<any>(null)
   const [userProducts, setUserProducts] = useState<any[]>([])
-  const [loadingProducts, setLoadingProducts] = useState(false)
   const [isVerified, setIsVerified] = useState(false)
   const [verificationStatus, setVerificationStatus] = useState<any>(null)
   const [showVerificationModal, setShowVerificationModal] = useState(false)
@@ -107,6 +105,19 @@ export default function WalletPage() {
     }
   }, [status, router])
 
+  const fetchVerificationStatus = async () => {
+    try {
+      const response = await fetch("/api/user/verification-status")
+      const data = await response.json()
+      setVerificationStatus(data.verification)
+      if (data.verified) {
+        setIsVerified(true)
+      }
+    } catch (error) {
+      console.error("Failed to fetch verification status:", error)
+    }
+  }
+
   useEffect(() => {
     // Fetch banks from Paystack
     const fetchBanks = async () => {
@@ -118,20 +129,6 @@ export default function WalletPage() {
         }
       } catch (error) {
         console.error("Failed to fetch banks:", error)
-      }
-    }
-    
-    // Fetch verification status
-    const fetchVerificationStatus = async () => {
-      try {
-        const response = await fetch("/api/user/verification-status")
-        const data = await response.json()
-        setVerificationStatus(data.verification)
-        if (data.verified) {
-          setIsVerified(true)
-        }
-      } catch (error) {
-        console.error("Failed to fetch verification status:", error)
       }
     }
     
@@ -534,18 +531,19 @@ export default function WalletPage() {
                 <Coins className="w-8 h-8 text-white" />
               </div>
             </div>
-            <div className="flex gap-3 mt-6">
+            <div className="flex gap-2 mt-6 flex-wrap">
               <Button 
                 variant="secondary" 
-                className="rounded-full bg-white/20 text-white hover:bg-white/30 border-0"
+                className="rounded-full bg-white/20 text-white hover:bg-white/30 border-0 text-sm md:text-base px-3 md:px-4 py-2 md:py-2.5 flex-1 min-w-[80px] sm:flex-none"
                 onClick={() => setShowVerificationModal(true)}
               >
-                <BadgeCheck className="w-4 h-4 mr-2" />
-                Verify
+                <BadgeCheck className="w-4 h-4 mr-1" />
+                <span className="hidden sm:inline">Verify</span>
+                <span className="sm:hidden">ID</span>
               </Button>
               <Button 
                 variant="secondary" 
-                className="rounded-full bg-white/20 text-white hover:bg-white/30 border-0"
+                className="rounded-full bg-white/20 text-white hover:bg-white/30 border-0 text-sm md:text-base px-3 md:px-4 py-2 md:py-2.5 flex-1 min-w-[80px] sm:flex-none"
                 onClick={() => {
                   if (isVerified) {
                     setShowWithdrawalModal(true)
@@ -554,18 +552,26 @@ export default function WalletPage() {
                   }
                 }}
               >
-                <Wallet className="w-4 h-4 mr-2" />
-                {t("withdraw")}
+                <Wallet className="w-4 h-4 mr-1" />
+                <span className="hidden sm:inline">{t("withdraw")}</span>
+                <span className="sm:hidden">Cash</span>
               </Button>
               <Button 
                 variant="secondary" 
-                className="rounded-full bg-white/20 text-white hover:bg-white/30 border-0"
+                className="rounded-full bg-white/20 text-white hover:bg-white/30 border-0 text-sm md:text-base px-3 md:px-4 py-2 md:py-2.5 flex-1 min-w-[80px] sm:flex-none"
                 onClick={() => setShowPaymentModal(true)}
               >
-                <CreditCard className="w-4 h-4 mr-2" />
-                Buy Coins
+                <CreditCard className="w-4 h-4 mr-1" />
+                <span className="hidden sm:inline">Buy Coins</span>
+                <span className="sm:hidden">Buy</span>
               </Button>
             </div>
+            <VerificationModal
+              open={showVerificationModal}
+              onOpenChange={setShowVerificationModal}
+              verificationStatus={verificationStatus}
+              onVerificationSubmitted={fetchVerificationStatus}
+            />
           </div>
         </Card>
 
@@ -599,22 +605,27 @@ export default function WalletPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="transactions" className="space-y-6">
-        <TabsList className="bg-muted/50 p-1 rounded-full">
-          <TabsTrigger value="transactions" className="rounded-full">
-            Transactions
+      <Tabs defaultValue="transactions" className="space-y-2">
+        <TabsList className="bg-muted/50 p-1 rounded-full overflow-x-auto">
+          <TabsTrigger value="transactions" className="rounded-full" title="Transactions">
+        <Eye className="w-4 h-4 md:hidden" />
+        <span className="hidden md:inline">Transactions</span>
           </TabsTrigger>
-          <TabsTrigger value="withdrawals" className="rounded-full">
-            Withdrawals
+          <TabsTrigger value="withdrawals" className="rounded-full" title="Withdrawals">
+        <Wallet className="w-4 h-4 md:hidden" />
+        <span className="hidden md:inline">Withdrawals</span>
           </TabsTrigger>
-          <TabsTrigger value="earn" className="rounded-full">
-            {t("earnCoins")}
+          <TabsTrigger value="earn" className="rounded-full" title="Earn Coins">
+        <TrendingUp className="w-4 h-4 md:hidden" />
+        <span className="hidden md:inline">{t("earnCoins")}</span>
           </TabsTrigger>
-          <TabsTrigger value="referral" className="rounded-full">
-            Referral
+          <TabsTrigger value="referral" className="rounded-full" title="Referral">
+        <Users className="w-4 h-4 md:hidden" />
+        <span className="hidden md:inline">Referral</span>
           </TabsTrigger>
-          <TabsTrigger value="redeem" className="rounded-full">
-            Redeem
+          <TabsTrigger value="redeem" className="rounded-full" title="Redeem">
+        <Gift className="w-4 h-4 md:hidden" />
+        <span className="hidden md:inline">Redeem</span>
           </TabsTrigger>
         </TabsList>
 
@@ -859,6 +870,7 @@ export default function WalletPage() {
                       className="pr-10 rounded-full bg-muted/50"
                     />
                     <button
+                      type="button"
                       onClick={() => {
                         navigator.clipboard.writeText(referralLink)
                         const event = new CustomEvent("showToast", {
@@ -1064,6 +1076,7 @@ export default function WalletPage() {
                 <Label htmlFor="bankCode">Bank Name</Label>
                 <select
                   id="bankCode"
+                  title="Select your bank"
                   value={bankCode}
                   onChange={(e) => {
                     const selected = banks.find((b) => b.code === e.target.value)
@@ -1233,8 +1246,10 @@ export default function WalletPage() {
             {/* Product Selection for Featured Product */}
             {selectedRedemption?.id === "featured_product" && (
               <div className="space-y-2">
-                <Label>Select Product to Feature</Label>
+                <Label htmlFor="productSelect">Select Product to Feature</Label>
                 <select
+                  id="productSelect"
+                  title="Select a product to feature"
                   value={selectedProduct?.id || ""}
                   onChange={(e) => {
                     const product = userProducts.find((p) => p.id === e.target.value)

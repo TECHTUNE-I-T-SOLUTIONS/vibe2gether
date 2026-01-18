@@ -13,13 +13,13 @@ import {
   MapPin,
   Loader2,
   ChevronDown,
-  Lock,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useUserProfile } from "@/hooks/use-user-profile"
-import { usePremiumCheck } from "@/hooks/use-premium-check"
 import { useToast } from "@/hooks/use-toast"
 import {
   getPostComments,
@@ -33,10 +33,9 @@ const SCROLL_VIEW_TIMEOUT = 2000 // Track view after 2 seconds in viewport
 
 export default function FeedPage() {
   const router = useRouter()
-  const { data: session, status } = useSession()
+  const { status } = useSession()
   const { user } = useUserProfile()
   const { toast } = useToast()
-  const { checkPremium, isPremium } = usePremiumCheck()
   const [posts, setPosts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [offset, setOffset] = useState(0)
@@ -51,6 +50,7 @@ export default function FeedPage() {
   const [postComments, setPostComments] = useState<Map<string, any[]>>(new Map())
   const [newComments, setNewComments] = useState<Map<string, string>>(new Map())
   const [submittingComment, setSubmittingComment] = useState<Map<string, boolean>>(new Map())
+  const [mediaCarouselIndex, setMediaCarouselIndex] = useState<Map<string, number>>(new Map())
   const observerTarget = useRef<HTMLDivElement>(null)
   const viewTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map())
 
@@ -76,6 +76,17 @@ export default function FeedPage() {
       setPosts((prev) => (newOffset === 0 ? posts : [...prev, ...posts]))
       setHasMore(posts.length === 20)
       setOffset(newOffset + 20)
+
+      // Prefetch images for all fetched posts
+      posts.forEach((post: any) => {
+        const mediaArray = getMediaArray(post.media)
+        mediaArray.forEach((url) => {
+          if (url && typeof url === 'string' && !isVideo(url)) {
+            const img = new window.Image()
+            img.src = url
+          }
+        })
+      })
 
       // Initialize count maps for all posts (API returns them directly)
       const likesCountMap = new Map<string, number>()
@@ -262,8 +273,9 @@ export default function FeedPage() {
       setLikeCounts((prev) => new Map(prev).set(postId, likesCount))
 
       toast({
-        title: liked ? "Liked" : "Unliked",
+        title: liked ? "Liked" : "Unlike",
         description: liked ? "Post added to likes" : "Post removed from likes",
+        variant: "default",
       })
     } catch (err) {
       // Revert on error
@@ -449,13 +461,46 @@ export default function FeedPage() {
     }
   }
 
-  const getMediaUrl = (media: any) => {
-    if (!media) return null
-    if (Array.isArray(media) && media.length > 0) {
-      return media[0].url || media[0]
+  const getMediaArray = (media: any) => {
+    if (!media) return []
+    if (Array.isArray(media)) {
+      return media.map((m) => (typeof m === "string" ? m : m.url || m))
     }
-    return null
+    return []
   }
+
+  const getMediaUrl = (media: any, index: number = 0) => {
+    const mediaArray = getMediaArray(media)
+    return mediaArray[index] || null
+  }
+
+  const isVideo = (url: string) => {
+    return url.match(/\.(mp4|webm|ogg)$/i)
+  }
+
+  // Prefetch images for carousel
+  const prefetchMediaUrl = useCallback((url: string) => {
+    if (url && !isVideo(url)) {
+      const img = new window.Image()
+      img.src = url
+    }
+  }, [])
+
+  // Prefetch next media when carousel index changes
+  useEffect(() => {
+    posts.forEach((post) => {
+      const mediaArray = getMediaArray(post.media)
+      const currentIndex = mediaCarouselIndex.get(post.id) || 0
+      
+      // Prefetch current and next media
+      if (mediaArray[currentIndex]) {
+        prefetchMediaUrl(mediaArray[currentIndex])
+      }
+      if (mediaArray[currentIndex + 1]) {
+        prefetchMediaUrl(mediaArray[currentIndex + 1])
+      }
+    })
+  }, [posts, mediaCarouselIndex, prefetchMediaUrl])
 
   return (
     <div className="p-4 md:p-6 max-w-8xl mx-auto w-auto">
@@ -479,7 +524,9 @@ export default function FeedPage() {
       {/* Posts Feed */}
       <div className="space-y-4">
         {posts.map((post) => {
-          const mediaUrl = getMediaUrl(post.media)
+          const mediaArray = getMediaArray(post.media)
+          const currentMediaIndex = mediaCarouselIndex.get(post.id) || 0
+          const mediaUrl = getMediaUrl(post.media, currentMediaIndex)
           const timeAgo = new Date(post.created_at).toLocaleDateString("en-US", {
             month: "short",
             day: "numeric",
@@ -560,31 +607,78 @@ export default function FeedPage() {
 
                 {/* Media */}
                 {mediaUrl && (
-                  <div
-                  className="relative w-full rounded-lg overflow-hidden mb-4 bg-muted"
-                  onClick={() => router.push(`/post/${post.id}`)}
-                  >
-                  {mediaUrl.match(/\.(mp4|webm|ogg)$/i) ? (
-                    <video
-                    className="w-full h-96 object-cover"
-                    controls
-                    autoPlay
-                    muted
-                    onClick={(e) => e.stopPropagation()}
+                  <div className="relative w-full rounded-lg overflow-hidden mb-4 bg-muted">
+                    <div
+                      className="relative w-full h-96"
+                      onClick={() => router.push(`/post/${post.id}`)}
                     >
-                    <source src={mediaUrl} />
-                    Your browser does not support the video tag.
-                    </video>
-                  ) : (
-                    <div className="relative w-full h-96 cursor-pointer hover:opacity-90 transition-opacity">
-                    <Image
-                      src={mediaUrl}
-                      alt="Post media"
-                      fill
-                      className="object-cover"
-                    />
+                      {isVideo(mediaUrl) ? (
+                        <video
+                          className="w-full h-96 object-cover"
+                          controls
+                          controlsList="nofullscreen nodownload"
+                          disablePictureInPicture
+                          autoPlay
+                          muted
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <source src={mediaUrl} />
+                          Your browser does not support the video tag.
+                        </video>
+                      ) : (
+                        <Image
+                          src={mediaUrl}
+                          alt="Post media"
+                          fill
+                          className="object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                        />
+                      )}
                     </div>
-                  )}
+
+                    {/* Carousel Navigation */}
+                    {mediaArray.length > 1 && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setMediaCarouselIndex(
+                              (prev) =>
+                                new Map(prev).set(
+                                  post.id,
+                                  currentMediaIndex === 0 ? mediaArray.length - 1 : currentMediaIndex - 1
+                                )
+                            )
+                          }}
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </Button>
+
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setMediaCarouselIndex(
+                              (prev) =>
+                                new Map(prev).set(
+                                  post.id,
+                                  currentMediaIndex === mediaArray.length - 1 ? 0 : currentMediaIndex + 1
+                                )
+                            )
+                          }}
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
+
+                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                          {currentMediaIndex + 1} / {mediaArray.length}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
 
