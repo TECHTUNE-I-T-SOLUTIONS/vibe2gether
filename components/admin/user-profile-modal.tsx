@@ -18,6 +18,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -67,6 +75,15 @@ export function UserProfileModal({ user, open, onOpenChange, onRefresh }: UserPr
     open: false,
     action: null,
   })
+  const [verificationUpdate, setVerificationUpdate] = useState<{
+    status: string
+    reason: string
+    loading: boolean
+  }>({
+    status: "",
+    reason: "",
+    loading: false,
+  })
 
   if (!user) return null
 
@@ -84,6 +101,36 @@ export function UserProfileModal({ user, open, onOpenChange, onRefresh }: UserPr
       console.error("Failed to verify user:", error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleUpdateVerification = async () => {
+    if (!verificationUpdate.status) return
+
+    setVerificationUpdate(prev => ({ ...prev, loading: true }))
+    try {
+      const response = await fetch("/api/admin/update-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          status: verificationUpdate.status,
+          decisionReason: verificationUpdate.reason || null,
+        }),
+      })
+
+      if (response.ok) {
+        // Reset form
+        setVerificationUpdate({ status: "", reason: "", loading: false })
+        onRefresh?.()
+      } else {
+        const error = await response.json()
+        console.error("Failed to update verification:", error)
+      }
+    } catch (error) {
+      console.error("Failed to update verification:", error)
+    } finally {
+      setVerificationUpdate(prev => ({ ...prev, loading: false }))
     }
   }
 
@@ -424,6 +471,49 @@ export function UserProfileModal({ user, open, onOpenChange, onRefresh }: UserPr
                           {user.is_verified ? "Approved" : user.verification_status === "pending" ? "Pending Review" : "No Submission"}
                         </Badge>
                       </div>
+
+                      {user.verification_status === "pending" && (
+                        <div className="pt-4 border-t space-y-4">
+                          <p className="text-sm font-medium text-muted-foreground">Update Verification Status</p>
+                          <div className="space-y-3">
+                            <Select
+                              value={verificationUpdate.status}
+                              onValueChange={(value) => setVerificationUpdate(prev => ({ ...prev, status: value }))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select new status" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="approved">✅ Approve Verification</SelectItem>
+                                <SelectItem value="rejected">❌ Reject Verification</SelectItem>
+                                <SelectItem value="pending">⏳ Keep Pending</SelectItem>
+                              </SelectContent>
+                            </Select>
+
+                            {(verificationUpdate.status === "rejected" || verificationUpdate.status === "approved") && (
+                              <Textarea
+                                placeholder={verificationUpdate.status === "rejected" ? "Reason for rejection (optional)" : "Additional notes (optional)"}
+                                value={verificationUpdate.reason}
+                                onChange={(e) => setVerificationUpdate(prev => ({ ...prev, reason: e.target.value }))}
+                                rows={3}
+                              />
+                            )}
+
+                            <Button
+                              onClick={handleUpdateVerification}
+                              disabled={!verificationUpdate.status || verificationUpdate.loading}
+                              className="w-full"
+                              variant={verificationUpdate.status === "approved" ? "default" : verificationUpdate.status === "rejected" ? "destructive" : "secondary"}
+                            >
+                              {verificationUpdate.loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                              {verificationUpdate.status === "approved" && "Approve Verification"}
+                              {verificationUpdate.status === "rejected" && "Reject Verification"}
+                              {verificationUpdate.status === "pending" && "Update Status"}
+                              {!verificationUpdate.status && "Update Status"}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
 
                       {(user.verification_status === "pending" || user.is_verified) && (
                         <>

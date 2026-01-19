@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     const idDocument = formData.get("idDocument") as File
     const selfie = formData.get("selfie") as File
 
-    if (!idType || !idNumber || !idDocument || !selfie) {
+    if (!idType || !idDocument || !selfie) {
       console.error("[POST /api/user/submit-verification] Missing required fields")
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
