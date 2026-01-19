@@ -84,6 +84,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Set extended timeout for large file uploads (up to 10 minutes)
-export const maxDuration = 600 // 10 minutes for Vercel, ignored on other platforms
-
+// Set extended timeout for large file uploads
+// Hobby plan: max 300 seconds (5 minutes)
+// Pro plan: max 900 seconds (15 minutes)
+export const maxDuration = 300 // 5 minutes (Vercel hobby plan limit)
