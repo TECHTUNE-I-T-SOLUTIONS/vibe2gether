@@ -270,7 +270,7 @@ export function VerificationModal({
   }
 
   // Check if form can be submitted
-  const canSubmit = idType && idNumber && idDocument && selfie && !loading
+  const canSubmit = idType && idDocument && selfie && !loading
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
