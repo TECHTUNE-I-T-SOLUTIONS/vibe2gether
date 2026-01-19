@@ -38,6 +38,7 @@ const countryCodes = [
   { code: "+966", country: "Saudi Arabia", flag: "🇸🇦" },
   { code: "+971", country: "UAE", flag: "🇦🇪" },
   { code: "+234", country: "Nigeria", flag: "🇳🇬" },
+  { code: "+237", country: "Cameroon", flag: "🇨🇲" },
   { code: "+27", country: "South Africa", flag: "🇿🇦" },
   { code: "+254", country: "Kenya", flag: "🇰🇪" },
   { code: "+20", country: "Egypt", flag: "🇪🇬" },
@@ -280,12 +281,12 @@ export default function SignupContent() {
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
             >
-              <h1 className="text-3xl font-bold mb-2">
+              <h1 className="text-3xl text-center font-bold mb-2">
                 {step === 1 && "Create your account"}
                 {step === 2 && "About you"}
                 {step === 3 && "Contact & Location"}
               </h1>
-              <p className="text-muted-foreground mb-8">
+              <p className="text-muted-foreground text-center mb-8">
                 {step === 1 && "Start your journey to finding meaningful connections."}
                 {step === 2 && "Help us know you better for personalized matching."}
                 {step === 3 && "Almost there! Add your contact details."}

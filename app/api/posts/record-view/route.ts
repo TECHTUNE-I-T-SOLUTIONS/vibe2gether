@@ -17,6 +17,36 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
     const session = await getServerSession(authOptions)
 
+    // Check if the viewer is the post creator - if so, don't count as a view
+    const { data: postData, error: postError } = await supabase
+      .from("posts")
+      .select("user_id")
+      .eq("id", postId)
+      .limit(1)
+
+    if (postError || !postData || postData.length === 0) {
+      console.error("[POST /api/posts/record-view] Post not found:", postError)
+      return NextResponse.json({ error: "Post not found" }, { status: 404 })
+    }
+
+    const postCreatorId = postData[0].user_id
+    const viewerUserId = session?.user?.id
+
+    // Don't count views from the post creator
+    if (viewerUserId && viewerUserId === postCreatorId) {
+      console.log(`[POST /api/posts/record-view] Post creator ${viewerUserId} viewing their own post - not counting as view`)
+      
+      // Still return current view count
+      const { data: currentPost } = await supabase
+        .from("posts")
+        .select("views_count")
+        .eq("id", postId)
+        .limit(1)
+      
+      const viewsCount = currentPost?.[0]?.views_count || 0
+      return NextResponse.json({ success: false, isOwnPost: true, viewsCount })
+    }
+
     // Get viewer IP
     const headersList = await headers()
     const forwardedFor = headersList.get("x-forwarded-for")
@@ -45,24 +75,20 @@ export async function POST(request: NextRequest) {
       console.log(`[POST /api/posts/record-view] IP ${viewerIp} already viewed this post within 24 hours - skipping count`)
       
       // Still fetch and return current view count
-      const { data: postData, error: postError } = await supabase
+      const { data: currentPost } = await supabase
         .from("posts")
         .select("views_count")
         .eq("id", postId)
         .limit(1)
 
-      if (postError || !postData || postData.length === 0) {
-        return NextResponse.json({ error: "Post not found" }, { status: 404 })
-      }
-
-      const viewsCount = postData[0].views_count || 0
+      const viewsCount = currentPost?.[0]?.views_count || 0
       return NextResponse.json({ success: false, alreadyViewed: true, viewsCount })
     }
 
     // Insert view record (new IP or first view from this IP)
     const { error: insertError } = await supabase.from("post_views").insert({
       post_id: postId,
-      user_id: session?.user?.id || null,
+      user_id: viewerUserId || null,
       viewer_ip: viewerIp,
     })
 
@@ -78,23 +104,23 @@ export async function POST(request: NextRequest) {
     await new Promise(resolve => setTimeout(resolve, 500))
 
     // Fetch updated view count from posts table
-    const { data: postData, error: postError } = await supabase
+    const { data: updatedPost, error: updatePostError } = await supabase
       .from("posts")
       .select("views_count")
       .eq("id", postId)
       .limit(1)
 
-    if (postError) {
-      console.error("[POST /api/posts/record-view] Error fetching updated views count:", postError)
-      throw postError
+    if (updatePostError) {
+      console.error("[POST /api/posts/record-view] Error fetching updated views count:", updatePostError)
+      throw updatePostError
     }
 
-    if (!postData || postData.length === 0) {
+    if (!updatedPost || updatedPost.length === 0) {
       console.error("[POST /api/posts/record-view] Post not found after insert")
       return NextResponse.json({ error: "Post not found" }, { status: 404 })
     }
 
-    const viewsCount = postData[0].views_count || 0
+    const viewsCount = updatedPost[0].views_count || 0
     console.log(`[POST /api/posts/record-view] View recorded successfully - new count: ${viewsCount}`)
 
     if (viewsCount < 1) {

@@ -74,8 +74,7 @@ export function Footer() {
               <span className="text-xl font-bold gradient-text">Vibe2Gether</span>
             </Link>
             <p className="text-muted-foreground text-sm mb-6 max-w-xs">
-              Connecting hearts worldwide. Find your perfect match, discover amazing products, and join unforgettable
-              events.
+              Connecting people worldwide. Discover amazing products, join unforgettable events, and expand your network.
             </p>
             <div className="flex gap-3">
               {socialLinks.map((social) => {

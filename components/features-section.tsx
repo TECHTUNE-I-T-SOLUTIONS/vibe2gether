@@ -3,6 +3,7 @@
 import { Heart, Users, ShoppingBag, MessageCircle, Bell, Coins, Globe2, Shield, Calendar, Sparkles } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { useLanguage } from "@/lib/i18n/context"
+import "./features-section.css"
 
 interface Feature {
   icon: React.ComponentType<{ className?: string }>
@@ -77,6 +78,12 @@ const features: Feature[] = [
 export function FeaturesSection() {
   const { t } = useLanguage()
 
+  // Organize features into rows (4 items per row on desktop, 2 on mobile)
+  const rows = []
+  for (let i = 0; i < features.length; i += 4) {
+    rows.push(features.slice(i, i + 4))
+  }
+
   return (
     <section className="py-20 md:py-32 relative overflow-hidden">
       {/* Background */}
@@ -93,29 +100,36 @@ export function FeaturesSection() {
           </p>
         </div>
 
-        {/* Features Grid */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {features.map((feature, i) => {
-            const Icon = feature.icon
-            return (
-              <Card
-                key={i}
-                className="group relative overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm hover:border-primary/50 transition-all duration-300 hover:-translate-y-1 flex flex-col items-center justify-center"
-              >
-                <CardContent className="p-6 flex flex-col items-center z-10 relative">
-                  <div
-                    className={`w-12 h-12 rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}
+        {/* Features with Animated Rows */}
+        <div className="space-y-6 md:space-y-8">
+          {rows.map((row, rowIndex) => (
+            <div
+              key={rowIndex}
+              className={`features-row ${rowIndex % 2 === 0 ? "animate-scroll-left" : "animate-scroll-right"}`}
+            >
+              {row.map((feature, i) => {
+                const Icon = feature.icon
+                return (
+                  <Card
+                    key={i}
+                    className="group relative overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm hover:border-primary/50 transition-all duration-300 hover:-translate-y-1 flex flex-col items-center justify-center flex-shrink-0 w-full sm:w-[calc(50%-12px)] lg:w-[calc(25%-18px)]"
                   >
-                    <Icon className="w-6 h-6 text-white flex items-center justify-center" />
-                  </div>
-                  <h3 className="text-lg font-semibold mb-2 dark:text-white text-black">{t(feature.title)}</h3>
-                  <p className="text-sm text-foreground/70 dark:text-foreground/75 leading-relaxed">{t(feature.description)}</p>
-                </CardContent>
-                {/* Hover Gradient */}
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-accent/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              </Card>
-            )
-          })}
+                    <CardContent className="p-6 flex flex-col items-center z-10 relative">
+                      <div
+                        className={`w-12 h-12 rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}
+                      >
+                        <Icon className="w-6 h-6 text-white flex items-center justify-center" />
+                      </div>
+                      <h3 className="text-lg font-semibold mb-2 dark:text-white text-black">{t(feature.title)}</h3>
+                      <p className="text-sm text-foreground/70 dark:text-foreground/75 leading-relaxed">{t(feature.description)}</p>
+                    </CardContent>
+                    {/* Hover Gradient */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-accent/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  </Card>
+                )
+              })}
+            </div>
+          ))}
         </div>
       </div>
     </section>

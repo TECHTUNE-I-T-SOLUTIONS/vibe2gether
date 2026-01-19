@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { use } from "react"
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -20,6 +21,7 @@ import { PostMenu } from "@/components/post-menu"
 
 export default function PostPage({ params }: { params: Promise<{ postId: string }> }) {
   const router = useRouter()
+  const { status } = useSession()
   const { user: currentUser } = useUserProfile()
   const { toast } = useToast()
   const unwrappedParams = use(params)
@@ -37,6 +39,14 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
   const [mediaIndex, setMediaIndex] = useState(0)
 
+  // Auth check - redirect to login if not authenticated
+  useEffect(() => {
+    if (status === "loading") return
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
+
   useEffect(() => {
     fetchPost()
   }, [unwrappedParams.postId])
@@ -50,8 +60,9 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
     // Preload current media
     const currentMedia = mediaList[mediaIndex]
     if (currentMedia) {
-      if (!currentMedia.match(/\.(mp4|webm|ogg)$/i)) {
-        // Preload image
+      const isVideoFormat = /\.(mp4|webm|ogg|avi|mov|mkv|flv|wmv|m3u8)$/i.test(currentMedia)
+      if (!isVideoFormat) {
+        // Preload image (all formats)
         const img = new window.Image()
         img.src = currentMedia
       } else {
@@ -65,7 +76,8 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
     // Prefetch next media
     if (mediaList[mediaIndex + 1]) {
       const nextMedia = mediaList[mediaIndex + 1]
-      if (!nextMedia.match(/\.(mp4|webm|ogg)$/i)) {
+      const isVideoFormat = /\.(mp4|webm|ogg|avi|mov|mkv|flv|wmv|m3u8)$/i.test(nextMedia)
+      if (!isVideoFormat) {
         const img = new window.Image()
         img.src = nextMedia
       } else {
@@ -78,7 +90,8 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
     // Prefetch previous media
     if (mediaIndex > 0 && mediaList[mediaIndex - 1]) {
       const prevMedia = mediaList[mediaIndex - 1]
-      if (!prevMedia.match(/\.(mp4|webm|ogg)$/i)) {
+      const isVideoFormat = /\.(mp4|webm|ogg|avi|mov|mkv|flv|wmv|m3u8)$/i.test(prevMedia)
+      if (!isVideoFormat) {
         const img = new window.Image()
         img.src = prevMedia
       } else {
@@ -91,9 +104,10 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
     // Aggressively preload all media in idle time
     mediaList.forEach((url: string, index: number) => {
       if (url && index !== mediaIndex) {
+        const isVideoFormat = /\.(mp4|webm|ogg|avi|mov|mkv|flv|wmv|m3u8)$/i.test(url)
         if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
           requestIdleCallback(() => {
-            if (!url.match(/\.(mp4|webm|ogg)$/i)) {
+            if (!isVideoFormat) {
               const img = new window.Image()
               img.src = url
             } else {
@@ -152,23 +166,26 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
       setIsLiked(post.userLiked || false)
       setIsSaved(post.userSaved || false)
 
-      // Record view (IP-gated, one count per IP per 24 hours)
+      // Record view (user-based, creator excluded, one per user per 24 hours)
       try {
         console.log(`[Post Detail] Recording view for post ${unwrappedParams.postId}`)
-        const viewResponse = await fetch("/api/posts/record-view", {
+        const viewResponse = await fetch("/api/posts/scroll-view", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ postId: unwrappedParams.postId }),
         })
 
         if (viewResponse.ok) {
-          const { viewsCount, alreadyViewed } = await viewResponse.json()
-          if (alreadyViewed) {
-            console.log(`[Post Detail] View already recorded from this IP within 24 hours - count: ${viewsCount}`)
+          const { newViewCount, isOwnPost, message } = await viewResponse.json()
+          if (isOwnPost) {
+            console.log(`[Post Detail] Post creator's own view - not counted`)
           } else {
-            console.log(`[Post Detail] View recorded - new count: ${viewsCount}`)
+            console.log(`[Post Detail] View recorded - ${message}`)
           }
-          setViewCount(viewsCount)
+          setViewCount(newViewCount)
+        } else {
+          const error = await viewResponse.json()
+          console.error("[Post Detail] View tracking error:", error.error)
         }
       } catch (err) {
         console.error("[Post Detail] Failed to record view:", err)
@@ -360,7 +377,45 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
     : []
   
   const currentMedia = mediaList[mediaIndex] || null
-  const isVideo = currentMedia?.match(/\.(mp4|webm|ogg)$/i)
+  const isVideo = currentMedia?.match(/\.(mp4|webm|ogg|avi|mov|mkv|flv|wmv|m3u8)$/i)
+  const isImage = currentMedia?.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|tiff|heic|heif|avif)$/i)
+
+  // Get MIME type for video
+  const getVideoMimeType = (url: string): string => {
+    const ext = url.toLowerCase().split(/[\?#]/)[0].split('.').pop() || ''
+    const mimeMap: { [key: string]: string } = {
+      'mp4': 'video/mp4',
+      'webm': 'video/webm',
+      'ogg': 'video/ogg',
+      'mov': 'video/quicktime',
+      'avi': 'video/x-msvideo',
+      'mkv': 'video/x-matroska',
+      'flv': 'video/x-flv',
+      'wmv': 'video/x-ms-wmv',
+      'm3u8': 'application/x-mpegURL',
+    }
+    return mimeMap[ext] || 'video/mp4'
+  }
+
+  // Get MIME type for image
+  const getImageMimeType = (url: string): string => {
+    const ext = url.toLowerCase().split(/[\?#]/)[0].split('.').pop() || ''
+    const mimeMap: { [key: string]: string } = {
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'svg': 'image/svg+xml',
+      'bmp': 'image/bmp',
+      'ico': 'image/x-icon',
+      'tiff': 'image/tiff',
+      'heic': 'image/heic',
+      'heif': 'image/heif',
+      'avif': 'image/avif',
+    }
+    return mimeMap[ext] || 'image/jpeg'
+  }
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
@@ -430,28 +485,34 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
 
           {/* Media Carousel */}
           {currentMedia && (
-            <div className="relative w-full rounded-lg overflow-hidden mb-4 bg-muted">
+            <div className="relative w-full rounded-lg overflow-hidden mb-4 bg-black flex items-center justify-center">
               {isVideo ? (
                 <video
-                  className="w-full h-96 object-cover"
+                  className="w-full max-h-96 object-contain"
                   controls
                   autoPlay
                   muted
                   onClick={(e) => e.stopPropagation()}
                   controlsList="nofullscreen"
+                  preload="none"
                 >
-                  <source src={currentMedia} />
-                  Your browser does not support the video tag.
+                  <source src={currentMedia} type={getVideoMimeType(currentMedia)} />
+                  <track kind="captions" />
+                  Your browser does not support this video format. Please update your browser.
                 </video>
               ) : (
-                <div className="relative w-full h-96 cursor-pointer hover:opacity-90 transition-opacity">
-                  <Image
-                    src={currentMedia}
-                    alt="Post media"
-                    fill
-                    className="object-cover"
-                  />
-                </div>
+                <picture>
+                  <source srcSet={currentMedia} type={getImageMimeType(currentMedia)} />
+                  <div className="relative w-full max-h-96 cursor-pointer hover:opacity-90 transition-opacity flex items-center justify-center bg-black">
+                    <Image
+                      src={currentMedia}
+                      alt="Post media"
+                      width={800}
+                      height={600}
+                      className="object-contain max-h-96"
+                    />
+                  </div>
+                </picture>
               )}
 
               {/* Navigation Arrows - Only show if multiple media items */}

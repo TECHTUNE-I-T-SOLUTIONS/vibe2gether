@@ -14,6 +14,7 @@ import { useUserProfile } from "@/hooks/use-user-profile"
 import { uploadProfilePicture, uploadCoverPicture } from "@/lib/supabase/storage"
 import { updateUserProfile } from "@/lib/supabase/queries"
 import { DashboardAnnouncements } from "@/components/dashboard-announcements"
+import { ProfileCompletionModal } from "@/components/profile-completion-modal"
 import {
   Heart,
   MessageCircle,
@@ -48,6 +49,7 @@ export default function DashboardPage() {
   const [unreadMessages, setUnreadMessages] = useState(0)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [showProfileCompletion, setShowProfileCompletion] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [hasPremium, setHasPremium] = useState(false)
@@ -71,78 +73,143 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!session?.user?.id) return
 
-    async function fetchDashboardData() {
+    async function fetchAllDashboardData() {
       try {
         setLoading(true)
-        const response = await fetch("/api/dashboard/stats", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        })
+        setError(null)
+        
+        // Check if we have fresh cached data (within 5 minutes)
+        const cachedData = localStorage.getItem("dashboard_stats_cache")
+        const cachedTimestamp = localStorage.getItem("dashboard_stats_timestamp")
+        const now = Date.now()
+        
+        if (cachedData && cachedTimestamp) {
+          const cacheAge = now - parseInt(cachedTimestamp)
+          if (cacheAge < 5 * 60 * 1000) { // 5 minutes
+            console.log("[Dashboard] Using cached data (", Math.round(cacheAge / 1000), "s old)")
+            const cached = JSON.parse(cachedData)
+            setStats(cached.stats || [])
+            setRecentActivity(cached.recentActivity || [])
+            setMatches(cached.matches || [])
+            setCoinBalance(cached.coinBalance || 0)
+            setLoading(false)
+            return
+          }
+        }
+        
+        // Parallelize all API calls with timeout
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+        
+        // Parallelize all API calls
+        const [dashboardRes, notificationsRes, messagesRes, premiumRes] = await Promise.all([
+          fetch("/api/dashboard/stats", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            signal: controller.signal
+          }),
+          fetch("/api/notifications", { signal: controller.signal }),
+          fetch("/api/messages", { signal: controller.signal }),
+          fetch("/api/user/premium-status", { signal: controller.signal })
+        ])
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch dashboard data")
+        clearTimeout(timeoutId)
+
+        // Dashboard stats - REQUIRED
+        if (!dashboardRes.ok) {
+          console.error("[Dashboard] Stats endpoint returned:", dashboardRes.status)
+          throw new Error(`Dashboard stats failed: ${dashboardRes.status}`)
+        }
+        
+        const dashboardData = await dashboardRes.json()
+        console.log("[Dashboard] Stats loaded:", { stats: dashboardData.stats?.length, activities: dashboardData.recentActivity?.length })
+        
+        // Cache the data
+        try {
+          localStorage.setItem("dashboard_stats_cache", JSON.stringify(dashboardData))
+          localStorage.setItem("dashboard_stats_timestamp", now.toString())
+        } catch (e) {
+          console.warn("[Dashboard] Failed to cache data:", e)
+        }
+        
+        setStats(dashboardData.stats || [])
+        setRecentActivity(dashboardData.recentActivity || [])
+        setMatches(dashboardData.matches || [])
+        setCoinBalance(dashboardData.coinBalance || 0)
+
+        // Notifications - optional
+        if (notificationsRes.ok) {
+          try {
+            const data = await notificationsRes.json()
+            setUnreadNotifications(data.unreadCount || 0)
+          } catch (e) {
+            console.error("[Dashboard] Failed to parse notifications:", e)
+          }
         }
 
-        const data = await response.json()
-        setStats(data.stats || [])
-        setRecentActivity(data.recentActivity || [])
-        setMatches(data.matches || [])
-        setCoinBalance(data.coinBalance || 0)
+        // Messages - optional
+        if (messagesRes.ok) {
+          try {
+            const data = await messagesRes.json()
+            const unreadCount = (data.conversations || []).reduce(
+              (total: number, conv: any) => total + (conv.unreadCount || 0),
+              0
+            )
+            setUnreadMessages(unreadCount)
+          } catch (e) {
+            console.error("[Dashboard] Failed to parse messages:", e)
+          }
+        }
+
+        // Premium status - optional
+        if (premiumRes.ok) {
+          try {
+            const data = await premiumRes.json()
+            setHasPremium(data.hasPremium || false)
+          } catch (e) {
+            console.error("[Dashboard] Failed to parse premium status:", e)
+          }
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "An error occurred")
-        console.error("Dashboard data fetch error:", err)
+        const errorMsg = err instanceof Error ? err.message : "An error occurred"
+        console.error("[Dashboard] Fetch error:", errorMsg, err)
+        setError(errorMsg)
+        // Set default values on error so UI doesn't stay loading forever
+        setStats([])
+        setRecentActivity([])
+        setMatches([])
       } finally {
         setLoading(false)
       }
     }
 
-    async function fetchNotifications() {
-      try {
-        const response = await fetch("/api/notifications")
-        if (response.ok) {
-          const data = await response.json()
-          setUnreadNotifications(data.unreadCount || 0)
-        }
-      } catch (err) {
-        console.error("Failed to fetch notifications:", err)
-      }
-    }
+    fetchAllDashboardData()
+  }, [session?.user?.id])
 
-    async function fetchMessages() {
-      try {
-        const response = await fetch("/api/messages")
-        if (response.ok) {
-          const data = await response.json()
-          const unreadCount = (data.conversations || []).reduce(
-            (total: number, conv: any) => total + (conv.unreadCount || 0),
-            0
-          )
-          setUnreadMessages(unreadCount)
-        }
-      } catch (err) {
-        console.error("Failed to fetch messages:", err)
-      }
-    }
+  // Check profile completion status (non-blocking, doesn't slow down dashboard)
+  useEffect(() => {
+    if (!profileUser?.id) return
 
-    async function checkPremium() {
-      try {
-        console.log("[Dashboard] Checking premium status")
-        const response = await fetch("/api/user/premium-status")
-        if (response.ok) {
-          const data = await response.json()
-          console.log("[Dashboard] Premium status:", data)
-          setHasPremium(data.hasPremium)
-        }
-      } catch (err) {
-        console.error("[Dashboard] Failed to check premium status:", err)
-      }
-    }
+    // Check if user has skipped profile completion before
+    const skipped = localStorage.getItem("profile_completion_skipped")
+    if (skipped) return
 
-    fetchDashboardData()
-    fetchNotifications()
-    fetchMessages()
-    checkPremium()
-  }, [])
+    // Check if profile is incomplete - show modal if any major field is missing
+    const isProfileComplete = 
+      profileUser.display_name && 
+      profileUser.bio && 
+      profileUser.city &&
+      profileUser.date_of_birth &&
+      profileUser.gender &&
+      profileUser.looking_for
+
+    if (!isProfileComplete) {
+      // Show modal only once per session (after a slight delay so dashboard loads first)
+      setTimeout(() => {
+        setShowProfileCompletion(true)
+      }, 1000)
+    }
+  }, [profileUser?.id, profileUser?.display_name, profileUser?.bio, profileUser?.city, profileUser?.date_of_birth, profileUser?.gender, profileUser?.looking_for])
 
   const handleCoverPictureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -247,6 +314,18 @@ export default function DashboardPage() {
 
   return (
     <div className="p-4 md:p-4 lg:px-6">
+      {/* Profile Completion Modal */}
+      <ProfileCompletionModal
+        open={showProfileCompletion}
+        onOpenChange={setShowProfileCompletion}
+        userId={profileUser.id}
+        onComplete={() => {
+          refetch()
+          // Clear the skipped flag so it can show again if needed
+          localStorage.removeItem("profile_completion_skipped")
+        }}
+      />
+
       {/* Profile Header */}
       <Card className="border-border/50 overflow-hidden mb-8">
         {/* Cover */}
@@ -281,7 +360,7 @@ export default function DashboardPage() {
           <div className="flex flex-col md:flex-row md:items-end gap-4 -mt-12 md:-mt-16">
             {/* Avatar */}
             <div className="relative flex-shrink-0">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full border-4 border-background overflow-hidden bg-muted flex items-center justify-center">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full border-4 border-background overflow-hidden bg-muted flex items-center justify-center relative">
                 {profileUser.profile_picture ? (
                   <Image src={profileUser.profile_picture} alt={profileUser.display_name || profileUser.full_name} fill className="object-cover object-center" />
                 ) : (
@@ -354,17 +433,37 @@ export default function DashboardPage() {
               <span className="text-sm text-primary font-semibold">{profileCompletion}%</span>
             </div>
             <Progress value={profileCompletion} className="h-2" />
-            <p className="text-xs text-muted-foreground mt-2">
+            <p className="text-xs text-muted-foreground mt-2 mb-3">
               {profileCompletion < 100
                 ? "Complete your profile to get more matches!"
                 : "Your profile is complete! 🎉"}
             </p>
+            {profileCompletion < 100 && (
+              <Button
+                onClick={() => setShowProfileCompletion(true)}
+                className="w-full sm:w-auto text-xs sm:text-sm h-8 sm:h-9"
+                size="sm"
+              >
+                Complete Profile
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
 
       {/* Announcements Section */}
       <DashboardAnnouncements />
+
+      {/* Error Alert */}
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-red-700 dark:text-red-400">Failed to load dashboard</p>
+            <p className="text-xs text-red-600 dark:text-red-500 mt-1">{error}</p>
+          </div>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-8">
         {/* Main Content */}

@@ -270,10 +270,10 @@ export default function NotificationsPage() {
     <div className="p-4 md:p-6 lg:p-8">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold mb-2">{t("notifications")}</h1>
+          <h1 className="text-md md:text-3xl font-bold mb-2">{t("notifications")}</h1>
           <p className="text-muted-foreground">Stay updated with your activity</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1">
           <Button 
             variant="outline" 
             className="rounded-full bg-transparent"
@@ -285,7 +285,7 @@ export default function NotificationsPage() {
             ) : (
               <CheckCheck className="w-4 h-4 mr-2" />
             )}
-            Mark All Read
+            All Read
           </Button>
           <Button 
             variant="outline" 
@@ -298,7 +298,7 @@ export default function NotificationsPage() {
             ) : (
               <Trash2 className="w-4 h-4 mr-2" />
             )}
-            Clear All
+            Clr All
           </Button>
         </div>
       </div>

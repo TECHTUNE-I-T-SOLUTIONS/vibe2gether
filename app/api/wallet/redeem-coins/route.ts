@@ -57,9 +57,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Calculate USD and NGN amounts
+    // Calculate USD, NGN, and XAF amounts
     const amountUsd = coinsAmount / 500;
     const amountNgn = amountUsd * 1450;
+    const amountXaf = amountUsd * 585.48;
 
     let result: any = null;
 

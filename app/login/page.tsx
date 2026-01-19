@@ -90,8 +90,8 @@ export default function LoginPage() {
             transition={{ duration: 0.5 }}
           >
             {/* Header */}
-            <h1 className="text-3xl font-bold mb-2 text-foreground">{t("welcomeBack")}</h1>
-            <p className="text-foreground/70 mb-8">{t("loginDescription")}</p>
+            <h1 className="text-3xl text-center font-bold mb-2 text-foreground">{t("welcomeBack")}</h1>
+            <p className="text-foreground/70 text-center mb-8">{t("loginDescription")}</p>
 
             {/* Social Login */}
             <div className="space-y-3">

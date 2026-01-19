@@ -38,7 +38,7 @@ export function PaystackPaymentModal({
   const { data: session } = useSession()
   const [email, setEmail] = useState("")
   const [fullName, setFullName] = useState("")
-  const [paymentAmount, setPaymentAmount] = useState(amount)
+  const [paymentAmount, setPaymentAmount] = useState<number | "">(amount)
   const [isProcessing, setIsProcessing] = useState(false)
   const [paymentStatus, setPaymentStatus] = useState<"idle" | "processing" | "success" | "error">("idle")
   const [errorMessage, setErrorMessage] = useState("")
@@ -46,10 +46,13 @@ export function PaystackPaymentModal({
   const [paymentReference, setPaymentReference] = useState<string | null>(null)
 
   // USD equivalent = NGN / 1450 (1 USD = 1450 NGN)
-  const usdEquivalent = paymentAmount / 1450
+  const usdEquivalent = paymentAmount !== "" ? paymentAmount / 1450 : 0
 
   // Coins equivalent = USD * 500 (500 coins = 1 USD)
   const coinsEquivalent = Math.round(usdEquivalent * 500)
+
+  // XAF equivalent = USD * 585.48 (1 USD = 585.48 XAF)
+  const xafEquivalent = Math.round(usdEquivalent * 585.48)
 
   // Check for payment reference in URL params (Paystack redirect)
   useEffect(() => {
@@ -118,7 +121,7 @@ export function PaystackPaymentModal({
       return
     }
 
-    if (paymentAmount < 1500) {
+    if (paymentAmount === "" || paymentAmount < 1500) {
       toast({
         title: "Minimum Amount Required",
         description: "The minimum payment amount is ₦1,500",
@@ -282,7 +285,15 @@ export function PaystackPaymentModal({
                     min="1500"
                     step="100"
                     value={paymentAmount}
-                    onChange={(e) => setPaymentAmount(Math.max(0, parseInt(e.target.value) || 1500))}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      if (value === "") {
+                        setPaymentAmount("")
+                      } else {
+                        const numValue = parseInt(value) || 0
+                        setPaymentAmount(numValue > 0 ? numValue : "")
+                      }
+                    }}
                     disabled={isProcessing}
                     className="font-semibold"
                   />
@@ -291,10 +302,13 @@ export function PaystackPaymentModal({
               </div>
               <div className="flex justify-between items-baseline bg-background p-3 rounded">
                 <div>
-                  <span className="text-lg font-bold block">₦{paymentAmount.toLocaleString()}</span>
+                  <span className="text-lg font-bold block">₦{paymentAmount !== "" ? paymentAmount.toLocaleString() : "0"}</span>
                   <span className="text-xs text-muted-foreground">{coinsEquivalent.toLocaleString()} coins</span>
                 </div>
-                <span className="text-sm text-muted-foreground">${usdEquivalent.toFixed(2)} USD</span>
+                <div className="text-right">
+                  <span className="text-sm text-muted-foreground block">${usdEquivalent.toFixed(2)} USD</span>
+                  <span className="text-sm text-muted-foreground">FCFA {xafEquivalent.toLocaleString()}</span>
+                </div>
               </div>
             </div>
           </div>

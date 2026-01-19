@@ -149,7 +149,7 @@ export default function EventsPage() {
                 Unforgettable <span className="gradient-text">Experiences</span> Await
               </h1>
               <p className="text-lg text-muted-foreground mb-8">
-                Discover curated events designed for connection, romance, and unforgettable moments.
+                Discover curated events designed for connection, networking, and unforgettable experiences.
               </p>
               <div className="relative max-w-xl mx-auto">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />

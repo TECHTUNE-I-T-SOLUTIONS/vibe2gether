@@ -70,19 +70,19 @@ export async function GET(request: NextRequest) {
       const postIds = randomizedPosts.map((p) => p.id)
       console.log(`[GET /api/posts/get-feed] Checking interactions for user ${session.user.id}`)
 
-      // Get likes
-      const { data: likes, error: likesError } = await supabase
-        .from("likes")
-        .select("post_id")
-        .eq("user_id", session.user.id)
-        .in("post_id", postIds)
-
-      // Get saves
-      const { data: saves, error: savesError } = await supabase
-        .from("saved_posts")
-        .select("post_id")
-        .eq("user_id", session.user.id)
-        .in("post_id", postIds)
+      // Parallelize likes and saves queries
+      const [{ data: likes, error: likesError }, { data: saves, error: savesError }] = await Promise.all([
+        supabase
+          .from("likes")
+          .select("post_id")
+          .eq("user_id", session.user.id)
+          .in("post_id", postIds),
+        supabase
+          .from("saved_posts")
+          .select("post_id")
+          .eq("user_id", session.user.id)
+          .in("post_id", postIds),
+      ])
 
       if (likesError) console.error("[GET /api/posts/get-feed] Error fetching likes:", likesError)
       if (savesError) console.error("[GET /api/posts/get-feed] Error fetching saves:", savesError)
@@ -107,16 +107,23 @@ export async function GET(request: NextRequest) {
       userSaved: userInteractions[post.id]?.saved || false,
     })) || []
 
-    return NextResponse.json({
-      success: true,
-      data: formattedPosts,
-      pagination: {
-        page,
-        limit,
-        total: count || 0,
-        pages: Math.ceil((count || 0) / limit),
+    return NextResponse.json(
+      {
+        success: true,
+        data: formattedPosts,
+        pagination: {
+          page,
+          limit,
+          total: count || 0,
+          pages: Math.ceil((count || 0) / limit),
+        },
       },
-    })
+      {
+        headers: {
+          "Cache-Control": "private, max-age=30",
+        },
+      }
+    )
   } catch (error) {
     console.error("[GET /api/posts/get-feed] Unexpected error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

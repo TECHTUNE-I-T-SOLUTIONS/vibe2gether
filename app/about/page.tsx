@@ -5,76 +5,74 @@ import { Footer } from "@/components/footer"
 import { MobileNav } from "@/components/mobile-nav"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Heart, Globe2, Shield, Sparkles, ArrowRight, CheckCircle } from "lucide-react"
+import { Briefcase, Globe2, Shield, Zap, ArrowRight, CheckCircle, Users, TrendingUp } from "lucide-react"
 
 const stats = [
-  { value: "1000+", label: "Active Users" },
-  { value: "150+", label: "Countries" },
-  { value: "500K+", label: "Successful Matches" },
-  { value: "4.9", label: "App Rating" },
+  { value: "5K+", label: "Active Community Members" },
+  { value: "40+", label: "Countries" },
+  { value: "200+", label: "Marketplace Listings" },
+  { value: "50+", label: "Events Hosted" },
 ]
 
 const values = [
   {
-    icon: Heart,
-    title: "Love First",
+    icon: Briefcase,
+    title: "Business & Growth",
     description:
-      "We believe everyone deserves to find meaningful connections. Our mission is to bring hearts together across the globe.",
+      "We empower entrepreneurs and professionals to build networks, discover opportunities, and grow their businesses through meaningful connections.",
   },
   {
     icon: Shield,
-    title: "Safety & Trust",
+    title: "Safety & Transparency",
     description:
-      "Your security is our priority. We employ advanced verification, encryption, and moderation to keep our community safe.",
+      "We prioritize community safety with verified profiles and transparent practices. Your trust is our foundation.",
   },
   {
     icon: Globe2,
-    title: "Global Community",
+    title: "Global Opportunities",
     description:
-      "Love knows no borders. We connect people from every corner of the world, celebrating diversity and cultural exchange.",
+      "Connect with professionals and entrepreneurs worldwide. Discover partnerships, collaborations, and business ventures across borders.",
   },
   {
-    icon: Sparkles,
+    icon: Zap,
     title: "Innovation",
     description:
-      "We continuously evolve our platform with cutting-edge technology to create the best possible experience for our users.",
+      "We're building modern tools to help you network, collaborate, and succeed. We listen to our community and evolve continuously.",
   },
 ]
 
-const team = [
+const features = [
   {
-    name: "Alexandra Chen",
-    role: "CEO & Co-Founder",
-    image: "/placeholder.svg?height=300&width=300",
+    title: "Professional Networking",
+    description: "Build meaningful professional connections and expand your network",
   },
   {
-    name: "Marcus Williams",
-    role: "CTO & Co-Founder",
-    image: "/placeholder.svg?height=300&width=300",
+    title: "Business Marketplace",
+    description: "Buy and sell services, products, and opportunities in one place",
   },
   {
-    name: "Sofia Martinez",
-    role: "Head of Product",
-    image: "/placeholder.svg?height=300&width=300",
+    title: "Events & Meetups",
+    description: "Discover and host events to connect with like-minded professionals",
   },
   {
-    name: "David Kim",
-    role: "Head of Community",
-    image: "/placeholder.svg?height=300&width=300",
+    title: "Community Feed",
+    description: "Share insights, updates, and opportunities with your network",
   },
 ]
 
 const milestones = [
-  { year: "2025", title: "Founded", description: "Vibe2Gether launched with a vision to revolutionize online dating" },
-  // { year: "2021", title: "1M Users", description: "Reached our first million users across 50 countries" },
+  { year: "2025", title: "Platform Launch", description: "Vibe2Gether launched as a community platform for networking and opportunities" },
+  {
+    year: "2025",
+    title: "Early Community",
+    description: "Growing community with thousands of active members discovering opportunities",
+  },
   {
     year: "2026",
-    title: "Marketplace Launch",
-    description: "Introducing the romantic marketplace for gifts and experiences",
+    title: "Marketplace Expansion",
+    description: "Launching enhanced marketplace features for buying and selling services",
   },
-  // { year: "2023", title: "Global Expansion", description: "Expanded to 150+ countries with multi-language support" },
-  { year: "2026", title: "AI Matching", description: "Launching AI-powered compatibility matching algorithm" },
-  // { year: "2025", title: "2M+ Users", description: "Growing community with over 2 million active members" },
+  { year: "2026+", title: "Global Growth", description: "Expanding to more countries and adding advanced networking tools" },
 ]
 
 export default function AboutPage() {
@@ -84,14 +82,15 @@ export default function AboutPage() {
       <main className="pt-20 md:pt-24">
         {/* Hero */}
         <section className="relative py-20 md:py-32 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-accent/5 to-secondary/5" />
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 via-cyan-50/50 to-teal-50/50" />
           <div className="container mx-auto px-4 relative z-10">
             <div className="max-w-4xl mx-auto text-center">
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6">
-                Bringing People <span className="gradient-text">Together</span>
+                Opportunities Know <span className="gradient-text">No Borders</span>
               </h1>
               <p className="text-xl text-muted-foreground mb-8 leading-relaxed">
-                Vibe2Gether is a social platform where communities form — meet new people, create events, buy & sell, post, and earn rewards for participation. We combine cutting-edge technology with a human-first approach to help you connect, share, and grow your network.
+                Vibe2Gether connects entrepreneurs, professionals, and creators worldwide. Build your network, discover business opportunities, 
+                showcase your services, and grow together in a thriving global community.
               </p>
               <div className="flex flex-wrap justify-center gap-4">
                 <Link href="/signup">
@@ -117,7 +116,7 @@ export default function AboutPage() {
               {stats.map((stat, i) => (
                 <div key={i} className="text-center">
                   <div className="text-3xl md:text-4xl font-bold gradient-text mb-1">{stat.value}</div>
-                  <div className="text-muted-foreground">{stat.label}</div>
+                  <div className="text-muted-foreground text-sm md:text-base">{stat.label}</div>
                 </div>
               ))}
             </div>
@@ -127,72 +126,30 @@ export default function AboutPage() {
         {/* Our Story */}
         <section className="py-20 md:py-32">
           <div className="container mx-auto px-4">
-            <div className="grid lg:grid-cols-2 gap-12 items-center">
-              <div>
-                <h2 className="text-3xl md:text-4xl font-bold mb-6">
-                  Our <span className="gradient-text">Story</span>
-                </h2>
-                <p className="text-lg text-muted-foreground mb-6 leading-relaxed">
-                  Vibe2Gether was born from a simple belief: meaningful connections should be exciting, safe, and accessible to everyone. Founded in 2025 by a team passionate about human connection, we set out to create a platform that goes beyond superficial swipes.
-                </p>
-                <p className="text-lg text-muted-foreground mb-6 leading-relaxed">
-                  Today, we're proud to be a global community of over 2 million members from 150+ countries, all seeking
-                  genuine connections. Our unique combination of dating, marketplace, and events creates opportunities
-                  for love to bloom in unexpected ways.
-                </p>
-                <div className="space-y-3">
-                  {[
-                    "AI-powered matching for genuine compatibility",
-                    "Verified profiles for a safe community",
-                    "Marketplace for experiences, gifts, and local services",
-                    "Curated events for real-world connections",
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <CheckCircle className="w-5 h-5 text-primary shrink-0" />
-                      <span>{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="relative">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-4">
-                    <div className="relative aspect-[3/4] rounded-2xl overflow-hidden">
-                      <Image
-                        src="/about/couple (1).jpg?height=400&width=300"
-                        alt="Happy couple"
-                        fill
-                        className="object-cover"
-                      />
-                    </div>
-                    <div className="relative aspect-square rounded-2xl overflow-hidden">
-                      <Image
-                        src="/about/couple (2).jpg?height=300&width=300"
-                        alt="Romantic date"
-                        fill
-                        className="object-cover"
-                      />
+            <div className="max-w-4xl mx-auto">
+              <h2 className="text-3xl md:text-4xl font-bold mb-6">
+                Our <span className="gradient-text">Mission</span>
+              </h2>
+              <p className="text-lg text-muted-foreground mb-6 leading-relaxed">
+                Founded in 2025, Vibe2Gether is built on the belief that professional networks and business opportunities shouldn't be limited by geography, 
+                background, or platform. We're creating a space where entrepreneurship thrives, partnerships form naturally, and everyone has a shot at success.
+              </p>
+              <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
+                Our growing community includes business owners, freelancers, creators, and professionals from 40+ countries. We're still early, still growing, 
+                and committed to building a platform that's transparent about its journey while delivering real value to our community.
+              </p>
+
+              <h3 className="text-2xl font-bold mb-6 mt-10">What You Can Do on Vibe2Gether</h3>
+              <div className="grid sm:grid-cols-2 gap-6">
+                {features.map((feature, i) => (
+                  <div key={i} className="flex items-start gap-4">
+                    <Briefcase className="w-6 h-6 text-primary shrink-0 mt-1" />
+                    <div>
+                      <h4 className="font-semibold mb-1">{feature.title}</h4>
+                      <p className="text-muted-foreground text-sm">{feature.description}</p>
                     </div>
                   </div>
-                  <div className="space-y-4 pt-8">
-                    <div className="relative aspect-square rounded-2xl overflow-hidden">
-                      <Image
-                        src="/about/couple (3).jpg?height=300&width=300"
-                        alt="Adventure together"
-                        fill
-                        className="object-cover"
-                      />
-                    </div>
-                    <div className="relative aspect-[3/4] rounded-2xl overflow-hidden">
-                      <Image
-                        src="/about/couple (4).jpg?height=400&width=300"
-                        alt="Wedding celebration"
-                        fill
-                        className="object-cover"
-                      />
-                    </div>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>
@@ -203,10 +160,10 @@ export default function AboutPage() {
           <div className="container mx-auto px-4">
             <div className="text-center mb-16">
               <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                Our <span className="gradient-text">Values</span>
+                Our <span className="gradient-text">Core Values</span>
               </h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                These core principles guide everything we do at Vibe2Gether.
+                These principles guide how we build and operate Vibe2Gether.
               </p>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -219,7 +176,7 @@ export default function AboutPage() {
                         <Icon className="w-7 h-7 text-primary-foreground" />
                       </div>
                       <h3 className="text-xl font-semibold mb-2">{value.title}</h3>
-                      <p className="text-muted-foreground">{value.description}</p>
+                      <p className="text-muted-foreground text-sm">{value.description}</p>
                     </CardContent>
                   </Card>
                 )
@@ -233,10 +190,10 @@ export default function AboutPage() {
           <div className="container mx-auto px-4">
             <div className="text-center mb-16">
               <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                Our <span className="gradient-text">Journey</span>
+                Our <span className="gradient-text">Roadmap</span>
               </h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                From a simple idea to a global platform — here's how we got here.
+                We're transparent about where we are and where we're headed.
               </p>
             </div>
             <div className="max-w-4xl mx-auto">
@@ -292,9 +249,9 @@ export default function AboutPage() {
           <div className="absolute inset-0 gradient-bg opacity-90" />
           <div className="container mx-auto px-4 relative z-10">
             <div className="max-w-3xl mx-auto text-center">
-              <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">Ready to Join Our Story?</h2>
+              <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">Ready to Grow Together?</h2>
               <p className="text-xl text-white/80 mb-8">
-                Become part of a community where love, friendship, and meaningful connections flourish every day.
+                Join thousands of professionals and entrepreneurs building meaningful connections and discovering opportunities on Vibe2Gether.
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <Link href="/signup">

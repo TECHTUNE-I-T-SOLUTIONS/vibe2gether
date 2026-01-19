@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  AlertCircle,
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -38,6 +39,7 @@ export default function FeedPage() {
   const { toast } = useToast()
   const [posts, setPosts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [offset, setOffset] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const [likedPosts, setLikedPosts] = useState<Map<string, boolean>>(new Map())
@@ -46,76 +48,57 @@ export default function FeedPage() {
   const [commentCounts, setCommentCounts] = useState<Map<string, number>>(new Map())
   const [saveCounts, setSaveCounts] = useState<Map<string, number>>(new Map())
   const [viewCounts, setViewCounts] = useState<Map<string, number>>(new Map())
+
+  // Auth check - redirect to login if not authenticated
+  useEffect(() => {
+    if (status === "loading") return
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set())
   const [postComments, setPostComments] = useState<Map<string, any[]>>(new Map())
   const [newComments, setNewComments] = useState<Map<string, string>>(new Map())
   const [submittingComment, setSubmittingComment] = useState<Map<string, boolean>>(new Map())
   const [mediaCarouselIndex, setMediaCarouselIndex] = useState<Map<string, number>>(new Map())
+  const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set())
   const observerTarget = useRef<HTMLDivElement>(null)
   const viewTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map())
+  const mediaObserverRef = useRef<IntersectionObserver | null>(null)
 
   const fetchPosts = useCallback(async (newOffset: number) => {
     try {
+      setError(null)
       const page = Math.floor(newOffset / 20) + 1
       console.log(`[Feed] Fetching posts - page: ${page}`)
 
-      const response = await fetch(`/api/posts/get-feed?page=${page}&limit=20`)
+      // Setup timeout
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000)
+
+      const response = await fetch(`/api/posts/get-feed?page=${page}&limit=20`, {
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+
       if (!response.ok) {
         throw new Error("Failed to fetch posts")
       }
 
-      const { data: posts } = await response.json()
+      const { data: fetchedPosts } = await response.json()
       
-      if (!posts || posts.length === 0) {
+      if (!fetchedPosts || fetchedPosts.length === 0) {
         setHasMore(false)
         return
       }
 
-      console.log(`[Feed] Fetched ${posts.length} posts with counts`)
+      console.log(`[Feed] Fetched ${fetchedPosts.length} posts`)
 
-      setPosts((prev) => (newOffset === 0 ? posts : [...prev, ...posts]))
-      setHasMore(posts.length === 20)
+      setPosts((prev) => (newOffset === 0 ? fetchedPosts : [...prev, ...fetchedPosts]))
+      setHasMore(fetchedPosts.length === 20)
       setOffset(newOffset + 20)
 
-      // Aggressive prefetch: Load all images immediately and videos with preload
-      posts.forEach((post: any) => {
-        const mediaArray = getMediaArray(post.media)
-        mediaArray.forEach((url, index) => {
-          if (url && typeof url === 'string') {
-            if (!isVideo(url)) {
-              // Preload images immediately
-              const img = new window.Image()
-              img.src = url
-              console.log(`[Feed] Preloading image: ${url}`)
-            } else {
-              // Preload video metadata with priority
-              if (index === 0) {
-                const video = document.createElement('video')
-                video.src = url
-                video.preload = 'metadata'
-                console.log(`[Feed] Preloading first video: ${url}`)
-              } else {
-                // Queue other videos for idle time loading
-                if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-                  requestIdleCallback(() => {
-                    const video = document.createElement('video')
-                    video.src = url
-                    video.preload = 'metadata'
-                  }, { timeout: 3000 })
-                } else {
-                  setTimeout(() => {
-                    const video = document.createElement('video')
-                    video.src = url
-                    video.preload = 'metadata'
-                  }, 1000)
-                }
-              }
-            }
-          }
-        })
-      })
-
-      // Initialize count maps for all posts (API returns them directly)
+      // Build interaction maps - no aggressive prefetching
       const likesCountMap = new Map<string, number>()
       const commentsCountMap = new Map<string, number>()
       const savesCountMap = new Map<string, number>()
@@ -123,17 +106,13 @@ export default function FeedPage() {
       const likesMap = new Map<string, boolean>()
       const savesMap = new Map<string, boolean>()
 
-      for (const post of posts) {
+      for (const post of fetchedPosts) {
         likesCountMap.set(post.id, post.likes_count || 0)
         commentsCountMap.set(post.id, post.comments_count || 0)
         savesCountMap.set(post.id, post.saves_count || 0)
         viewsCountMap.set(post.id, post.views_count || 0)
         likesMap.set(post.id, post.userLiked || false)
         savesMap.set(post.id, post.userSaved || false)
-
-        console.log(
-          `[Feed] Post ${post.id} - likes: ${post.likes_count}, saves: ${post.saves_count}, views: ${post.views_count}`
-        )
       }
 
       // Update all states
@@ -154,6 +133,7 @@ export default function FeedPage() {
       }
     } catch (err) {
       console.error("[Feed] Failed to fetch posts:", err)
+      setError("Failed to load posts. Please try again.")
     } finally {
       setLoading(false)
     }
@@ -190,18 +170,10 @@ export default function FeedPage() {
     }
   }, [])
 
-  // Auth check
-  useEffect(() => {
-    if (status === "loading") return // Wait for session to load
-    if (status === "unauthenticated") {
-      router.push("/login")
-    }
-  }, [status, router])
-
-  // Setup Intersection Observer for scroll-based view tracking
+  // Setup view tracking observer
   useEffect(() => {
     const observerOptions = {
-      threshold: 0.5, // 50% of post must be visible
+      threshold: 0.5,
       rootMargin: "0px",
     }
 
@@ -211,11 +183,9 @@ export default function FeedPage() {
         if (!postId) return
 
         if (entry.isIntersecting) {
-          // Clear any existing timeout for this post
           const existingTimeout = viewTimeoutsRef.current.get(postId)
           if (existingTimeout) clearTimeout(existingTimeout)
 
-          // Set a new timeout to track view after 2 seconds in viewport
           const timeout = setTimeout(() => {
             trackPostView(postId)
             viewTimeoutsRef.current.delete(postId)
@@ -223,7 +193,6 @@ export default function FeedPage() {
 
           viewTimeoutsRef.current.set(postId, timeout)
         } else {
-          // Clear timeout if post leaves viewport before 2 seconds
           const timeout = viewTimeoutsRef.current.get(postId)
           if (timeout) {
             clearTimeout(timeout)
@@ -233,22 +202,60 @@ export default function FeedPage() {
       })
     }, observerOptions)
 
-    // Observe all post cards
     const postCards = document.querySelectorAll("[data-post-id]")
     postCards.forEach((card) => viewObserver.observe(card))
 
     return () => {
-      // Cleanup timeouts
       viewTimeoutsRef.current.forEach((timeout) => clearTimeout(timeout))
       viewTimeoutsRef.current.clear()
       viewObserver.disconnect()
     }
   }, [posts, trackPostView])
 
+  // Setup lazy-load media observer (replaces aggressive prefetching)
   useEffect(() => {
-    fetchPosts(0)
-  }, [fetchPosts])
+    const options = {
+      root: null,
+      rootMargin: "100px", // Start loading 100px before viewport (aggressive but optimized)
+      threshold: 0,
+    }
 
+    mediaObserverRef.current = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const mediaId = (entry.target as HTMLElement).getAttribute("data-media-id")
+          const isVideo = (entry.target as HTMLElement).getAttribute("data-is-video") === "true"
+          
+          if (mediaId) {
+            // Prioritize videos less to reduce network congestion
+            const delay = isVideo ? 100 : 0
+            setTimeout(() => {
+              setLoadedImages((prev) => new Set(prev).add(mediaId))
+              // Stop observing once loaded
+              if (mediaObserverRef.current) {
+                mediaObserverRef.current.unobserve(entry.target)
+              }
+            }, delay)
+          }
+        }
+      })
+    }, options)
+
+    return () => {
+      if (mediaObserverRef.current) {
+        mediaObserverRef.current.disconnect()
+      }
+    }
+  }, [])
+
+  // Initial fetch
+  useEffect(() => {
+    if (user) {
+      fetchPosts(0)
+    }
+  }, [user, fetchPosts])
+
+  // Infinite scroll
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -501,111 +508,70 @@ export default function FeedPage() {
     return mediaArray[index] || null
   }
 
+  // Comprehensive media format detection
   const isVideo = (url: string) => {
-    return url.match(/\.(mp4|webm|ogg)$/i)
+    // Common video formats and container types
+    return /\.(mp4|webm|ogg|avi|mov|mkv|flv|wmv|m3u8)$/i.test(url) || 
+           /\.(mp4|webm|ogg|avi|mov|mkv|flv|wmv|m3u8)\?/i.test(url)
   }
 
-  // Aggressive media preloading strategy
-  const prefetchMediaUrl = useCallback((url: string) => {
-    if (!url) return
-    
-    if (isVideo(url)) {
-      // Preload video metadata and first frame
-      try {
-        const video = document.createElement('video')
-        video.src = url
-        video.preload = 'metadata'
-        // Trigger metadata load for thumbnail
-        video.addEventListener('loadedmetadata', () => {
-          // Video metadata loaded
-        })
-      } catch (e) {
-        console.log('[Feed] Video preload setup error:', e)
-      }
-    } else {
-      // Preload image
-      const img = new window.Image()
-      img.src = url
-      img.onerror = () => console.log('[Feed] Image preload failed:', url)
+  // Comprehensive image format detection
+  const isImage = (url: string) => {
+    // Common image formats including modern ones
+    return /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|tiff|heic|heif|avif)$/i.test(url) ||
+           /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|tiff|heic|heif|avif)\?/i.test(url)
+  }
+
+  // Get MIME type for proper video source element
+  const getVideoMimeType = (url: string): string => {
+    const ext = url.toLowerCase().split(/[\?#]/)[0].split('.').pop() || ''
+    const mimeMap: { [key: string]: string } = {
+      'mp4': 'video/mp4',
+      'webm': 'video/webm',
+      'ogg': 'video/ogg',
+      'mov': 'video/quicktime',
+      'avi': 'video/x-msvideo',
+      'mkv': 'video/x-matroska',
+      'flv': 'video/x-flv',
+      'wmv': 'video/x-ms-wmv',
+      'm3u8': 'application/x-mpegURL',
     }
-  }, [])
+    return mimeMap[ext] || 'video/mp4'
+  }
 
-  // Prefetch all media for all posts on page load and when index changes
-  useEffect(() => {
-    if (posts.length === 0) return
-    
-    posts.forEach((post) => {
-      const mediaArray = getMediaArray(post.media)
-      const currentIndex = mediaCarouselIndex.get(post.id) || 0
-      
-      // Prefetch current media (already visible)
-      if (mediaArray[currentIndex]) {
-        prefetchMediaUrl(mediaArray[currentIndex])
-      }
-      
-      // Prefetch next media (user might click next)
-      if (mediaArray[currentIndex + 1]) {
-        prefetchMediaUrl(mediaArray[currentIndex + 1])
-      }
-      
-      // Prefetch previous media (user might click prev)
-      if (currentIndex > 0 && mediaArray[currentIndex - 1]) {
-        prefetchMediaUrl(mediaArray[currentIndex - 1])
-      }
-      
-      // Aggressively prefetch all other media in the carousel
-      mediaArray.forEach((url, index) => {
-        if (url && index !== currentIndex) {
-          // Use requestIdleCallback for lower priority background loading
-          if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-            requestIdleCallback(() => prefetchMediaUrl(url), { timeout: 2000 })
-          } else {
-            // Fallback for browsers without requestIdleCallback
-            setTimeout(() => prefetchMediaUrl(url), 500)
-          }
-        }
-      })
-    })
-  }, [posts, mediaCarouselIndex, prefetchMediaUrl])
-
-  // Prefetch media for posts that will come into view (infinite scroll)
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const postElement = entry.target as HTMLElement
-            const postId = postElement.getAttribute('data-post-id')
-            if (postId) {
-              const post = posts.find(p => p.id === postId)
-              if (post) {
-                const mediaArray = getMediaArray(post.media)
-                // Prefetch first 3 media items for soon-to-be-visible posts
-                mediaArray.slice(0, 3).forEach((url) => {
-                  if (url) {
-                    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-                      requestIdleCallback(() => prefetchMediaUrl(url), { timeout: 3000 })
-                    } else {
-                      setTimeout(() => prefetchMediaUrl(url), 1000)
-                    }
-                  }
-                })
-              }
-            }
-          }
-        })
-      },
-      { rootMargin: '500px' }
-    )
-
-    const postCards = document.querySelectorAll('[data-post-id]')
-    postCards.forEach((card) => observer.observe(card))
-
-    return () => observer.disconnect()
-  }, [posts, prefetchMediaUrl])
+  // Get MIME type for image sources (for better compatibility)
+  const getImageMimeType = (url: string): string => {
+    const ext = url.toLowerCase().split(/[\?#]/)[0].split('.').pop() || ''
+    const mimeMap: { [key: string]: string } = {
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'svg': 'image/svg+xml',
+      'bmp': 'image/bmp',
+      'ico': 'image/x-icon',
+      'tiff': 'image/tiff',
+      'heic': 'image/heic',
+      'heif': 'image/heif',
+      'avif': 'image/avif',
+    }
+    return mimeMap[ext] || 'image/jpeg'
+  }
 
   return (
     <div className="p-4 md:p-6 max-w-8xl mx-auto w-auto">
+      {/* Error Alert */}
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-semibold text-red-900">Failed to load posts</p>
+            <p className="text-sm text-red-800">{error}</p>
+          </div>
+        </div>
+      )}
+
       {/* Create Post Card */}
       <Card className="border-border/50 mb-6 overflow-hidden">
         <CardContent className="p-4">
@@ -711,29 +677,48 @@ export default function FeedPage() {
                 {mediaUrl && (
                   <div className="relative w-full rounded-lg overflow-hidden mb-4 bg-muted">
                     <div
-                      className="relative w-full h-96"
+                      className="relative w-full bg-black flex items-center justify-center min-h-[300px]"
                       onClick={() => router.push(`/post/${post.id}`)}
+                      data-media-id={`${post.id}-${currentMediaIndex}`}
+                      data-is-video={isVideo(mediaUrl)}
+                      ref={(el) => {
+                        if (el && mediaObserverRef.current) {
+                          mediaObserverRef.current.observe(el)
+                        }
+                      }}
                     >
-                      {isVideo(mediaUrl) ? (
-                        <video
-                          className="w-full h-96 object-cover"
-                          controls
-                          controlsList="nofullscreen nodownload"
-                          disablePictureInPicture
-                          autoPlay
-                          muted
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <source src={mediaUrl} />
-                          Your browser does not support the video tag.
-                        </video>
+                      {loadedImages.has(`${post.id}-${currentMediaIndex}`) ? (
+                        isVideo(mediaUrl) ? (
+                          <video
+                            className="w-full max-h-96 object-contain bg-black"
+                            controls
+                            controlsList="nofullscreen nodownload"
+                            disablePictureInPicture
+                            preload="none"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <source src={mediaUrl} type={getVideoMimeType(mediaUrl)} />
+                            <track kind="captions" />
+                            Your browser does not support this video format. Please update your browser.
+                          </video>
+                        ) : (
+                          <picture>
+                            <source srcSet={mediaUrl} type={getImageMimeType(mediaUrl)} />
+                            <Image
+                              src={mediaUrl}
+                              alt="Post media"
+                              width={600}
+                              height={400}
+                              className="w-full h-auto max-h-96 object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                              priority={false}
+                              loading="lazy"
+                            />
+                          </picture>
+                        )
                       ) : (
-                        <Image
-                          src={mediaUrl}
-                          alt="Post media"
-                          fill
-                          className="object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                        />
+                        <div className="flex items-center justify-center w-full h-80 bg-muted/50">
+                          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                        </div>
                       )}
                     </div>
 

@@ -21,6 +21,7 @@ import {
   Share2,
   Copy,
   Loader2,
+  MoreVertical,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -28,6 +29,19 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useI18n } from "@/lib/i18n/context"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { uploadProfilePicture, uploadCoverPicture } from "@/lib/supabase/storage"
@@ -54,6 +68,9 @@ export default function ProfilePage() {
     dateOfBirth: "",
     gender: "",
     looking_for: "",
+    countryCode: "+234",
+    mobileNumber: "",
+    interests: "",
   })
   // const profilePictureInputRef = useRef<HTMLInputElement>(null)
   // const coverPictureInputRef = useRef<HTMLInputElement>(null)
@@ -77,6 +94,9 @@ export default function ProfilePage() {
         dateOfBirth: user.date_of_birth || "",
         gender: user.gender || "",
         looking_for: user.looking_for || "",
+        countryCode: user.country_code || "+234",
+        mobileNumber: user.mobile_number || "",
+        interests: Array.isArray(user.interests) ? user.interests.join(", ") : "",
       })
     }
   }, [user])
@@ -182,12 +202,29 @@ export default function ProfilePage() {
 
     try {
       setUploading(true)
+      
+      // Parse location
+      const [city, country] = formData.city.includes(',')
+        ? formData.city.split(',').map(s => s.trim())
+        : [formData.city, '']
+
+      // Parse interests from comma-separated string
+      const interestsArray = formData.interests
+        .split(',')
+        .map(i => i.trim())
+        .filter(i => i.length > 0)
+
       const { error } = await updateUserProfile(user.id, {
         display_name: formData.displayName,
         bio: formData.bio,
-        city: formData.city,
-        country: formData.country,
-        interests: selectedInterests,
+        city: city,
+        country: country,
+        date_of_birth: formData.dateOfBirth,
+        gender: formData.gender,
+        looking_for: formData.looking_for,
+        country_code: formData.countryCode,
+        mobile_number: formData.mobileNumber,
+        interests: interestsArray,
       })
 
       if (!error) {
@@ -242,7 +279,7 @@ export default function ProfilePage() {
       <div className="flex items-start justify-between mb-8">
         <div className="flex gap-4">
           {user.profile_picture && (
-            <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-4 border-background">
+            <div className="relative w-16 h-16 md:w-16 md:h-16 rounded-full overflow-hidden border-4 border-background">
               <Image
                 src={user.profile_picture}
                 alt={user.display_name || user.full_name}
@@ -253,7 +290,7 @@ export default function ProfilePage() {
           )}
           <div className="pt-4">
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl md:text-3xl font-bold">{user.display_name || user.full_name}</h1>
+              <h1 className="text-sm md:text-3xl font-bold">{user.display_name || user.full_name}</h1>
               {user.is_premium && (
                 <span className="inline-flex items-center gap-1 bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-700 px-3 py-1 rounded-full text-sm font-semibold">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
@@ -262,7 +299,7 @@ export default function ProfilePage() {
                   Premium
                 </span>
               )}
-              {user.is_verified && (
+              {verificationStatus?.status === "verified" && (
                 <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full text-sm">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -270,8 +307,20 @@ export default function ProfilePage() {
                   Verified
                 </span>
               )}
+              {verificationStatus?.status === "pending" && (
+                <span className="inline-flex items-center gap-1 bg-yellow-50 text-yellow-600 px-2 py-0.5 rounded-full text-sm">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Pending
+                </span>
+              )}
+              {verificationStatus?.status === "rejected" && (
+                <span className="inline-flex items-center gap-1 bg-red-50 text-red-600 px-2 py-0.5 rounded-full text-sm">
+                  <X className="h-3.5 w-3.5" />
+                  Not Verified
+                </span>
+              )}
             </div>
-            <p className="text-muted-foreground">{user.email}</p>
+            <p className="text-muted-foreground text-xs">{user.email}</p>
             {user.city || user.country ? (
               <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                 <MapPin className="w-4 h-4" />
@@ -283,52 +332,115 @@ export default function ProfilePage() {
 
         {isEditing ? (
           <div className="flex gap-1.5">
-            <Button size="sm" variant="outline" className="rounded-full" onClick={() => setIsEditing(false)}>
+            <Button size="sm" variant="outline" className="rounded-full" onClick={() => setIsEditing(false)} disabled={uploading}>
               <X className="w-3.5 h-3.5" />
             </Button>
-            <Button size="sm" className="rounded-full gradient-bg" onClick={() => setIsEditing(false)}>
-              <Check className="w-3.5 h-3.5 mr-1" />
-              Save
+            <Button 
+              size="sm" 
+              className="rounded-full gradient-bg" 
+              onClick={handleSaveProfile}
+              disabled={uploading}
+            >
+              {uploading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Check className="w-3.5 h-3.5 mr-1" />
+                  Save
+                </>
+              )}
             </Button>
           </div>
         ) : (
-          <div className="flex gap-1.5 flex-wrap justify-end">
-            <Button size="sm" className="rounded-full gradient-bg" onClick={() => setIsEditing(true)}>
-              <Edit className="w-3.5 h-3.5 mr-1" />
-              {t("editProfile")}
-            </Button>
-            {!user.is_verified && (
-              <Button size="sm" variant="outline" className="rounded-full" onClick={() => setVerificationModalOpen(true)}>
-                <Shield className="w-3.5 h-3.5 mr-1" />
-                Verify
+          <>
+            {/* Desktop View - Show all buttons */}
+            <div className="hidden sm:flex gap-1.5 flex-wrap justify-end">
+              <Button size="sm" className="rounded-full gradient-bg" onClick={() => setIsEditing(true)}>
+                <Edit className="w-3.5 h-3.5 mr-1" />
+                {t("editProfile")}
               </Button>
-            )}
-            <Button
-              size="sm"
-              variant="outline"
-              className="rounded-full"
-              onClick={async () => {
-                const shareData = {
-                  title: `Join me on V2G`,
-                  text: `Check out my profile on V2G!`,
-                  url: window.location.href,
-                }
-                if (navigator.share) {
-                  try {
-                    await navigator.share(shareData)
-                  } catch (err) {
-                    console.error("Error sharing:", err)
+              {verificationStatus?.status !== "verified" && (
+                <Button size="sm" variant="outline" className="rounded-full" onClick={() => setVerificationModalOpen(true)}>
+                  <Shield className="w-3.5 h-3.5 mr-1" />
+                  Verify
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-full"
+                onClick={async () => {
+                  const shareData = {
+                    title: `Join me on V2G`,
+                    text: `Check out my profile on V2G!`,
+                    url: window.location.href,
                   }
-                } else {
-                  navigator.clipboard.writeText(
-                    `Check out my profile on V2G: ${window.location.href}`
-                  )
-                }
-              }}
-            >
-              <Share2 className="w-3.5 h-3.5" />
-            </Button>
-          </div>
+                  if (navigator.share) {
+                    try {
+                      await navigator.share(shareData)
+                    } catch (err) {
+                      console.error("Error sharing:", err)
+                    }
+                  } else {
+                    navigator.clipboard.writeText(
+                      `Check out my profile on V2G: ${window.location.href}`
+                    )
+                  }
+                }}
+              >
+                <Share2 className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+
+            {/* Mobile View - Show dropdown menu */}
+            <div className="sm:hidden">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" className="rounded-full">
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => setIsEditing(true)}>
+                    <Edit className="w-4 h-4 mr-2" />
+                    {t("editProfile")}
+                  </DropdownMenuItem>
+                  {!user.is_verified && (
+                    <DropdownMenuItem onClick={() => setVerificationModalOpen(true)}>
+                      <Shield className="w-4 h-4 mr-2" />
+                      Verify Account
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      const shareData = {
+                        title: `Join me on V2G`,
+                        text: `Check out my profile on V2G!`,
+                        url: window.location.href,
+                      }
+                      if (navigator.share) {
+                        try {
+                          await navigator.share(shareData)
+                        } catch (err) {
+                          console.error("Error sharing:", err)
+                        }
+                      } else {
+                        navigator.clipboard.writeText(
+                          `Check out my profile on V2G: ${window.location.href}`
+                        )
+                      }
+                    }}
+                  >
+                    <Share2 className="w-4 h-4 mr-2" />
+                    Share Profile
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </>
         )}
       </div>
 
@@ -350,7 +462,7 @@ export default function ProfilePage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-white/70 mb-1">Your Referral Code</p>
-                <p className="text-2xl font-bold font-mono">{user.referral_code}</p>
+                <p className="text-sm font-bold font-mono">{user.referral_code}</p>
               </div>
               <div className="flex gap-2">
                 <Button
@@ -444,28 +556,40 @@ export default function ProfilePage() {
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <Label>Full Name</Label>
-                <Input defaultValue={user.full_name || ""} disabled={!isEditing} className="mt-1.5" />
+                <Input 
+                  value={user.full_name || ""} 
+                  disabled={true} 
+                  className="mt-1.5" 
+                />
               </div>
               <div>
                 <Label>Display Name</Label>
-                <Input defaultValue={user.display_name || ""} disabled={!isEditing} className="mt-1.5" />
+                <Input 
+                  value={formData.displayName}
+                  onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
+                  disabled={!isEditing} 
+                  className="mt-1.5" 
+                />
               </div>
             </div>
             <div>
               <Label>Bio</Label>
               <Textarea
-                defaultValue={user.bio || ""}
+                value={formData.bio}
+                onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
                 disabled={!isEditing}
                 className="mt-1.5 min-h-24"
               />
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <div>
-                <Label>Location</Label>
+                <Label>Location (City, Country)</Label>
                 <div className="relative mt-1.5">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                   <Input 
-                    defaultValue={`${user.city || ""}, ${user.country || ""}`} 
+                    value={formData.city}
+                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                    placeholder="e.g., Lagos, Nigeria"
                     disabled={!isEditing} 
                     className="pl-10" 
                   />
@@ -474,10 +598,11 @@ export default function ProfilePage() {
               <div>
                 <Label>Birthday</Label>
                 <div className="relative mt-1.5">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                   <Input 
                     type="date" 
-                    defaultValue={formData.dateOfBirth} 
+                    value={formData.dateOfBirth} 
+                    onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
                     disabled={!isEditing} 
                     className="pl-10" 
                   />
@@ -487,12 +612,131 @@ export default function ProfilePage() {
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <Label>Gender</Label>
-                <Input defaultValue={formData.gender} disabled={!isEditing} className="mt-1.5" />
+                {isEditing ? (
+                  <Select value={formData.gender} onValueChange={(value) => setFormData({ ...formData, gender: value })}>
+                    <SelectTrigger className="mt-1.5">
+                      <SelectValue placeholder="Select your gender" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="male">Male</SelectItem>
+                      <SelectItem value="female">Female</SelectItem>
+                      <SelectItem value="non-binary">Non-binary</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                      <SelectItem value="prefer-not">Prefer not to say</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input 
+                    value={formData.gender}
+                    disabled={true} 
+                    className="mt-1.5" 
+                  />
+                )}
               </div>
               <div>
                 <Label>Looking For</Label>
-                <Input defaultValue={formData.looking_for} disabled={!isEditing} className="mt-1.5" />
+                {isEditing ? (
+                  <Select value={formData.looking_for} onValueChange={(value) => setFormData({ ...formData, looking_for: value })}>
+                    <SelectTrigger className="mt-1.5">
+                      <SelectValue placeholder="Select what you're looking for" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="relationship">Serious Relationship</SelectItem>
+                      <SelectItem value="casual">Casual Dating</SelectItem>
+                      <SelectItem value="friendship">Friendship</SelectItem>
+                      <SelectItem value="networking">Networking</SelectItem>
+                      <SelectItem value="not-sure">Not Sure Yet</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input 
+                    value={formData.looking_for}
+                    disabled={true} 
+                    className="mt-1.5" 
+                  />
+                )}
               </div>
+            </div>
+
+            {/* Contact Information */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-6 border-t border-border/50">
+              <div>
+                <Label>Country Code</Label>
+                {isEditing ? (
+                  <Select value={formData.countryCode} onValueChange={(value) => setFormData({ ...formData, countryCode: value })}>
+                    <SelectTrigger className="mt-1.5">
+                      <SelectValue placeholder="Select country code" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="+234">🇳🇬 +234 (Nigeria)</SelectItem>
+                      <SelectItem value="+237">🇨🇲 +237 (Cameroon)</SelectItem>
+                      <SelectItem value="+1">🇺🇸 +1 (USA/Canada)</SelectItem>
+                      <SelectItem value="+44">🇬🇧 +44 (UK)</SelectItem>
+                      <SelectItem value="+91">🇮🇳 +91 (India)</SelectItem>
+                      <SelectItem value="+255">🇹🇿 +255 (Tanzania)</SelectItem>
+                      <SelectItem value="+27">🇿🇦 +27 (South Africa)</SelectItem>
+                      <SelectItem value="+233">🇬🇭 +233 (Ghana)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input 
+                    value={formData.countryCode}
+                    disabled={true} 
+                    className="mt-1.5" 
+                  />
+                )}
+              </div>
+              <div>
+                <Label>Mobile Number</Label>
+                {isEditing ? (
+                  <Input
+                    placeholder="e.g., 9123456789"
+                    value={formData.mobileNumber}
+                    onChange={(e) => setFormData({ ...formData, mobileNumber: e.target.value.replace(/\D/g, '') })}
+                    disabled={uploading}
+                    className="mt-1.5"
+                  />
+                ) : (
+                  <Input 
+                    value={formData.mobileNumber ? `${formData.countryCode} ${formData.mobileNumber}` : "Not provided"}
+                    disabled={true} 
+                    className="mt-1.5" 
+                  />
+                )}
+                <p className="text-xs text-muted-foreground mt-1">Without country code</p>
+              </div>
+            </div>
+
+            {/* Interests */}
+            <div className="mt-6 pt-6 border-t border-border/50">
+              <Label className="text-base font-semibold">Interests</Label>
+              {isEditing ? (
+                <Textarea
+                  placeholder="e.g., Gaming, Music, Travel, Reading, Coding"
+                  value={formData.interests}
+                  onChange={(e) => setFormData({ ...formData, interests: e.target.value })}
+                  disabled={uploading}
+                  className="mt-3 min-h-16"
+                />
+              ) : (
+                <div className="mt-3">
+                  {formData.interests ? (
+                    <div className="flex flex-wrap gap-2">
+                      {formData.interests.split(',').map((interest, index) => {
+                        const trimmed = interest.trim()
+                        return trimmed ? (
+                          <div key={index} className="px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
+                            {trimmed}
+                          </div>
+                        ) : null
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No interests added yet</p>
+                  )}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground mt-2">Separate interests with commas</p>
             </div>
           </CardContent>
         </Card>

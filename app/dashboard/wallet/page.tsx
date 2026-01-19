@@ -63,6 +63,19 @@ export default function WalletPage() {
   const { status } = useSession()
   const router = useRouter()
   const { user } = useUserProfile()
+  
+  // Currency conversion constants
+  const COINS_TO_USD = 500
+  const COINS_TO_NGN = 2.9
+  const USD_TO_XAF = 585.48 // 1 USD = 585.48 XAF
+  
+  // Helper function to format currency
+  const formatCurrency = (coins: number) => {
+    const usd = (coins / COINS_TO_USD).toFixed(2)
+    const ngn = Math.round(coins * COINS_TO_NGN)
+    const xaf = Math.round((coins / COINS_TO_USD) * USD_TO_XAF)
+    return { usd, ngn, xaf }
+  }
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [coinRates, setCoinRates] = useState<CoinRate[]>([])
   const [stats, setStats] = useState({ totalEarned: 0, totalSpent: 0 })
@@ -522,16 +535,17 @@ export default function WalletPage() {
                   <span className="text-4xl md:text-5xl font-bold text-white">{(user?.coins_balance || 0).toLocaleString()}</span>
                   <span className="text-white/70 text-lg">coins</span>
                 </div>
-                <div className="flex gap-4 mt-2">
-                  <p className="text-white/70 text-sm">≈ ${((user?.coins_balance || 0) / 500).toFixed(2)} USD</p>
-                  <p className="text-white/70 text-sm">≈ ₦{((user?.coins_balance || 0) * 2.9).toLocaleString(undefined, { maximumFractionDigits: 0 })} NGN</p>
+                <div className="flex gap-3 mt-2 text-sm text-white/70 flex-wrap">
+                  <p>≈ ${formatCurrency(user?.coins_balance || 0).usd} USD</p>
+                  <p>≈ ₦{formatCurrency(user?.coins_balance || 0).ngn.toLocaleString()} NGN</p>
+                  <p>≈ Fr{formatCurrency(user?.coins_balance || 0).xaf.toLocaleString()} XAF</p>
                 </div>
               </div>
               <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center">
                 <Coins className="w-8 h-8 text-white" />
               </div>
             </div>
-            <div className="flex gap-2 mt-6 flex-wrap">
+            <div className="flex gap-1 mt-4 flex-wrap">
               <Button 
                 variant="secondary" 
                 className="rounded-full bg-white/20 text-white hover:bg-white/30 border-0 text-sm md:text-base px-3 md:px-4 py-2 md:py-2.5 flex-1 min-w-[80px] sm:flex-none"
@@ -554,7 +568,7 @@ export default function WalletPage() {
               >
                 <Wallet className="w-4 h-4 mr-1" />
                 <span className="hidden sm:inline">{t("withdraw")}</span>
-                <span className="sm:hidden">Cash</span>
+                <span className="sm:hidden">Cash out</span>
               </Button>
               <Button 
                 variant="secondary" 
@@ -1036,11 +1050,15 @@ export default function WalletPage() {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">In USD</span>
-                <span className="font-bold">${((user?.coins_balance || 0) / 500).toFixed(2)}</span>
+                <span className="font-bold">${formatCurrency(user?.coins_balance || 0).usd}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">In NGN</span>
-                <span className="font-bold">₦{((user?.coins_balance || 0) * 2.9).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                <span className="font-bold">₦{formatCurrency(user?.coins_balance || 0).ngn.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">In XAF</span>
+                <span className="font-bold">Fr{formatCurrency(user?.coins_balance || 0).xaf.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
               </div>
               <div className="pt-2 border-t border-border">
                 <span className="text-xs text-muted-foreground">Minimum withdrawal: $15 USD</span>

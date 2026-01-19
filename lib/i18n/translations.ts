@@ -122,10 +122,10 @@ const baseTranslations = {
 
   // Features
   everythingYouNeed: "Everything You Need to",
-  toConnect: "Connect",
-  featuresDescription: "From finding your soulmate to discovering amazing products, Vibe2Gether brings it all together in one beautiful platform.",
+  toConnect: "Connect & Explore",
+  featuresDescription: "From connecting with people to discovering amazing products, Vibe2Gether brings it all together in one beautiful platform.",
   smartMatching: "Smart Matching",
-  smartMatchingDesc: "Our AI-powered algorithm finds your perfect match based on interests, values, and compatibility.",
+  smartMatchingDesc: "Our AI-powered algorithm helps you find compatible connections based on interests, values, and compatibility.",
   discoverPeople: "Discover People",
   discoverPeopleDesc: "Explore millions of profiles from around the world. Filter by location, interests, and more.",
   marketplace: "Marketplace",
@@ -137,7 +137,7 @@ const baseTranslations = {
   buyCoins: "Buy Coins",
   buyCoinsDesc: "Purchase coins to promote your posts and send gifts.",
   realTimeChat: "Real-time Chat",
-  realTimeChatDesc: "Connect instantly with matches. Send messages, voice notes, GIFs, and more.",
+  realTimeChatDesc: "Connect instantly with connections. Send messages, voice notes, GIFs, and more.",
   smartNotifications: "Smart Notifications",
   smartNotificationsDesc: "Never miss a match, message, or event. Stay updated with personalized alerts.",
   earnRedeem: "Earn & Redeem",
@@ -149,11 +149,11 @@ const baseTranslations = {
 
   // Profiles/Discover
   discoverProfiles: "Meet",
-  amazingPeople: "Amazing People",
+  amazingPeople: "Interesting People",
   discoverDescription: "Discover profiles from around the world. Your next connection awaits.",
 
   // Testimonials
-  loveStories: "Love Stories from",
+  loveStories: "Success Stories from",
   ourCommunity: "Our Community",
   testimonialDescription: "Real connections, real stories. See what our members have to say about their Vibe2Gether experience.",
 

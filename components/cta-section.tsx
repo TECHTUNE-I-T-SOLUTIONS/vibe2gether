@@ -39,12 +39,11 @@ export function CTASection() {
 
           {/* Content */}
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">
-            Ready to Find Your
-            <span className="block">Perfect Match?</span>
+            Ready to Connect,
+            <span className="block">Discover & Grow?</span>
           </h2>
           <p className="text-lg md:text-xl text-white/80 mb-10 max-w-2xl mx-auto">
-            Join other people who have already found meaningful connections on Vibe2Gether. Your journey to love
-            starts here.
+            Join thousands of people who have found meaningful connections, business opportunities, and exciting events on Vibe2Gether. Your journey starts here.
           </p>
 
           {/* CTA */}

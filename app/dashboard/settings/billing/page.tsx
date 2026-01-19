@@ -123,7 +123,14 @@ export default function BillingSettingsPage() {
     return date.toLocaleDateString()
   }
 
-  function formatCurrency(amount: number) {
+  function formatCurrency(coins: number) {
+    const usd = (coins / 500).toFixed(2)
+    const ngn = Math.round(coins * 2.9)
+    const xaf = Math.round((coins / 500) * 585.48)
+    return { usd, ngn, xaf }
+  }
+
+  function formatUSD(amount: number) {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
@@ -166,8 +173,9 @@ export default function BillingSettingsPage() {
                 <span className="text-white/70 text-lg">coins</span>
               </div>
               <div className="flex gap-4 mt-2 flex-wrap">
-                <p className="text-white/70 text-sm">≈ ${((user?.coins_balance || 0) / 500).toFixed(2)} USD</p>
-                <p className="text-white/70 text-sm">≈ ₦{((user?.coins_balance || 0) * 2.9).toLocaleString(undefined, { maximumFractionDigits: 0 })} NGN</p>
+                <p className="text-white/70 text-sm">≈ ${formatCurrency(user?.coins_balance || 0).usd} USD</p>
+                <p className="text-white/70 text-sm">≈ ₦{formatCurrency(user?.coins_balance || 0).ngn.toLocaleString(undefined, { maximumFractionDigits: 0 })} NGN</p>
+                <p className="text-white/70 text-sm">≈ Fr{formatCurrency(user?.coins_balance || 0).xaf.toLocaleString(undefined, { maximumFractionDigits: 0 })} XAF</p>
               </div>
             </div>
             <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center">

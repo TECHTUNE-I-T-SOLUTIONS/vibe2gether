@@ -39,6 +39,7 @@ export default function CreatePostPage() {
   const [isPublic, setIsPublic] = useState(true)
   const [allowComments, setAllowComments] = useState(true)
   const [loading, setLoading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   const handleAddTag = () => {
     const t = tagInput.trim()
@@ -50,6 +51,23 @@ export default function CreatePostPage() {
 
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files || [])
+    
+    // Validate file sizes
+    const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
+    const invalidFiles = selected.filter(f => f.size > MAX_FILE_SIZE)
+    
+    if (invalidFiles.length > 0) {
+      setUploadError(`${invalidFiles.length} file(s) exceed 100MB limit`)
+      return
+    }
+    
+    // Warn about large files
+    const largeFiles = selected.filter(f => f.size > 20 * 1024 * 1024)
+    if (largeFiles.length > 0) {
+      console.log(`⚠️ ${largeFiles.length} large file(s) detected - upload may take 1-5 minutes`)
+    }
+    
+    setUploadError(null)
     setFiles((prev) => [...prev, ...selected].slice(0, 6))
   }
 
@@ -57,6 +75,7 @@ export default function CreatePostPage() {
     if (!user) return alert('Please sign in to post')
     if (!content.trim()) return alert('Please add some content')
     setLoading(true)
+    setUploadError(null)
     try {
       const mediaUrls: any[] = []
       for (const f of files) {
@@ -80,8 +99,9 @@ export default function CreatePostPage() {
 
       router.push('/dashboard/feed')
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create post'
+      setUploadError(errorMessage)
       console.error('Failed to create post', err)
-      alert('Failed to create post')
     } finally {
       setLoading(false)
     }
@@ -91,6 +111,14 @@ export default function CreatePostPage() {
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
       <Card className="border-border/50 mb-6">
         <CardContent className="pt-6">
+          {/* Error Display */}
+          {uploadError && (
+            <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <p className="text-sm text-destructive font-medium">{uploadError}</p>
+              <p className="text-xs text-destructive/70 mt-1">Max file size: 100MB. Large files (20MB+) may take 1-5 minutes to upload.</p>
+            </div>
+          )}
+          
           {/* Content Section */}
           <div className="space-y-4 mb-6">
             <div>
@@ -109,7 +137,7 @@ export default function CreatePostPage() {
           {/* Media Section */}
           <div className="space-y-4 mb-6">
             <div>
-              <Label htmlFor="media" className="text-base font-semibold">Media (up to 6 files)</Label>
+              <Label htmlFor="media" className="text-base font-semibold">Media (up to 6 files, max 100MB each)</Label>
               <input
                 id="media"
                 type="file"
@@ -118,20 +146,30 @@ export default function CreatePostPage() {
                 onChange={handleFiles}
                 className="mt-2 w-full p-2 border border-border/50 rounded-lg cursor-pointer"
               />
+              <p className="text-xs text-muted-foreground mt-1">Large videos (20MB+) may take a few minutes to upload</p>
               {files.length > 0 && (
-                <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {files.map((f, i) => (
-                    <div key={i} className="relative w-full aspect-square rounded-lg overflow-hidden bg-muted border border-border/50">
-                      <Image src={URL.createObjectURL(f)} alt={f.name} fill className="object-cover" />
-                      <button
-                        onClick={() => setFiles(prev => prev.filter((_, idx) => idx !== i))}
-                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                <>
+                  <p className="text-xs text-muted-foreground mt-3 mb-3">
+                    {files.length} file(s) - Total: {(files.reduce((sum, f) => sum + f.size, 0) / 1024 / 1024).toFixed(1)}MB
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {files.map((f, i) => (
+                      <div key={i} className="relative w-full aspect-square rounded-lg overflow-hidden bg-muted border border-border/50 group">
+                        <Image src={URL.createObjectURL(f)} alt={f.name} fill className="object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+                          <p className="text-white text-xs font-medium text-center px-1 truncate">{f.name}</p>
+                          <p className="text-white/80 text-xs">{(f.size / 1024 / 1024).toFixed(1)}MB</p>
+                        </div>
+                        <button
+                          onClick={() => setFiles(prev => prev.filter((_, idx) => idx !== i))}
+                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           </div>

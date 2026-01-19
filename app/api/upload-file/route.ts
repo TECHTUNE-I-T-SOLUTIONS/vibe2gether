@@ -15,6 +15,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validate file size - max 100MB
+    const MAX_FILE_SIZE = 100 * 1024 * 1024
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: `File too large. Maximum size is 100MB (${(file.size / 1024 / 1024).toFixed(1)}MB)` },
+        { status: 413 }
+      )
+    }
+
     // Get Supabase credentials from environment
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -38,18 +47,24 @@ export async function POST(request: NextRequest) {
     const fileName = `${userId}-${Date.now()}.${fileExt}`
     const filePath = `public/${userId}/${fileName}`
 
+    console.log(`[UPLOAD] Starting upload: ${fileName} (${(file.size / 1024 / 1024).toFixed(1)}MB)`)
+
     // Upload using service role (bypasses RLS)
+    // Adding longer timeout for large files
     const { data, error } = await supabase.storage
       .from(bucket)
       .upload(filePath, buffer, {
         cacheControl: "3600",
         contentType: file.type,
+        upsert: false,
       })
 
     if (error) {
-      console.error("Upload error:", error)
+      console.error(`[UPLOAD] Upload failed for ${fileName}:`, error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
+
+    console.log(`[UPLOAD] Successfully uploaded: ${fileName}`)
 
     // Get public URL
     const { data: publicData } = supabase.storage
@@ -61,10 +76,14 @@ export async function POST(request: NextRequest) {
       path: filePath,
     })
   } catch (error) {
-    console.error("Upload failed:", error)
+    console.error("[UPLOAD] Upload failed:", error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Upload failed" },
       { status: 500 }
     )
   }
 }
+
+// Set extended timeout for large file uploads (up to 10 minutes)
+export const maxDuration = 600 // 10 minutes for Vercel, ignored on other platforms
+

@@ -122,9 +122,8 @@ export function VerificationModal({
       newErrors.idType = "Please select an ID type"
     }
 
-    if (!idNumber || idNumber.trim().length === 0) {
-      newErrors.idNumber = "ID number is required"
-    } else if (idNumber.trim().length < 5) {
+    // ID Number is now optional - only validate if provided
+    if (idNumber && idNumber.trim().length > 0 && idNumber.trim().length < 5) {
       newErrors.idNumber = "ID number must be at least 5 characters"
     }
 
@@ -436,15 +435,15 @@ export function VerificationModal({
             {/* ID Number Input */}
             <div className="space-y-2">
               <Label htmlFor="idNumber">
-                ID Number <span className="text-red-500 dark:text-red-500">*</span>
+                ID Number <span className="text-gray-400 dark:text-gray-500">(Optional)</span>
               </Label>
               <Input
                 id="idNumber"
-                placeholder="Enter your ID number"
+                placeholder="Enter your ID number (optional)"
                 value={idNumber}
                 onChange={handleIdNumberChange}
                 disabled={loading}
-                className={errors.idNumber ? "border-red-500" : ""}
+                className={`h-9 ${errors.idNumber ? "border-red-500" : ""}`}
               />
               {errors.idNumber && <p className="text-sm text-red-500 dark:text-red-200">{errors.idNumber}</p>}
             </div>
@@ -454,12 +453,12 @@ export function VerificationModal({
               <Label>
                 ID Document (Front Side) <span className="text-red-500 dark:text-red-500">*</span>
               </Label>
-              <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition">
+              <div className="border-2 border-dashed rounded-lg p-3 sm:p-4 text-center hover:border-primary/50 transition">
                 {!idDocumentPreview ? (
                   <label className="cursor-pointer">
-                    <div className="space-y-2">
-                      <Upload className="w-8 h-8 mx-auto text-muted-foreground" />
-                      <p className="text-sm font-medium">Click to upload</p>
+                    <div className="space-y-1">
+                      <Upload className="w-6 h-6 mx-auto text-muted-foreground" />
+                      <p className="text-xs sm:text-sm font-medium">Click to upload</p>
                       <p className="text-xs text-muted-foreground">PNG, JPG, PDF up to 5MB</p>
                     </div>
                     <input
@@ -471,22 +470,22 @@ export function VerificationModal({
                     />
                   </label>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <div className="relative inline-block">
                       <img
                         src={idDocumentPreview}
                         alt="ID Document Preview"
-                        className="w-32 h-32 object-cover rounded"
+                        className="w-24 h-24 sm:w-32 sm:h-32 object-cover rounded"
                       />
                       <button
                         type="button"
                         onClick={() => removeFile("idDocument")}
-                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1"
+                        className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1"
                       >
-                        <X className="w-4 h-4" />
+                        <X className="w-3 h-3" />
                       </button>
                     </div>
-                    <p className="text-sm text-green-600">✓ Document selected</p>
+                    <p className="text-xs sm:text-sm text-green-600">✓ Document selected</p>
                     <label className="text-xs text-blue-600 cursor-pointer hover:underline">
                       Change file
                       <input
@@ -508,12 +507,12 @@ export function VerificationModal({
               <Label>
                 Selfie Photo <span className="text-red-500 dark:text-red-500">*</span>
               </Label>
-              <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition">
+              <div className="border-2 border-dashed rounded-lg p-3 sm:p-4 text-center hover:border-primary/50 transition">
                 {!selfiePreview ? (
                   <label className="cursor-pointer">
-                    <div className="space-y-2">
-                      <Upload className="w-8 h-8 mx-auto text-muted-foreground" />
-                      <p className="text-sm font-medium">Click to upload</p>
+                    <div className="space-y-1">
+                      <Upload className="w-6 h-6 mx-auto text-muted-foreground" />
+                      <p className="text-xs sm:text-sm font-medium">Click to upload</p>
                       <p className="text-xs text-muted-foreground">PNG, JPG up to 5MB</p>
                     </div>
                     <input
@@ -525,22 +524,22 @@ export function VerificationModal({
                     />
                   </label>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <div className="relative inline-block">
                       <img
                         src={selfiePreview}
                         alt="Selfie Preview"
-                        className="w-32 h-32 object-cover rounded-full"
+                        className="w-24 h-24 sm:w-32 sm:h-32 object-cover rounded-full"
                       />
                       <button
                         type="button"
                         onClick={() => removeFile("selfie")}
-                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1"
+                        className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1"
                       >
-                        <X className="w-4 h-4" />
+                        <X className="w-3 h-3" />
                       </button>
                     </div>
-                    <p className="text-sm text-green-600">✓ Photo selected</p>
+                    <p className="text-xs sm:text-sm text-green-600">✓ Photo selected</p>
                     <label className="text-xs text-blue-600 cursor-pointer hover:underline dark:text-blue-300">
                       Change file
                       <input

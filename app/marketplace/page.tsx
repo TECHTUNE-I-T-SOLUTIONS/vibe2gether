@@ -139,10 +139,10 @@ export default function MarketplacePage() {
                 Marketplace
               </Badge>
               <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
-                Discover <span className="gradient-text">Romantic Gifts</span> & Experiences
+                Discover <span className="gradient-text">Unique Products</span> & Experiences
               </h1>
               <p className="text-lg text-muted-foreground mb-8">
-                Find the perfect gift, plan unforgettable experiences, and make your special moments extraordinary.
+                Find amazing products, plan unforgettable experiences, and discover what you're looking for.
               </p>
               <div className="relative max-w-xl mx-auto">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
