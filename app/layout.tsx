@@ -16,9 +16,9 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "Vibe2Gether - Find Your Perfect Match",
-  description: "Connect with amazing people worldwide. Dating meets marketplace on the most romantic social platform.",
-  keywords: ["dating", "social", "marketplace", "connection", "love", "relationships"],
+  title: "Vibe2Gether - Business Connections & Marketplace",
+  description: "Connect with professionals worldwide. Business networking meets marketplace on a dynamic platform for events, listings, and monetization.",
+  keywords: ["business", "networking", "marketplace", "events", "connections", "monetization"],
   authors: [{ name: "Vibe2Gether" }],
   manifest: "/manifest.json",
   icons: {
@@ -27,9 +27,9 @@ export const metadata: Metadata = {
     shortcut: "/v2g-logo.png",
   },
   openGraph: {
-    title: "Vibe2Gether - Find Your Perfect Match",
+    title: "Vibe2Gether - Business Connections & Marketplace",
     description:
-      "Connect with amazing people worldwide. Dating meets marketplace on the most romantic social platform.",
+      "Connect with professionals worldwide. Business networking meets marketplace on a dynamic platform for events, listings, and monetization.",
     type: "website",
   },
 }
