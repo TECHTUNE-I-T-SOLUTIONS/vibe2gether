@@ -16,9 +16,9 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "Vibe2Gether - Business Connections & Marketplace",
-  description: "Connect with professionals worldwide. Business networking meets marketplace on a dynamic platform for events, listings, and monetization.",
-  keywords: ["business", "networking", "marketplace", "events", "connections", "monetization"],
+  title: "Vibe2Gether - A Social platform with many connections and opportunities",
+  description: "A Social platform where connections and opportunities meets marketplace on a dynamic platform for events, listings, and monetization.",
+  keywords: ["vibing", "networking", "marketplace", "events", "connections", "monetization"],
   authors: [{ name: "Vibe2Gether" }],
   manifest: "/manifest.json",
   icons: {
@@ -27,9 +27,9 @@ export const metadata: Metadata = {
     shortcut: "/v2g-logo.png",
   },
   openGraph: {
-    title: "Vibe2Gether - Business Connections & Marketplace",
+    title: "Vibe2Gether - A Social platform with many connections and opportunities",
     description:
-      "Connect with professionals worldwide. Business networking meets marketplace on a dynamic platform for events, listings, and monetization.",
+      "A Social platform where connections and opportunities meets marketplace on a dynamic platform for events, listings, and monetization.",
     type: "website",
   },
 }
