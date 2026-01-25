@@ -320,7 +320,7 @@ export default function WalletPage() {
     e.preventDefault()
 
     const amount = parseFloat(withdrawalAmount)
-    const minWithdrawal = 3 // $15 minimum (21,750 NGN)
+    const minWithdrawal = 0.71 // $0.71 minimum (1,000 NGN)
     const currentBalance = user?.coins_balance || 0
     const maxWithdrawal = currentBalance / 500 // Convert coins to USD
     const usdBalance = currentBalance / 500
@@ -1061,7 +1061,7 @@ export default function WalletPage() {
                 <span className="font-bold">Fr{formatCurrency(user?.coins_balance || 0).xaf.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
               </div>
               <div className="pt-2 border-t border-border">
-                <span className="text-xs text-muted-foreground">Minimum withdrawal: $3 USD</span>
+                <span className="text-xs text-muted-foreground">Minimum withdrawal: $0.71 USD</span>
               </div>
             </div>
 
@@ -1075,8 +1075,8 @@ export default function WalletPage() {
                   <Input
                     id="amount"
                     type="number"
-                    placeholder="3.00"
-                    min="3"
+                    placeholder="0.71"
+                    min="0.71"
                     max={(user?.coins_balance || 0) / 500}
                     step="0.01"
                     value={withdrawalAmount}
@@ -1167,15 +1167,15 @@ export default function WalletPage() {
               {(() => {
                 const usdBalance = (user?.coins_balance || 0) / 500
                 const requestAmount = parseFloat(withdrawalAmount) || 0
-                const insufficientBalance = usdBalance < 3
-                const requestTooSmall = requestAmount < 3 && requestAmount > 0
+                const insufficientBalance = usdBalance < 0.71
+                const requestTooSmall = requestAmount < 0.71 && requestAmount > 0
 
                 return withdrawalAmount ? (
                   <div className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
                     <p className="text-sm">
                       {insufficientBalance ? (
-                        <span className="text-red-600 dark:text-red-400 font-medium">✗ Insufficient balance (${usdBalance.toFixed(2)}). Minimum required: $3</span>
-                      ) : requestAmount >= 3 && accountVerified ? (
+                        <span className="text-red-600 dark:text-red-400 font-medium">✗ Insufficient balance (${usdBalance.toFixed(2)}). Minimum required: $0.71</span>
+                      ) : requestAmount >= 0.71 && accountVerified ? (
                         <span className="text-green-600 dark:text-green-400 font-medium">✓ You are eligible for withdrawal</span>
                       ) : requestTooSmall ? (
                         <span className="text-orange-600 dark:text-orange-400 font-medium">⚠ Minimum $3 required</span>
@@ -1198,7 +1198,7 @@ export default function WalletPage() {
                 <Button
                   className="gradient-bg"
                   type="submit"
-                  disabled={withdrawalLoading || !withdrawalAmount || !bankCode || !accountNumber || !accountVerified || ((user?.coins_balance || 0) / 500) < 5}
+                  disabled={withdrawalLoading || !withdrawalAmount || !bankCode || !accountNumber || !accountVerified || ((user?.coins_balance || 0) / 500) < 0.71}
                 >
                   {withdrawalLoading ? (
                     <>
