@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     const usdAmount = parseFloat(amount)
-    const minWithdrawal = 15 // $15 minimum
+    const minWithdrawal = 0.71 // $0.71 minimum
 
     if (usdAmount < minWithdrawal) {
       return NextResponse.json(
