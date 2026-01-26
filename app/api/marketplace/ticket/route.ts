@@ -24,9 +24,9 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient()
     const userId = session.user.id
 
-    console.log(
-      `[GET /api/marketplace/ticket] User ${userId} requesting ticket for product ${productId}`
-    )
+    // console.log(
+    //   `[GET /api/marketplace/ticket] User ${userId} requesting ticket for product ${productId}`
+    // )
 
     // Get transaction
     const { data: transaction, error: transError } = await supabase
@@ -90,9 +90,9 @@ Present this ticket code for delivery/download verification.
 ==============================================
 `
 
-    console.log(
-      `[GET /api/marketplace/ticket] Ticket generated for transaction ${transactionId}`
-    )
+    // console.log(
+    //   `[GET /api/marketplace/ticket] Ticket generated for transaction ${transactionId}`
+    // )
 
     // Return ticket as downloadable content
     return new NextResponse(ticketContent, {

@@ -1,0 +1,908 @@
+"use client"
+
+import { useState, useEffect, useRef, useCallback } from "react"
+import Image from "next/image"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
+import {
+  Heart,
+  MessageCircle,
+  Share2,
+  Bookmark,
+  MapPin,
+  Loader2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  AlertCircle,
+} from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { useUserProfile } from "@/hooks/use-user-profile"
+import { useToast } from "@/hooks/use-toast"
+import {
+  getPostComments,
+  deletePost,
+} from "@/lib/supabase/queries"
+import { cn } from "@/lib/utils"
+import { Textarea } from "@/components/ui/textarea"
+import { PostMenu } from "@/components/post-menu"
+
+const SCROLL_VIEW_TIMEOUT = 2000 // Track view after 2 seconds in viewport
+
+export default function FeedPage() {
+  const router = useRouter()
+  const { status } = useSession()
+  const { user } = useUserProfile()
+  const { toast } = useToast()
+  const [posts, setPosts] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [offset, setOffset] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  const [likedPosts, setLikedPosts] = useState<Map<string, boolean>>(new Map())
+  const [savedPosts, setSavedPosts] = useState<Map<string, boolean>>(new Map())
+  const [likeCounts, setLikeCounts] = useState<Map<string, number>>(new Map())
+  const [commentCounts, setCommentCounts] = useState<Map<string, number>>(new Map())
+  const [saveCounts, setSaveCounts] = useState<Map<string, number>>(new Map())
+  const [viewCounts, setViewCounts] = useState<Map<string, number>>(new Map())
+
+  // Auth check - redirect to login if not authenticated
+  useEffect(() => {
+    if (status === "loading") return
+    if (status === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [status, router])
+  const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set())
+  const [postComments, setPostComments] = useState<Map<string, any[]>>(new Map())
+  const [newComments, setNewComments] = useState<Map<string, string>>(new Map())
+  const [submittingComment, setSubmittingComment] = useState<Map<string, boolean>>(new Map())
+  const [mediaCarouselIndex, setMediaCarouselIndex] = useState<Map<string, number>>(new Map())
+  const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set())
+  const observerTarget = useRef<HTMLDivElement>(null)
+  const viewTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map())
+  const mediaObserverRef = useRef<IntersectionObserver | null>(null)
+
+  const fetchPosts = useCallback(async (newOffset: number) => {
+    try {
+      setError(null)
+      const page = Math.floor(newOffset / 20) + 1
+      // console.log(`[Feed] Fetching posts - page: ${page}`)
+
+      // Setup timeout
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000)
+
+      const response = await fetch(`/api/posts/get-feed?page=${page}&limit=20`, {
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch posts")
+      }
+
+      const { data: fetchedPosts } = await response.json()
+      
+      if (!fetchedPosts || fetchedPosts.length === 0) {
+        setHasMore(false)
+        return
+      }
+
+      // console.log(`[Feed] Fetched ${fetchedPosts.length} posts`)
+
+      setPosts((prev) => (newOffset === 0 ? fetchedPosts : [...prev, ...fetchedPosts]))
+      setHasMore(fetchedPosts.length === 20)
+      setOffset(newOffset + 20)
+
+      // Build interaction maps - no aggressive prefetching
+      const likesCountMap = new Map<string, number>()
+      const commentsCountMap = new Map<string, number>()
+      const savesCountMap = new Map<string, number>()
+      const viewsCountMap = new Map<string, number>()
+      const likesMap = new Map<string, boolean>()
+      const savesMap = new Map<string, boolean>()
+
+      for (const post of fetchedPosts) {
+        likesCountMap.set(post.id, post.likes_count || 0)
+        commentsCountMap.set(post.id, post.comments_count || 0)
+        savesCountMap.set(post.id, post.saves_count || 0)
+        viewsCountMap.set(post.id, post.views_count || 0)
+        likesMap.set(post.id, post.userLiked || false)
+        savesMap.set(post.id, post.userSaved || false)
+      }
+
+      // Update all states
+      if (newOffset === 0) {
+        setLikedPosts(likesMap)
+        setSavedPosts(savesMap)
+        setLikeCounts(likesCountMap)
+        setCommentCounts(commentsCountMap)
+        setSaveCounts(savesCountMap)
+        setViewCounts(viewsCountMap)
+      } else {
+        setLikedPosts((prev) => new Map([...prev, ...likesMap]))
+        setSavedPosts((prev) => new Map([...prev, ...savesMap]))
+        setLikeCounts((prev) => new Map([...prev, ...likesCountMap]))
+        setCommentCounts((prev) => new Map([...prev, ...commentsCountMap]))
+        setSaveCounts((prev) => new Map([...prev, ...savesCountMap]))
+        setViewCounts((prev) => new Map([...prev, ...viewsCountMap]))
+      }
+    } catch (err) {
+      console.error("[Feed] Failed to fetch posts:", err)
+      setError("Failed to load posts. Please try again.")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Track post views when scrolling into viewport
+  const trackPostView = useCallback(async (postId: string) => {
+    try {
+      const response = await fetch("/api/posts/scroll-view", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ postId }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        console.error(`[Feed] API error: ${error.error}`)
+        throw new Error(error.error || "Failed to track view")
+      }
+
+      const data = await response.json()
+      const newViewCount = data.newViewCount
+      
+      if (typeof newViewCount !== "number") {
+        console.error(`[Feed] Invalid view count received: ${newViewCount}`)
+        return
+      }
+      
+      // Update view count
+      setViewCounts((prev) => new Map(prev).set(postId, newViewCount))
+      // console.log(`[Feed] View tracked for post ${postId}, new count: ${newViewCount}`)
+    } catch (err) {
+      console.error("[Feed] Failed to track view:", err)
+    }
+  }, [])
+
+  // Setup view tracking observer
+  useEffect(() => {
+    const observerOptions = {
+      threshold: 0.5,
+      rootMargin: "0px",
+    }
+
+    const viewObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        const postId = entry.target.getAttribute("data-post-id")
+        if (!postId) return
+
+        if (entry.isIntersecting) {
+          const existingTimeout = viewTimeoutsRef.current.get(postId)
+          if (existingTimeout) clearTimeout(existingTimeout)
+
+          const timeout = setTimeout(() => {
+            trackPostView(postId)
+            viewTimeoutsRef.current.delete(postId)
+          }, SCROLL_VIEW_TIMEOUT)
+
+          viewTimeoutsRef.current.set(postId, timeout)
+        } else {
+          const timeout = viewTimeoutsRef.current.get(postId)
+          if (timeout) {
+            clearTimeout(timeout)
+            viewTimeoutsRef.current.delete(postId)
+          }
+        }
+      })
+    }, observerOptions)
+
+    const postCards = document.querySelectorAll("[data-post-id]")
+    postCards.forEach((card) => viewObserver.observe(card))
+
+    return () => {
+      viewTimeoutsRef.current.forEach((timeout) => clearTimeout(timeout))
+      viewTimeoutsRef.current.clear()
+      viewObserver.disconnect()
+    }
+  }, [posts, trackPostView])
+
+  // Setup lazy-load media observer (replaces aggressive prefetching)
+  useEffect(() => {
+    const options = {
+      root: null,
+      rootMargin: "100px", // Start loading 100px before viewport (aggressive but optimized)
+      threshold: 0,
+    }
+
+    mediaObserverRef.current = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const mediaId = (entry.target as HTMLElement).getAttribute("data-media-id")
+          const isVideo = (entry.target as HTMLElement).getAttribute("data-is-video") === "true"
+          
+          if (mediaId) {
+            // Prioritize videos less to reduce network congestion
+            const delay = isVideo ? 100 : 0
+            setTimeout(() => {
+              setLoadedImages((prev) => new Set(prev).add(mediaId))
+              // Stop observing once loaded
+              if (mediaObserverRef.current) {
+                mediaObserverRef.current.unobserve(entry.target)
+              }
+            }, delay)
+          }
+        }
+      })
+    }, options)
+
+    return () => {
+      if (mediaObserverRef.current) {
+        mediaObserverRef.current.disconnect()
+      }
+    }
+  }, [])
+
+  // Initial fetch
+  useEffect(() => {
+    if (user) {
+      fetchPosts(0)
+    }
+  }, [user, fetchPosts])
+
+  // Infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading) {
+          fetchPosts(offset)
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current)
+    }
+
+    return () => observer.disconnect()
+  }, [offset, hasMore, loading, fetchPosts])
+
+  const handleLikePost = async (postId: string) => {
+    if (!user) {
+      router.push("/login")
+      return
+    }
+
+    const wasLiked = likedPosts.get(postId) || false
+    const currentCount = likeCounts.get(postId) || 0
+
+    // Optimistic update
+    setLikedPosts((prev) => new Map(prev).set(postId, !wasLiked))
+    setLikeCounts((prev) => new Map(prev).set(postId, wasLiked ? currentCount - 1 : currentCount + 1))
+
+    try {
+      console.log(`[Feed] Toggling like for post ${postId}`)
+
+      const response = await fetch("/api/posts/like", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ postId }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to toggle like")
+      }
+
+      const { liked, likesCount } = await response.json()
+      
+      // Update with actual counts from server
+      console.log(`[Feed] Like toggled - liked: ${liked}, count: ${likesCount}`)
+      setLikedPosts((prev) => new Map(prev).set(postId, liked))
+      setLikeCounts((prev) => new Map(prev).set(postId, likesCount))
+
+      toast({
+        title: liked ? "Liked" : "Unlike",
+        description: liked ? "Post added to likes" : "Post removed from likes",
+        variant: "default",
+      })
+    } catch (err) {
+      // Revert on error
+      console.error(`[Feed] Error toggling like:`, err)
+      setLikedPosts((prev) => new Map(prev).set(postId, wasLiked))
+      setLikeCounts((prev) => new Map(prev).set(postId, currentCount))
+      toast({
+        title: "Error",
+        description: "Failed to update like",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleSavePost = async (postId: string) => {
+    if (!user) {
+      router.push("/login")
+      return
+    }
+
+    const wasSaved = savedPosts.get(postId) || false
+    const currentSaveCount = saveCounts.get(postId) || 0
+
+    // Optimistic update
+    setSavedPosts((prev) => new Map(prev).set(postId, !wasSaved))
+    setSaveCounts((prev) => new Map(prev).set(postId, wasSaved ? currentSaveCount - 1 : currentSaveCount + 1))
+
+    try {
+      console.log(`[Feed] Toggling save for post ${postId}`)
+
+      const response = await fetch("/api/posts/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ postId }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to toggle save")
+      }
+
+      const { saved, savesCount } = await response.json()
+      
+      // Update with actual counts from server
+      console.log(`[Feed] Save toggled - saved: ${saved}, count: ${savesCount}`)
+      setSavedPosts((prev) => new Map(prev).set(postId, saved))
+      setSaveCounts((prev) => new Map(prev).set(postId, savesCount))
+
+      toast({
+        title: saved ? "Saved" : "Unsaved",
+        description: saved ? "Added to saved posts" : "Removed from saved posts",
+      })
+    } catch (err) {
+      // Revert on error
+      console.error(`[Feed] Error toggling save:`, err)
+      setSavedPosts((prev) => new Map(prev).set(postId, wasSaved))
+      setSaveCounts((prev) => new Map(prev).set(postId, currentSaveCount))
+      toast({
+        title: "Error",
+        description: "Failed to update save status",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleShowComments = async (postId: string) => {
+    const isExpanded = expandedComments.has(postId)
+
+    if (!isExpanded) {
+      // Fetch comments
+      try {
+        const { data, error } = await getPostComments(postId, 10)
+        if (error) throw error
+        setPostComments((prev) => new Map(prev).set(postId, data || []))
+      } catch (err) {
+        toast({
+          title: "Error",
+          description: "Failed to load comments",
+          variant: "destructive",
+        })
+      }
+    }
+
+    setExpandedComments((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(postId)) {
+        newSet.delete(postId)
+      } else {
+        newSet.add(postId)
+      }
+      return newSet
+    })
+  }
+
+  const handleSubmitComment = async (postId: string) => {
+    if (!user) {
+      router.push("/login")
+      return
+    }
+
+    const comment = newComments.get(postId) || ""
+    if (!comment.trim()) return
+
+    setSubmittingComment((prev) => new Map(prev).set(postId, true))
+
+    try {
+      const response = await fetch("/api/posts/comment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ postId, content: comment }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to post comment")
+      }
+
+      const { comment: newComment, commentsCount } = await response.json()
+
+      setPostComments((prev) => {
+        const comments = prev.get(postId) || []
+        return new Map(prev).set(postId, [newComment, ...comments])
+      })
+
+      setNewComments((prev) => new Map(prev).set(postId, ""))
+      setCommentCounts((prev) => new Map(prev).set(postId, commentsCount || (prev.get(postId) || 0) + 1))
+
+      toast({
+        title: "Success",
+        description: "Comment posted",
+      })
+    } catch (err) {
+      console.error("Comment error:", err)
+      toast({
+        title: "Error",
+        description: "Failed to post comment",
+        variant: "destructive",
+      })
+    } finally {
+      setSubmittingComment((prev) => new Map(prev).set(postId, false))
+    }
+  }
+
+  const handleDeletePost = async (postId: string) => {
+    try {
+      const { error } = await deletePost(postId)
+      if (error) throw error
+
+      // Remove from posts list
+      setPosts((prev) => prev.filter((post) => post.id !== postId))
+
+      // Clean up state maps
+      setLikedPosts((prev) => {
+        const newMap = new Map(prev)
+        newMap.delete(postId)
+        return newMap
+      })
+      setSavedPosts((prev) => {
+        const newMap = new Map(prev)
+        newMap.delete(postId)
+        return newMap
+      })
+      setLikeCounts((prev) => {
+        const newMap = new Map(prev)
+        newMap.delete(postId)
+        return newMap
+      })
+      setCommentCounts((prev) => {
+        const newMap = new Map(prev)
+        newMap.delete(postId)
+        return newMap
+      })
+
+      toast({
+        title: "Success",
+        description: "Post deleted",
+      })
+    } catch (err) {
+      console.error("Failed to delete post:", err)
+      toast({
+        title: "Error",
+        description: "Failed to delete post",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const getMediaArray = (media: any) => {
+    if (!media) return []
+    if (Array.isArray(media)) {
+      return media.map((m) => (typeof m === "string" ? m : m.url || m))
+    }
+    return []
+  }
+
+  const getMediaUrl = (media: any, index: number = 0) => {
+    const mediaArray = getMediaArray(media)
+    return mediaArray[index] || null
+  }
+
+  // Comprehensive media format detection
+  const isVideo = (url: string) => {
+    // Common video formats and container types
+    return /\.(mp4|webm|ogg|avi|mov|mkv|flv|wmv|m3u8)$/i.test(url) || 
+           /\.(mp4|webm|ogg|avi|mov|mkv|flv|wmv|m3u8)\?/i.test(url)
+  }
+
+  // Comprehensive image format detection
+  const isImage = (url: string) => {
+    // Common image formats including modern ones
+    return /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|tiff|heic|heif|avif)$/i.test(url) ||
+           /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|tiff|heic|heif|avif)\?/i.test(url)
+  }
+
+  // Get MIME type for proper video source element
+  const getVideoMimeType = (url: string): string => {
+    const ext = url.toLowerCase().split(/[\?#]/)[0].split('.').pop() || ''
+    const mimeMap: { [key: string]: string } = {
+      'mp4': 'video/mp4',
+      'webm': 'video/webm',
+      'ogg': 'video/ogg',
+      'mov': 'video/quicktime',
+      'avi': 'video/x-msvideo',
+      'mkv': 'video/x-matroska',
+      'flv': 'video/x-flv',
+      'wmv': 'video/x-ms-wmv',
+      'm3u8': 'application/x-mpegURL',
+    }
+    return mimeMap[ext] || 'video/mp4'
+  }
+
+  // Get MIME type for image sources (for better compatibility)
+  const getImageMimeType = (url: string): string => {
+    const ext = url.toLowerCase().split(/[\?#]/)[0].split('.').pop() || ''
+    const mimeMap: { [key: string]: string } = {
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'svg': 'image/svg+xml',
+      'bmp': 'image/bmp',
+      'ico': 'image/x-icon',
+      'tiff': 'image/tiff',
+      'heic': 'image/heic',
+      'heif': 'image/heif',
+      'avif': 'image/avif',
+    }
+    return mimeMap[ext] || 'image/jpeg'
+  }
+
+  return (
+    <div className="p-4 md:p-6 max-w-8xl mx-auto w-auto">
+      {/* Error Alert */}
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-semibold text-red-900">Failed to load posts</p>
+            <p className="text-sm text-red-800">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Create Post Card */}
+      <Card className="border-border/50 mb-6 overflow-hidden">
+        <CardContent className="p-4">
+          <div className="flex gap-4">
+            <Avatar className="w-10 h-10 ring-2 ring-primary/20">
+              <AvatarImage src={user?.profile_picture || undefined} />
+              <AvatarFallback>{user?.display_name?.substring(0, 2).toUpperCase()}</AvatarFallback>
+            </Avatar>
+            <Link href="/dashboard/create-post" className="flex-1">
+              <div className="bg-muted/50 rounded-full px-4 py-2.5 cursor-pointer hover:bg-muted transition-colors">
+                <p className="text-sm text-muted-foreground">What's on your mind?</p>
+              </div>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Posts Feed */}
+      <div className="space-y-4">
+        {posts.map((post) => {
+          const mediaArray = getMediaArray(post.media)
+          const currentMediaIndex = mediaCarouselIndex.get(post.id) || 0
+          const mediaUrl = getMediaUrl(post.media, currentMediaIndex)
+          const timeAgo = new Date(post.created_at).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+
+          const isLiked = likedPosts.get(post.id) || false
+          const isSaved = savedPosts.get(post.id) || false
+          const currentLikes = likeCounts.get(post.id) || 0
+          const currentComments = commentCounts.get(post.id) || 0
+          const currentSaves = saveCounts.get(post.id) || 0
+          const currentViews = viewCounts.get(post.id) || 0
+          const isExpanded = expandedComments.has(post.id)
+          const comments = postComments.get(post.id) || []
+          const commentValue = newComments.get(post.id) || ""
+          const isSubmittingComment = submittingComment.get(post.id) || false
+          const displayedComments = comments.slice(0, 2)
+
+          return (
+            <Card 
+              key={post.id} 
+              className="border-border/50 overflow-hidden hover:shadow-md transition-shadow"
+              data-post-id={post.id}
+            >
+              {/* Post Header */}
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between mb-4">
+                  <div
+                    className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={() => router.push(`/user/${post.user_id}`)}
+                  >
+                    <Avatar className="w-10 h-10">
+                      <AvatarImage src={post.user?.profile_picture} />
+                      <AvatarFallback>
+                        {post.user?.display_name?.substring(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-semibold text-sm">{post.user?.display_name}</p>
+                      <p className="text-xs text-muted-foreground">{timeAgo}</p>
+                    </div>
+                  </div>
+                  <PostMenu
+                    postId={post.id}
+                    postAuthorId={post.user_id}
+                    postLink={`${typeof window !== "undefined" ? window.location.origin : ""}/post/${post.id}`}
+                    onDelete={handleDeletePost}
+                  />
+                </div>
+
+                {/* Location */}
+                {post.location_name && (
+                  <div className="flex items-center gap-1 text-sm text-muted-foreground mb-3">
+                    <MapPin className="w-3.5 h-3.5" />
+                    {post.location_name}
+                  </div>
+                )}
+
+                {/* Post Content */}
+                <p
+                  className="text-sm text-foreground mb-4 whitespace-pre-wrap cursor-pointer hover:text-primary transition-colors"
+                  onClick={() => router.push(`/post/${post.id}`)}
+                >
+                  {post.content}
+                </p>
+
+                {/* Tags */}
+                {post.tags && post.tags.length > 0 && (
+                  <div className="flex gap-2 flex-wrap mb-4">
+                    {post.tags.map((tag: string) => (
+                      <span key={tag} className="text-xs bg-muted px-2 py-1 rounded">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Media */}
+                {mediaUrl && (
+                  <div className="relative w-full rounded-lg overflow-hidden mb-4 bg-muted">
+                    <div
+                      className="relative w-full bg-black flex items-center justify-center min-h-[300px]"
+                      onClick={() => router.push(`/post/${post.id}`)}
+                      data-media-id={`${post.id}-${currentMediaIndex}`}
+                      data-is-video={isVideo(mediaUrl)}
+                      ref={(el) => {
+                        if (el && mediaObserverRef.current) {
+                          mediaObserverRef.current.observe(el)
+                        }
+                      }}
+                    >
+                      {loadedImages.has(`${post.id}-${currentMediaIndex}`) ? (
+                        isVideo(mediaUrl) ? (
+                          <video
+                            className="w-full max-h-96 object-contain bg-black"
+                            controls
+                            controlsList="nofullscreen nodownload"
+                            disablePictureInPicture
+                            preload="none"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <source src={mediaUrl} type={getVideoMimeType(mediaUrl)} />
+                            <track kind="captions" />
+                            Your browser does not support this video format. Please update your browser.
+                          </video>
+                        ) : (
+                          <picture>
+                            <source srcSet={mediaUrl} type={getImageMimeType(mediaUrl)} />
+                            <Image
+                              src={mediaUrl}
+                              alt="Post media"
+                              width={600}
+                              height={400}
+                              className="w-full h-auto max-h-96 object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                              priority={false}
+                              loading="lazy"
+                            />
+                          </picture>
+                        )
+                      ) : (
+                        <div className="flex items-center justify-center w-full h-80 bg-muted/50">
+                          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Carousel Navigation */}
+                    {mediaArray.length > 1 && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setMediaCarouselIndex(
+                              (prev) =>
+                                new Map(prev).set(
+                                  post.id,
+                                  currentMediaIndex === 0 ? mediaArray.length - 1 : currentMediaIndex - 1
+                                )
+                            )
+                          }}
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </Button>
+
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setMediaCarouselIndex(
+                              (prev) =>
+                                new Map(prev).set(
+                                  post.id,
+                                  currentMediaIndex === mediaArray.length - 1 ? 0 : currentMediaIndex + 1
+                                )
+                            )
+                          }}
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
+
+                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                          {currentMediaIndex + 1} / {mediaArray.length}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Stats */}
+                <div className="flex items-center justify-between text-xs text-muted-foreground mb-4 pb-4 border-b border-border/50">
+                  <span>{currentLikes} likes</span>
+                  <div className="flex gap-4">
+                    <span>{currentComments} comments</span>
+                    <span>{currentSaves || 0} saves</span>
+                    <span>{currentViews || 0} views</span>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-around mb-4">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn("flex-1 gap-2", isLiked && "text-red-500")}
+                    onClick={() => handleLikePost(post.id)}
+                  >
+                    <Heart className={cn("w-4 h-4", isLiked && "fill-current")} />
+                    <span className="hidden sm:inline text-xs">Like</span>
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn("flex-1 gap-2", isExpanded && "text-primary")}
+                    onClick={() => handleShowComments(post.id)}
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span className="hidden sm:inline text-xs">Comment</span>
+                  </Button>
+
+                  <Button variant="ghost" size="sm" className="flex-1 gap-2">
+                    <Share2 className="w-4 h-4" />
+                    <span className="hidden sm:inline text-xs">Share</span>
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn("flex-1 gap-2", isSaved && "text-amber-500")}
+                    onClick={() => handleSavePost(post.id)}
+                  >
+                    <Bookmark className={cn("w-4 h-4", isSaved && "fill-current")} />
+                    <span className="hidden sm:inline text-xs">Save</span>
+                  </Button>
+                </div>
+
+                {/* Comments Section */}
+                {isExpanded && (
+                  <div className="space-y-3 pt-4 border-t border-border/50">
+                    {user && (
+                      <div className="space-y-2">
+                        <Textarea
+                          placeholder="Write a comment..."
+                          value={commentValue}
+                          onChange={(e) => setNewComments((prev) => new Map(prev).set(post.id, e.target.value))}
+                          className="min-h-20 text-sm"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => handleSubmitComment(post.id)}
+                          disabled={isSubmittingComment || !commentValue.trim()}
+                          className="w-full"
+                        >
+                          {isSubmittingComment ? (
+                            <>
+                              <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+                              Posting...
+                            </>
+                          ) : (
+                            "Post Comment"
+                          )}
+                        </Button>
+                      </div>
+                    )}
+
+                    {comments.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">No comments yet. Be the first!</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {displayedComments.map((comment) => (
+                          <div key={comment.id} className="space-y-1">
+                            <div className="flex items-start gap-2">
+                              <Avatar className="w-7 h-7">
+                                <AvatarImage src={comment.user?.profile_picture} />
+                                <AvatarFallback>{comment.user?.display_name?.[0] || "U"}</AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-xs">{comment.user?.display_name}</p>
+                                <p className="text-sm text-muted-foreground bg-muted/50 p-2 rounded">
+                                  {comment.content}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+
+                        {comments.length > 2 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full text-primary text-xs"
+                          >
+                            <ChevronDown className="w-3 h-3 mr-1" />
+                            Show {comments.length - 2} more comments
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
+
+      {/* Loading indicator */}
+      {loading && posts.length === 0 && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      )}
+
+      {/* Infinite scroll trigger */}
+      {hasMore && <div ref={observerTarget} className="h-10" />}
+
+      {/* No posts message */}
+      {!loading && posts.length === 0 && (
+        <Card className="border-border/50 p-12 text-center">
+          <p className="text-muted-foreground">No posts yet. Start following people to see their posts!</p>
+        </Card>
+      )}
+    </div>
+  )
+}

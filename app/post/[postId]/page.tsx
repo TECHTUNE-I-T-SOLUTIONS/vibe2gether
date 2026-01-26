@@ -135,7 +135,7 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
   async function fetchPost() {
     try {
       setLoading(true)
-      console.log(`[Post Detail] Fetching post ${unwrappedParams.postId}`)
+      // console.log(`[Post Detail] Fetching post ${unwrappedParams.postId}`)
 
       // Fetch post from API endpoint
       const response = await fetch(`/api/posts/get-post/${unwrappedParams.postId}`)
@@ -154,9 +154,9 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
         return
       }
 
-      console.log(
-        `[Post Detail] Post loaded - likes: ${post.likes_count}, saves: ${post.saves_count}, views: ${post.views_count}`
-      )
+      // console.log(
+      //   `[Post Detail] Post loaded - likes: ${post.likes_count}, saves: ${post.saves_count}, views: ${post.views_count}`
+      // )
 
       setPost(post)
       setLikeCount(post.likes_count || 0)
@@ -168,7 +168,7 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
 
       // Record view (user-based, creator excluded, one per user per 24 hours)
       try {
-        console.log(`[Post Detail] Recording view for post ${unwrappedParams.postId}`)
+        // console.log(`[Post Detail] Recording view for post ${unwrappedParams.postId}`)
         const viewResponse = await fetch("/api/posts/scroll-view", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -178,9 +178,9 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
         if (viewResponse.ok) {
           const { newViewCount, isOwnPost, message } = await viewResponse.json()
           if (isOwnPost) {
-            console.log(`[Post Detail] Post creator's own view - not counted`)
+            // console.log(`[Post Detail] Post creator's own view - not counted`)
           } else {
-            console.log(`[Post Detail] View recorded - ${message}`)
+            // console.log(`[Post Detail] View recorded - ${message}`)
           }
           setViewCount(newViewCount)
         } else {
@@ -220,7 +220,7 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
     setLikeCount(wasLiked ? currentCount - 1 : currentCount + 1)
 
     try {
-      console.log(`[Post Detail] Toggling like for post ${unwrappedParams.postId}`)
+      // console.log(`[Post Detail] Toggling like for post ${unwrappedParams.postId}`)
 
       const response = await fetch("/api/posts/like", {
         method: "POST",
@@ -234,7 +234,7 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
 
       const { liked, likesCount } = await response.json()
       
-      console.log(`[Post Detail] Like toggled - liked: ${liked}, count: ${likesCount}`)
+      // console.log(`[Post Detail] Like toggled - liked: ${liked}, count: ${likesCount}`)
       setIsLiked(liked)
       setLikeCount(likesCount)
       
@@ -269,7 +269,7 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
     setSaveCount(wasSaved ? currentCount - 1 : currentCount + 1)
 
     try {
-      console.log(`[Post Detail] Toggling save for post ${unwrappedParams.postId}`)
+      // console.log(`[Post Detail] Toggling save for post ${unwrappedParams.postId}`)
 
       const response = await fetch("/api/posts/save", {
         method: "POST",
@@ -283,7 +283,7 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
 
       const { saved, savesCount } = await response.json()
       
-      console.log(`[Post Detail] Save toggled - saved: ${saved}, count: ${savesCount}`)
+      // console.log(`[Post Detail] Save toggled - saved: ${saved}, count: ${savesCount}`)
       setIsSaved(saved)
       setSaveCount(savesCount)
       

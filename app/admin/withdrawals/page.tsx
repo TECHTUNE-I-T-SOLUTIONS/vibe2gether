@@ -81,7 +81,7 @@ export default function WithdrawalsPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: actionType === "settle" ? "settled" : actionType,
+          status: actionType === "approve" ? "approved" : actionType === "reject" ? "rejected" : "settled",
           notes,
         }),
       })

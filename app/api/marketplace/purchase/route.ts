@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
     const userId = session.user.id
 
-    console.log(`[POST /api/marketplace/purchase] User ${userId} purchasing product ${productId}`)
+    // console.log(`[POST /api/marketplace/purchase] User ${userId} purchasing product ${productId}`)
 
     // Get product details
     const { data: product, error: productError } = await supabase
@@ -102,9 +102,9 @@ export async function POST(request: NextRequest) {
       throw new Error("Failed to initialize Paystack payment")
     }
 
-    console.log(
-      `[POST /api/marketplace/purchase] Payment initialized for product ${productId}, reference: ${reference}`
-    )
+    // console.log(
+    //   `[POST /api/marketplace/purchase] Payment initialized for product ${productId}, reference: ${reference}`
+    // )
 
     return NextResponse.json({
       success: true,

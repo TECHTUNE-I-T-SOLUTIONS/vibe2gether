@@ -6,7 +6,6 @@ import { useEffect, useState } from "react"
 import {
   ShoppingBag,
   MessageCircle,
-  Bell,
   Rss,
   Calendar,
 } from "lucide-react"
@@ -29,12 +28,6 @@ export function DashboardMobileBottomNav() {
   useEffect(() => {
     async function fetchCounts() {
       try {
-        const notificationRes = await fetch("/api/notifications")
-        if (notificationRes.ok) {
-          const notificationData = await notificationRes.json()
-          setUnreadNotifications(notificationData.unreadCount || 0)
-        }
-
         const messagesRes = await fetch("/api/messages")
         if (messagesRes.ok) {
           const messagesData = await messagesRes.json()
@@ -72,11 +65,11 @@ export function DashboardMobileBottomNav() {
       label: "Messages",
       href: "/dashboard/messages",
     },
-    {
-      icon: <Bell className="w-4 h-4" />,
-      label: "Notifications",
-      href: "/dashboard/notifications",
-    },
+    // {
+    //   icon: <Bell className="w-4 h-4" />,
+    //   label: "Notifications",
+    //   href: "/dashboard/notifications",
+    // },
   ]
 
   // Helper function to determine if route is active
@@ -99,8 +92,6 @@ export function DashboardMobileBottomNav() {
           let badgeCount = 0
           if (item.href === "/dashboard/messages") {
             badgeCount = unreadMessages
-          } else if (item.href === "/dashboard/notifications") {
-            badgeCount = unreadNotifications
           }
 
           return (

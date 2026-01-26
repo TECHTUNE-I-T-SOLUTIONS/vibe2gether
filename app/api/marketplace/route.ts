@@ -24,9 +24,9 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient()
     const userId = session.user.id
 
-    console.log(
-      `[GET /api/marketplace] User ${userId} fetching products - page: ${page}, limit: ${limit}`
-    )
+    // console.log(
+    //   `[GET /api/marketplace] User ${userId} fetching products - page: ${page}, limit: ${limit}`
+    // )
 
     // Build query
     let query = supabase
@@ -93,9 +93,9 @@ export async function GET(request: NextRequest) {
 
     const totalPages = Math.ceil((count || 0) / limit)
 
-    console.log(
-      `[GET /api/marketplace] Fetched ${products?.length || 0} products - total: ${count}`
-    )
+    // console.log(
+    //   `[GET /api/marketplace] Fetched ${products?.length || 0} products - total: ${count}`
+    // )
 
     return NextResponse.json({
       success: true,

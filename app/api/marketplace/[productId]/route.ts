@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: { params: { productI
     const supabase = await createClient()
     const userId = session.user.id
 
-    console.log(`[GET /api/marketplace/[productId]] Fetching product ${productId}`)
+    // console.log(`[GET /api/marketplace/[productId]] Fetching product ${productId}`)
 
     // Get product details
     const { data: product, error: productError } = await supabase
@@ -80,9 +80,9 @@ export async function GET(request: NextRequest, { params }: { params: { productI
       users: undefined, // Remove raw user data
     }
 
-    console.log(
-      `[GET /api/marketplace/[productId]] Product loaded - ${product.title}, price: $${product.price}`
-    )
+    // console.log(
+    //   `[GET /api/marketplace/[productId]] Product loaded - ${product.title}, price: $${product.price}`
+    // )
 
     return NextResponse.json({
       success: true,

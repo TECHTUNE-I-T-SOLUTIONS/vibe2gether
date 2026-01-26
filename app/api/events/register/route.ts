@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
     const userId = session.user.id
 
-    console.log(`[POST /api/events/register] User ${userId} registering for event ${eventId}`)
+    // console.log(`[POST /api/events/register] User ${userId} registering for event ${eventId}`)
 
     // Get event details
     const { data: event, error: eventError } = await supabase
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
 
     // If free event, no payment needed
     if (!event.ticket_price || event.ticket_price === 0) {
-      console.log(`[POST /api/events/register] Free event registered successfully`)
+      // console.log(`[POST /api/events/register] Free event registered successfully`)
 
       // Send notifications
       await supabase.from("notifications").insert([
@@ -164,9 +164,9 @@ export async function POST(request: NextRequest) {
       throw new Error("Failed to initialize Paystack payment")
     }
 
-    console.log(
-      `[POST /api/events/register] Payment initialized for event ${eventId}, reference: ${reference}`
-    )
+    // console.log(
+    //   `[POST /api/events/register] Payment initialized for event ${eventId}, reference: ${reference}`
+    // )
 
     return NextResponse.json({
       success: true,
