@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, CheckCircle2, XCircle, Clock, DollarSign } from "lucide-react"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { Loader2, CheckCircle2, XCircle, Clock, List } from "lucide-react"
 
 interface WithdrawalRequest {
   id: string
@@ -32,6 +33,7 @@ interface WithdrawalRequest {
 
 export default function WithdrawalsPage() {
   const { toast } = useToast()
+  const isMobile = useIsMobile()
   const [loading, setLoading] = useState(true)
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([])
   const [selectedWithdrawal, setSelectedWithdrawal] = useState<WithdrawalRequest | null>(null)
@@ -159,6 +161,23 @@ export default function WithdrawalsPage() {
     }
   }
 
+  const getTabIcon = (tab: string) => {
+    switch (tab) {
+      case "pending":
+        return <Clock className="h-4 w-4" />
+      case "approved":
+        return <CheckCircle2 className="h-4 w-4" />
+      case "settled":
+        return <CheckCircle2 className="h-4 w-4" />
+      case "rejected":
+        return <XCircle className="h-4 w-4" />
+      case "all":
+        return <List className="h-4 w-4" />
+      default:
+        return null
+    }
+  }
+
   const stats = {
     pending: withdrawals.filter((w) => w.status === "pending").length,
     approved: withdrawals.filter((w) => w.status === "approved").length,
@@ -179,7 +198,7 @@ export default function WithdrawalsPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <p className="text-muted-foreground text-sm">Pending</p>
+              <p className="text-muted-foreground text-xs">Pending</p>
               <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
             </div>
           </CardContent>
@@ -187,7 +206,7 @@ export default function WithdrawalsPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <p className="text-muted-foreground text-sm">Approved</p>
+              <p className="text-muted-foreground text-xs">Approved</p>
               <p className="text-2xl font-bold text-blue-600">{stats.approved}</p>
             </div>
           </CardContent>
@@ -195,7 +214,7 @@ export default function WithdrawalsPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <p className="text-muted-foreground text-sm">Settled</p>
+              <p className="text-muted-foreground text-xs">Settled</p>
               <p className="text-2xl font-bold text-green-600">{stats.settled}</p>
             </div>
           </CardContent>
@@ -203,7 +222,7 @@ export default function WithdrawalsPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <p className="text-muted-foreground text-sm">Rejected</p>
+              <p className="text-muted-foreground text-xs">Rejected</p>
               <p className="text-2xl font-bold text-red-600">{stats.rejected}</p>
             </div>
           </CardContent>
@@ -221,24 +240,62 @@ export default function WithdrawalsPage() {
       {/* Withdrawals List */}
       <Card>
         <CardHeader>
-          <CardTitle>All Withdrawal Requests</CardTitle>
+          <CardTitle>All</CardTitle>
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList>
               <TabsTrigger value="pending">
-                Pending {stats.pending > 0 && <Badge className="ml-2">{stats.pending}</Badge>}
+                {isMobile ? (
+                  <>
+                    {getTabIcon("pending")}
+                    {stats.pending > 0 && <Badge className="ml-1">{stats.pending}</Badge>}
+                  </>
+                ) : (
+                  <>
+                    Pending {stats.pending > 0 && <Badge className="ml-2">{stats.pending}</Badge>}
+                  </>
+                )}
               </TabsTrigger>
               <TabsTrigger value="approved">
-                Approved {stats.approved > 0 && <Badge className="ml-2">{stats.approved}</Badge>}
+                {isMobile ? (
+                  <>
+                    {getTabIcon("approved")}
+                    {stats.approved > 0 && <Badge className="ml-1">{stats.approved}</Badge>}
+                  </>
+                ) : (
+                  <>
+                    Approved {stats.approved > 0 && <Badge className="ml-2">{stats.approved}</Badge>}
+                  </>
+                )}
               </TabsTrigger>
               <TabsTrigger value="settled">
-                Settled {stats.settled > 0 && <Badge className="ml-2">{stats.settled}</Badge>}
+                {isMobile ? (
+                  <>
+                    {getTabIcon("settled")}
+                    {stats.settled > 0 && <Badge className="ml-1">{stats.settled}</Badge>}
+                  </>
+                ) : (
+                  <>
+                    Settled {stats.settled > 0 && <Badge className="ml-2">{stats.settled}</Badge>}
+                  </>
+                )}
               </TabsTrigger>
               <TabsTrigger value="rejected">
-                Rejected {stats.rejected > 0 && <Badge className="ml-2">{stats.rejected}</Badge>}
+                {isMobile ? (
+                  <>
+                    {getTabIcon("rejected")}
+                    {stats.rejected > 0 && <Badge className="ml-1">{stats.rejected}</Badge>}
+                  </>
+                ) : (
+                  <>
+                    Rejected {stats.rejected > 0 && <Badge className="ml-2">{stats.rejected}</Badge>}
+                  </>
+                )}
               </TabsTrigger>
-              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="all">
+                {isMobile ? getTabIcon("all") : "All"}
+              </TabsTrigger>
             </TabsList>
 
             {["pending", "approved", "settled", "rejected", "all"].map((tab) => (
@@ -254,20 +311,22 @@ export default function WithdrawalsPage() {
                         key={withdrawal.id}
                         className="border border-border/50 rounded-lg p-4 hover:bg-muted/50 transition-colors"
                       >
-                        <div className="flex items-start justify-between gap-4">
+                        <div className="flex flex-col md:flex-row items-start justify-between gap-4">
                           <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              {getStatusIcon(withdrawal.status)}
-                              <div>
-                                <p className="font-medium">{withdrawal.user?.display_name || "Unknown User"}</p>
-                                <p className="text-sm text-muted-foreground">{withdrawal.user?.email}</p>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
+                              <div className="flex items-center gap-3">
+                                {getStatusIcon(withdrawal.status)}
+                                <div>
+                                  <p className="font-medium">{withdrawal.user?.display_name || "Unknown User"}</p>
+                                  <p className="text-sm text-muted-foreground">{withdrawal.user?.email}</p>
+                                </div>
                               </div>
-                              <Badge className={`ml-auto ${getStatusColor(withdrawal.status)}`}>
+                              <Badge className={`${getStatusColor(withdrawal.status)} sm:ml-auto`}>
                                 {withdrawal.status.charAt(0).toUpperCase() + withdrawal.status.slice(1)}
                               </Badge>
                             </div>
 
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3 text-sm">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 mt-3 text-sm">
                               <div>
                                 <p className="text-muted-foreground">Amount</p>
                                 <p className="font-medium">
