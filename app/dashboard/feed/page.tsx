@@ -1132,13 +1132,13 @@ export default function NewFeedPage() {
                               <>
                                 {/* Blurred background image */}
                                 <div 
-                                  className="absolute inset-0 w-full h-full rounded-lg"
+                                  className="absolute inset-0 rounded-lg"
                                   style={{
                                     backgroundImage: `url(${mediaUrl})`,
                                     backgroundSize: 'cover',
                                     backgroundPosition: 'center',
                                     filter: 'blur(40px) brightness(0.6)',
-                                    zIndex: 0
+                                    zIndex: 0,
                                   }}
                                 />
                                 {/* Main image on top with soft edges */}
@@ -1147,7 +1147,7 @@ export default function NewFeedPage() {
                                   alt={`Post media ${currentMediaIndex + 1}`}
                                   width={1200}
                                   height={800}
-                                  className="relative w-screen max-w-[calc(100vw-24px)] sm:max-w-[calc(100vw-32px)] h-auto max-h-[600px] object-contain cursor-pointer z-10 rounded-lg"
+                                  className="relative w-auto h-auto max-w-auto object-contain cursor-pointer z-10 rounded-lg"
                                   priority={false}
                                   sizes="100vw"
                                   style={{

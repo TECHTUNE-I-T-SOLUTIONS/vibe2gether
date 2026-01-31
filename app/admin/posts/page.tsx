@@ -153,7 +153,7 @@ export default function AdminPostsPage() {
   })
 
   return (
-    <div className="min-h-screen p-4 md:p-6 lg:p-8 w-full max-w-7xl mx-auto">
+    <div className="min-h-screen p-4 md:p-6 lg:p-8 w-4xl max-w-5xl mx-auto">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl md:text-4xl font-bold mb-2">Manage Posts</h1>
@@ -250,7 +250,7 @@ export default function AdminPostsPage() {
 
       {/* Posts Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="bg-muted/50 p-1 rounded-lg mb-6 grid grid-cols-3 w-full">
+        <TabsList className="bg-muted/50 p-1 rounded-lg mb-6 grid grid-cols-3 w-auto max-w-5xl">
           <TabsTrigger value="all" className="rounded">All</TabsTrigger>
           <TabsTrigger value="published" className="rounded">Published</TabsTrigger>
           <TabsTrigger value="under_review" className="rounded">Review</TabsTrigger>
@@ -267,7 +267,7 @@ export default function AdminPostsPage() {
             </CardContent>
           </Card>
         ) : (
-          <TabsContent value={activeTab} className="space-y-4">
+          <TabsContent value={activeTab} className="space-y-4 w-xl">
             {filteredPosts.map((post) => (
               <Card key={post.id} className="border-border/50 hover:border-border/80 transition-colors">
                 <CardContent className="p-4 md:p-6">
@@ -301,7 +301,7 @@ export default function AdminPostsPage() {
 
                       {/* Media - Images/Videos */}
                       {post.media && Array.isArray(post.media) && post.media.length > 0 && (
-                        <div className="mb-3 grid grid-cols-2 gap-2">
+                        <div className="mb-3 space-y-2">
                           {post.media.map((item: any, index: number) => {
                             const mediaUrl = typeof item === "string" ? item : item?.url || ""
                             const isVideo = typeof mediaUrl === "string" && /\.(mp4|webm|mov)$/i.test(mediaUrl)
@@ -309,22 +309,45 @@ export default function AdminPostsPage() {
                             if (!mediaUrl) return null
                             
                             return (
-                              <div key={index} className="relative bg-muted rounded-lg overflow-hidden">
-                                {isVideo ? (
-                                  <video
-                                    src={mediaUrl}
-                                    controls
-                                    autoPlay
-                                    muted
-                                    className="w-full h-40 object-cover"
-                                  />
-                                ) : (
-                                  <img
-                                    src={mediaUrl}
-                                    alt={`Post media ${index + 1}`}
-                                    className="w-full h-40 object-cover hover:scale-105 transition-transform cursor-pointer"
-                                  />
-                                )}
+                              <div key={index} className="relative w-full rounded-sm overflow-hidden flex justify-center">
+                                {/* Blurred background */}
+                                <div
+                                  className="absolute inset-0 rounded-sm"
+                                  style={{
+                                    backgroundImage: `url(${mediaUrl})`,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                    filter: 'blur(40px) brightness(0.6)',
+                                    zIndex: 0,
+                                  }}
+                                />
+                                {/* Main media */}
+                                <div className="relative z-10 flex items-center justify-center" style={{ minHeight: '250px' }}>
+                                  {isVideo ? (
+                                    <video
+                                      src={mediaUrl}
+                                      controls
+                                      autoPlay
+                                      muted
+                                      className="blur(40px) w-2xl h-auto max-h-auto object-contain rounded-lg"
+                                    />
+                                  ) : (
+                                    <img
+                                      src={mediaUrl}
+                                      alt={`Post media ${index + 1}`}
+                                      className="w-auto max-h-auto object-contain rounded-lg hover:scale-105 transition-transform cursor-pointer"
+                                    />
+                                  )}
+                                </div>
+                                {/* Inset shadow for blending */}
+                                <div
+                                  className="absolute inset-0 rounded-sm"
+                                  style={{
+                                    boxShadow: 'inset 0 0 20px rgba(0, 0, 0, 0.3)',
+                                    zIndex: 5,
+                                    pointerEvents: 'none',
+                                  }}
+                                />
                               </div>
                             )
                           })}
@@ -453,7 +476,7 @@ export default function AdminPostsPage() {
 
       {/* Preview Post Modal */}
       <Dialog open={!!previewPostId} onOpenChange={(open) => !open && setPreviewPostId(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Post Details</DialogTitle>
           </DialogHeader>
@@ -487,7 +510,7 @@ export default function AdminPostsPage() {
 
                   {/* Media */}
                   {post.media && Array.isArray(post.media) && post.media.length > 0 && (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-2">
                       {post.media.map((item: any, index: number) => {
                         const mediaUrl = typeof item === "string" ? item : item?.url || ""
                         const isVideo = typeof mediaUrl === "string" && /\.(mp4|webm|mov)$/i.test(mediaUrl)
@@ -495,22 +518,45 @@ export default function AdminPostsPage() {
                         if (!mediaUrl) return null
                         
                         return (
-                          <div key={index} className="relative bg-muted rounded-lg overflow-hidden">
-                            {isVideo ? (
-                              <video
-                                src={mediaUrl}
-                                controls
-                                autoPlay
-                                muted
-                                className="w-full h-64 object-cover"
-                              />
-                            ) : (
-                              <img
-                                src={mediaUrl}
-                                alt={`Post media ${index + 1}`}
-                                className="w-full h-64 object-cover"
-                              />
-                            )}
+                          <div key={index} className="relative w-full rounded-lg overflow-hidden">
+                            {/* Blurred background */}
+                            <div
+                              className="absolute inset-0 rounded-lg"
+                              style={{
+                                backgroundImage: `url(${mediaUrl})`,
+                                backgroundSize: 'cover',
+                                backgroundPosition: 'center',
+                                filter: 'blur(40px) brightness(0.6)',
+                                zIndex: 0,
+                              }}
+                            />
+                            {/* Main media */}
+                            <div className="relative z-10 flex items-center justify-center" style={{ minHeight: '200px' }}>
+                              {isVideo ? (
+                                <video
+                                  src={mediaUrl}
+                                  controls
+                                  autoPlay
+                                  muted
+                                  className="w-full max-h-160 object-contain rounded-lg"
+                                />
+                              ) : (
+                                <img
+                                  src={mediaUrl}
+                                  alt={`Post media ${index + 1}`}
+                                  className="w-full max-h-160 object-contain rounded-sm"
+                                />
+                              )}
+                            </div>
+                            {/* Inset shadow for blending */}
+                            <div
+                              className="absolute inset-0 rounded-sm"
+                              style={{
+                                boxShadow: 'inset 0 0 20px rgba(0, 0, 0, 0.3)',
+                                zIndex: 5,
+                                pointerEvents: 'none',
+                              }}
+                            />
                           </div>
                         )
                       })}
