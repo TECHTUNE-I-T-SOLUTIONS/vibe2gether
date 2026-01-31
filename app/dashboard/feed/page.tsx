@@ -1104,9 +1104,9 @@ export default function NewFeedPage() {
 
                     {/* Media */}
                     {mediaUrl && (
-                      <div className="relative w-full rounded-lg overflow-hidden mb-4 bg-muted">
+                      <div className="relative w-full rounded-lg overflow-hidden mb-4 bg-black">
                         <div
-                          className="relative w-full bg-black flex items-center justify-center min-h-[300px]"
+                          className="relative w-full bg-black flex items-center justify-center rounded-lg overflow-hidden"
                           onClick={() => post.user_id === session?.user?.id ? router.push(`/user/${session.user.id}`) : router.push(`/post/${post.id}`)}
                           data-media-id={`${post.id}-${currentMediaIndex}`}
                           data-is-video={isVideo(mediaUrl)}
@@ -1119,7 +1119,7 @@ export default function NewFeedPage() {
                           {loadedImages.has(`${post.id}-${currentMediaIndex}`) ? (
                             isVideo(mediaUrl) ? (
                               <video
-                                className="w-full max-h-96 object-contain bg-black"
+                                className="w-screen max-w-[calc(100vw-24px)] sm:max-w-[calc(100vw-32px)] max-h-[600px] object-contain"
                                 controls
                                 controlsList="nofullscreen nodownload"
                                 disablePictureInPicture
@@ -1129,16 +1129,36 @@ export default function NewFeedPage() {
                                 <source src={mediaUrl} type={getVideoMimeType(mediaUrl)} />
                               </video>
                             ) : (
-                              <Image
-                                src={mediaUrl}
-                                alt={`Post media ${currentMediaIndex + 1}`}
-                                fill
-                                className="object-contain cursor-pointer"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  post.user_id === session?.user?.id ? router.push(`/user/${session.user.id}`) : router.push(`/post/${post.id}`)
-                                }}
-                              />
+                              <>
+                                {/* Blurred background image */}
+                                <div 
+                                  className="absolute inset-0 w-full h-full rounded-lg"
+                                  style={{
+                                    backgroundImage: `url(${mediaUrl})`,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                    filter: 'blur(40px) brightness(0.6)',
+                                    zIndex: 0
+                                  }}
+                                />
+                                {/* Main image on top with soft edges */}
+                                <Image
+                                  src={mediaUrl}
+                                  alt={`Post media ${currentMediaIndex + 1}`}
+                                  width={1200}
+                                  height={800}
+                                  className="relative w-screen max-w-[calc(100vw-24px)] sm:max-w-[calc(100vw-32px)] h-auto max-h-[600px] object-contain cursor-pointer z-10 rounded-lg"
+                                  priority={false}
+                                  sizes="100vw"
+                                  style={{
+                                    boxShadow: 'inset 0 0 20px rgba(0, 0, 0, 0.3)'
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    post.user_id === session?.user?.id ? router.push(`/user/${session.user.id}`) : router.push(`/post/${post.id}`)
+                                  }}
+                                />
+                              </>
                             )
                           ) : (
                             <div className="flex items-center justify-center w-full h-64 bg-muted">

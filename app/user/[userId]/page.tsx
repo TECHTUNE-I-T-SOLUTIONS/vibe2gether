@@ -310,7 +310,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ userId: 
 
                     {/* Media Preview */}
                     {post.media && post.media.length > 0 && (
-                    <div className="relative w-full h-48 rounded-lg overflow-hidden mb-3 bg-muted">
+                    <div className="relative w-full rounded-lg overflow-hidden mb-3 bg-black flex items-center justify-center rounded-lg overflow-hidden">
                       {(() => {
                       const mediaUrl = post.media[0].url || post.media[0];
                       const isVideo = typeof mediaUrl === 'string' && /\.(mp4|webm|mov)$/i.test(mediaUrl);
@@ -321,15 +321,33 @@ export default function UserProfilePage({ params }: { params: Promise<{ userId: 
                         controls
                         autoPlay
                         muted
-                        className="w-full h-full object-cover"
+                        className="w-screen max-w-[calc(100vw-24px)] sm:max-w-[calc(100vw-32px)] max-h-[400px] object-contain"
                         />
                       ) : (
-                        <Image
-                        src={mediaUrl}
-                        alt="Post media"
-                        fill
-                        className="object-cover"
-                        />
+                        <>
+                          {/* Blurred background image */}
+                          <div 
+                            className="absolute inset-0 w-full h-full rounded-lg"
+                            style={{
+                              backgroundImage: `url(${mediaUrl})`,
+                              backgroundSize: 'cover',
+                              backgroundPosition: 'center',
+                              filter: 'blur(40px) brightness(0.6)',
+                              zIndex: 0
+                            }}
+                          />
+                          {/* Main image on top with soft edges */}
+                          <Image
+                            src={mediaUrl}
+                            alt="Post media"
+                            width={1200}
+                            height={600}
+                            className="relative w-screen max-w-[calc(100vw-24px)] sm:max-w-[calc(100vw-32px)] h-auto max-h-[400px] object-contain z-10 rounded-lg cursor-pointer"
+                            style={{
+                              boxShadow: 'inset 0 0 20px rgba(0, 0, 0, 0.3)'
+                            }}
+                          />
+                        </>
                       );
                       })()}
                     </div>

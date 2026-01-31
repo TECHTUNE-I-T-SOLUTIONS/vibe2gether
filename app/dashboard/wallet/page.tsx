@@ -35,6 +35,7 @@ import { useI18n } from "@/lib/i18n/context"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { VerificationModal } from "@/components/verification-modal-improved"
 import { PaystackPaymentModal } from "@/components/paystack-payment-modal"
+import { TransferCoinsModal } from "@/components/wallet/transfer-coins-modal"
 
 interface Transaction {
   id: string
@@ -85,6 +86,7 @@ export default function WalletPage() {
   const [loading, setLoading] = useState(true)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false)
+  const [showTransferModal, setShowTransferModal] = useState(false)
   const [withdrawalAmount, setWithdrawalAmount] = useState("")
   const [bankName, setBankName] = useState("")
   const [accountNumber, setAccountNumber] = useState("")
@@ -558,6 +560,15 @@ export default function WalletPage() {
               <Button 
                 variant="secondary" 
                 className="rounded-full bg-white/20 text-white hover:bg-white/30 border-0 text-sm md:text-base px-3 md:px-4 py-2 md:py-2.5 flex-1 min-w-[80px] sm:flex-none"
+                onClick={() => setShowTransferModal(true)}
+              >
+                <Gift className="w-4 h-4 mr-1" />
+                <span className="hidden sm:inline">Transfer</span>
+                <span className="sm:hidden">Send</span>
+              </Button>
+              <Button 
+                variant="secondary" 
+                className="rounded-full bg-white/20 text-white hover:bg-white/30 border-0 text-sm md:text-base px-3 md:px-4 py-2 md:py-2.5 flex-1 min-w-[80px] sm:flex-none"
                 onClick={() => {
                   if (isVerified) {
                     setShowWithdrawalModal(true)
@@ -585,6 +596,15 @@ export default function WalletPage() {
               onOpenChange={setShowVerificationModal}
               verificationStatus={verificationStatus}
               onVerificationSubmitted={fetchVerificationStatus}
+            />
+            <TransferCoinsModal
+              open={showTransferModal}
+              onOpenChange={setShowTransferModal}
+              userBalance={user?.coins_balance || 0}
+              onTransferSuccess={() => {
+                // Refresh user data after successful transfer
+                window.location.reload()
+              }}
             />
           </div>
         </Card>

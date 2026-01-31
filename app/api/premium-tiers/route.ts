@@ -1,14 +1,17 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js"
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+)
 
 export async function GET() {
   try {
-    const supabase = createClient();
-
     const { data: tiers, error } = await supabase
       .from("premium_tiers")
       .select("*")
       .eq("is_active", true)
-      .order("monthly_price", { ascending: true });
+      .order("monthly_price", { ascending: true })
 
     if (error) {
       return Response.json(

@@ -485,10 +485,10 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
 
           {/* Media Carousel */}
           {currentMedia && (
-            <div className="relative w-full rounded-lg overflow-hidden mb-4 bg-black flex items-center justify-center">
+            <div className="relative w-full rounded-lg overflow-hidden mb-4 bg-black flex items-center justify-center rounded-lg overflow-hidden">
               {isVideo ? (
                 <video
-                  className="w-full max-h-96 object-contain"
+                  className="w-screen max-w-[calc(100vw-24px)] sm:max-w-[calc(100vw-32px)] max-h-[600px] object-contain"
                   controls
                   autoPlay
                   muted
@@ -501,18 +501,32 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
                   Your browser does not support this video format. Please update your browser.
                 </video>
               ) : (
-                <picture>
-                  <source srcSet={currentMedia} type={getImageMimeType(currentMedia)} />
-                  <div className="relative w-full max-h-96 cursor-pointer hover:opacity-90 transition-opacity flex items-center justify-center bg-black">
-                    <Image
-                      src={currentMedia}
-                      alt="Post media"
-                      width={800}
-                      height={600}
-                      className="object-contain max-h-96"
-                    />
-                  </div>
-                </picture>
+                <>
+                  {/* Blurred background image */}
+                  <div 
+                    className="absolute inset-0 w-full h-full rounded-lg"
+                    style={{
+                      backgroundImage: `url(${currentMedia})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      filter: 'blur(40px) brightness(0.6)',
+                      zIndex: 0
+                    }}
+                  />
+                  {/* Main image on top with soft edges */}
+                  <Image
+                    src={currentMedia}
+                    alt="Post media"
+                    width={1200}
+                    height={800}
+                    className="relative w-screen max-w-[calc(100vw-24px)] sm:max-w-[calc(100vw-32px)] h-auto max-h-[600px] object-contain cursor-pointer z-10 rounded-lg"
+                    priority={false}
+                    sizes="100vw"
+                    style={{
+                      boxShadow: 'inset 0 0 20px rgba(0, 0, 0, 0.3)'
+                    }}
+                  />
+                </>
               )}
 
               {/* Navigation Arrows - Only show if multiple media items */}
@@ -521,7 +535,7 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 z-20"
                     onClick={handlePrevMedia}
                   >
                     <ChevronLeft className="w-5 h-5 text-white" />
@@ -529,14 +543,14 @@ export default function PostPage({ params }: { params: Promise<{ postId: string 
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 z-20"
                     onClick={handleNextMedia}
                   >
                     <ChevronRight className="w-5 h-5 text-white" />
                   </Button>
 
                   {/* Media Counter */}
-                  <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded">
+                  <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded z-20">
                     {mediaIndex + 1} / {mediaList.length}
                   </div>
                 </>
