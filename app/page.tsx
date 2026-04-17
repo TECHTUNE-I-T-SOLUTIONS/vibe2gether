@@ -24,8 +24,8 @@ import { Button } from "@/components/ui/button"
 
 const stats = [
   { value: "Many", label: "Young professionals reached" },
-  { value: "Continuous", label: "Meaningful connections made" },
-  { value: "Increasing", label: "Opportunities unlocked" },
+  { value: "50+", label: "Meaningful connections made" },
+  { value: "20+", label: "Opportunities unlocked" },
 ]
 
 const features = [
@@ -164,14 +164,14 @@ export default function HomePage() {
               </div>
 
               {/* Stats inline */}
-              <div className="mt-10 flex gap-6 sm:gap-8">
+              {/* <div className="mt-10 flex gap-6 sm:gap-8">
                 {stats.map((stat, idx) => (
                   <div key={idx}>
                     <p className="text-3xl font-black text-primary">{stat.value}</p>
                     <p className="text-xs font-medium text-muted-foreground">{stat.label.split(' ').slice(0, 2).join(' ')}</p>
                   </div>
                 ))}
-              </div>
+              </div> */}
             </div>
 
             {/* Right: Hero Image */}

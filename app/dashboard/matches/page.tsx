@@ -121,14 +121,14 @@ export default function MatchesPage() {
       )
 
       toast({
-        title: "Match Accepted!",
+        title: "Vibe Accepted!",
         description: "You can now message each other",
       })
     } catch (err) {
       console.error("Failed to accept match:", err)
       toast({
         title: "Error",
-        description: "Failed to accept match",
+        description: "Failed to accept vibe",
         variant: "destructive",
       })
     }
@@ -147,14 +147,14 @@ export default function MatchesPage() {
       setActiveMatches((prev) => prev.filter((m) => m.id !== matchId))
 
       toast({
-        title: "Match Rejected",
-        description: "This match request has been declined",
+        title: "Vibe Declined",
+        description: "This vibe request has been declined",
       })
     } catch (err) {
       console.error("Failed to reject match:", err)
       toast({
         title: "Error",
-        description: "Failed to reject match",
+        description: "Failed to decline vibe",
         variant: "destructive",
       })
     }
@@ -192,14 +192,14 @@ export default function MatchesPage() {
       setPotentialMatches((prev) => prev.filter((m) => m.id !== match.id))
 
       toast({
-        title: "Match Created!",
+        title: "Vibe Created!",
         description: "They'll see your request and can accept it",
       })
     } catch (err) {
       console.error("[Matches Page] Error creating match:", err)
       toast({
         title: "Error",
-        description: "Failed to create match",
+        description: "Failed to create vibe",
         variant: "destructive",
       })
     }
@@ -217,7 +217,7 @@ export default function MatchesPage() {
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
       <h1 className="text-3xl font-bold mb-8 flex items-center gap-2">
         <Sparkles className="w-8 h-8" />
-        Matches
+        Vibes
       </h1>
 
       {/* Tabs */}
@@ -231,7 +231,7 @@ export default function MatchesPage() {
               : "border-transparent text-muted-foreground hover:text-foreground"
           )}
         >
-          Active Matches ({activeMatches.length})
+          Your Vibes ({activeMatches.length})
         </button>
         <button
           onClick={() => {
@@ -247,24 +247,24 @@ export default function MatchesPage() {
               : "border-transparent text-muted-foreground hover:text-foreground"
           )}
         >
-          Potential Matches ({potentialMatches.length})
+          Discover Vibes ({potentialMatches.length})
           {!isPremium && (
             <Lock className="w-4 h-4" />
           )}
         </button>
       </div>
 
-      {/* Active Matches Tab */}
+      {/* Your Vibes Tab */}
       {tab === "active" && (
         <div>
           {activeMatches.length === 0 ? (
             <Card className="border-border/50 p-12 text-center">
               <Heart className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
               <p className="text-muted-foreground mb-4">
-                You don't have any accepted matches yet
+                You don't have any accepted vibes yet
               </p>
               <Button onClick={() => setTab("potential")} className="gradient-bg">
-                Check Potential Matches
+                Discover Vibes
               </Button>
             </Card>
           ) : (
@@ -344,10 +344,10 @@ export default function MatchesPage() {
             </div>
           )}
 
-          {/* Pending Matches */}
+          {/* Pending Vibe Requests */}
           {activeMatches.filter((m) => m.status === "pending").length > 0 && (
             <div className="mt-8">
-              <h2 className="text-xl font-bold mb-4">Pending Match Requests</h2>
+              <h2 className="text-xl font-bold mb-4">Pending Vibe Requests</h2>
               <div className="space-y-4">
                 {/* Sent Requests */}
                 {activeMatches
@@ -418,7 +418,7 @@ export default function MatchesPage() {
                                 {match.compatibility_score}% compatible
                               </p>
                               <p className="text-xs text-primary mt-1">
-                                💌 Wants to match with you
+                                💌 Wants to vibe with you
                               </p>
                             </div>
                           </div>
@@ -454,7 +454,7 @@ export default function MatchesPage() {
         </div>
       )}
 
-      {/* Potential Matches Tab */}
+      {/* Discover Vibes Tab */}
       {tab === "potential" && (
         <div>
           {!isPremium ? (
@@ -462,7 +462,7 @@ export default function MatchesPage() {
               <Crown className="w-12 h-12 text-amber-500 mx-auto mb-4" />
               <h3 className="text-2xl font-bold mb-2">Premium Feature</h3>
               <p className="text-muted-foreground mb-6">
-                Unlock Potential Matches and browse new profiles with a premium membership
+                Unlock Discover Vibes and browse new profiles with a premium membership
               </p>
               <Button
                 onClick={() => router.push("/dashboard/premium?feature=View+Matches")}
@@ -475,7 +475,7 @@ export default function MatchesPage() {
             <Card className="border-border/50 p-12 text-center">
               <Sparkles className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
               <p className="text-muted-foreground">
-                No more potential matches available
+                No more vibes to discover right now
               </p>
             </Card>
           ) : (
