@@ -23,9 +23,9 @@ import { MobileNav } from "@/components/mobile-nav"
 import { Button } from "@/components/ui/button"
 
 const stats = [
-  { value: "1M+", label: "Young professionals reached" },
-  { value: "50K+", label: "Meaningful connections made" },
-  { value: "200K+", label: "Opportunities unlocked" },
+  { value: "Many", label: "Young professionals reached" },
+  { value: "Continuous", label: "Meaningful connections made" },
+  { value: "Increasing", label: "Opportunities unlocked" },
 ]
 
 const features = [
@@ -517,9 +517,9 @@ export default function HomePage() {
               <div className="mt-8 lg:mt-0 grid gap-4 sm:grid-cols-2 lg:gap-3">
                 {[
                   { number: "48", label: "Countries", icon: <Zap className="h-5 w-5" /> },
-                  { number: "1M+", label: "Users", icon: <Users2 className="h-5 w-5" /> },
-                  { number: "50K+", label: "Connections", icon: <Heart className="h-5 w-5" /> },
-                  { number: "200K+", label: "Opportunities", icon: <TrendingUp className="h-5 w-5" /> },
+                  { number: "growing", label: "Users", icon: <Users2 className="h-5 w-5" /> },
+                  { number: "increasing", label: "Connections", icon: <Heart className="h-5 w-5" /> },
+                  { number: "many", label: "Opportunities", icon: <TrendingUp className="h-5 w-5" /> },
                 ].map((stat, idx) => (
                   <div
                     key={idx}
