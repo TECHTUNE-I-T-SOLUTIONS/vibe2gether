@@ -250,7 +250,7 @@ export function CreateOpportunityModal({ open, onOpenChange, opportunity, onSucc
           </div>
 
           <div className="flex flex-col md:flex-row gap-3 pt-4 border-t border-border/30">
-            <Button type="submit" className="w-full md:order-2 h-12 md:h-11 rounded-xl md:rounded-full gradient-bg font-bold shadow-lg shadow-primary/20" disabled={loading || uploading}>
+            <Button type="submit" className="w-auto md:order-2 h-12 md:h-11 rounded-xl md:rounded-full gradient-bg font-bold shadow-lg shadow-primary/20" disabled={loading || uploading}>
               {loading || uploading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -260,7 +260,7 @@ export function CreateOpportunityModal({ open, onOpenChange, opportunity, onSucc
                 opportunity ? "Update Posting" : "Post Opportunity"
               )}
             </Button>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="w-full md:order-1 h-12 md:h-11 rounded-xl md:rounded-full font-bold border-border/50" disabled={loading}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="w-auto md:order-1 h-12 md:h-11 rounded-xl md:rounded-full font-bold border-border/50" disabled={loading}>
               Cancel
             </Button>
           </div>
