@@ -1276,12 +1276,12 @@ export default function MessagesPage() {
 
       {/* Discovery Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="flex-shrink-0 px-6 py-4 border-b border-border">
             <DialogTitle>Discover People</DialogTitle>
           </DialogHeader>
 
-          <div className="p-4 border-b border-border">
+          <div className="flex-shrink-0 px-4 py-3 border-b border-border">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -1300,8 +1300,8 @@ export default function MessagesPage() {
             </div>
           </div>
 
-          <Tabs value={searchTab} onValueChange={(v) => setSearchTab(v as "following" | "discover")} className="flex-1 flex flex-col">
-            <TabsList className="w-full rounded-none border-b border-border bg-background">
+          <Tabs value={searchTab} onValueChange={(v) => setSearchTab(v as "following" | "discover")} className="flex-1 flex flex-col overflow-hidden">
+            <TabsList className="flex-shrink-0 w-full rounded-none border-b border-border bg-background">
               <TabsTrigger value="following" className="flex-1">
                 Following {allFollowingUsers.length > 0 && `(${allFollowingUsers.length})`}
               </TabsTrigger>
@@ -1340,7 +1340,7 @@ export default function MessagesPage() {
           </Tabs>
 
           {!searchQuery && totalPages > 1 && (
-            <div className="flex items-center justify-between p-4 border-t border-border">
+            <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-t border-border bg-background">
               <Button
                 variant="outline"
                 size="sm"
