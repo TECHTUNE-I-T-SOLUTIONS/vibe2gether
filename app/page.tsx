@@ -183,8 +183,8 @@ export default function HomePage() {
                 <div className="absolute -bottom-20 -right-20 w-40 h-40 bg-gradient-to-tl from-purple-500/20 to-transparent rounded-full blur-3xl pointer-events-none" />
                 
                 <Image
-                  src="/home/pexels-resumegenius.jpg"
-                  alt="Professional networking at Vibe2Gether"
+                  src="/home/people.jpg"
+                  alt="Young professionals collaborating on Vibe2Gether"
                   width={600}
                   height={600}
                   className="w-full h-auto object-cover rounded-[32px]"
