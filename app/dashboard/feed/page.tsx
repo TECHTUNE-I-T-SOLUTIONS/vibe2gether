@@ -33,8 +33,10 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
+import { getFlagAssetFromLocation } from "@/lib/location-country"
 import { cn } from "@/lib/utils"
 import { PostMenu } from "@/components/post-menu"
+import { FeatureCards } from "@/components/dashboard/feature-cards"
 import { CreatePost } from "@/components/create-post"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { getPostComments, deletePost, createPost } from "@/lib/supabase/queries"
@@ -43,6 +45,7 @@ import { uploadPostMedia } from "@/lib/supabase/storage"
 // Types
 interface Post {
   id: string
+  user_id?: string
   content: string
   media: any[]
   tags: string[]
@@ -194,16 +197,47 @@ export default function NewFeedPage() {
     queryFn: async () => {
       const response = await fetch(`/api/new-feed/posts?page=1&limit=50`) // Load 50 posts at once
       if (!response.ok) throw new Error("Failed to fetch posts")
-      return response.json()
+      return response.json() as Promise<{ posts: Post[] }>
     },
     staleTime: 0, // Always refetch on mount for fresh data
-    cacheTime: 1000 * 60 * 2, // 2 minutes cache
+    gcTime: 1000 * 60 * 2, // 2 minutes cache
     refetchOnWindowFocus: false,
     refetchOnMount: true, // Always refetch on mount
   })
 
   // Get posts from data
   const allPosts = data?.posts || []
+
+  // Warm up the first few videos so they are playable as soon as the feed settles.
+  useEffect(() => {
+    if (!allPosts.length) return
+
+    const initialMediaToLoad = new Set<string>()
+    let warmedVideos = 0
+
+    allPosts.forEach((post: Post) => {
+      const mediaUrl = getMediaUrl(post.media, 0)
+      if (!mediaUrl) return
+
+      if (!isVideo(mediaUrl)) {
+        initialMediaToLoad.add(`${post.id}-0`)
+        return
+      }
+
+      if (warmedVideos < 3) {
+        initialMediaToLoad.add(`${post.id}-0`)
+        warmedVideos += 1
+      }
+    })
+
+    if (initialMediaToLoad.size > 0) {
+      setLoadedImages((prev) => {
+        const next = new Set(prev)
+        initialMediaToLoad.forEach((mediaId) => next.add(mediaId))
+        return next
+      })
+    }
+  }, [allPosts])
 
   // Preload images for better performance
   const preloadImage = useCallback((src: string) => {
@@ -317,24 +351,24 @@ export default function NewFeedPage() {
   useEffect(() => {
     const options = {
       root: null,
-      rootMargin: "100px",
-      threshold: 0,
+      rootMargin: "600px 0px",
+      threshold: 0.01,
     }
 
     mediaObserverRef.current = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
           const mediaId = (entry.target as HTMLElement).getAttribute("data-media-id")
-          const isVideo = (entry.target as HTMLElement).getAttribute("data-is-video") === "true"
 
           if (mediaId) {
-            const delay = isVideo ? 100 : 0
-            setTimeout(() => {
-              setLoadedImages((prev) => new Set(prev).add(mediaId))
-              if (mediaObserverRef.current) {
-                mediaObserverRef.current.unobserve(entry.target)
-              }
-            }, delay)
+            setLoadedImages((prev) => {
+              const next = new Set(prev)
+              next.add(mediaId)
+              return next
+            })
+            if (mediaObserverRef.current) {
+              mediaObserverRef.current.unobserve(entry.target)
+            }
           }
         }
       })
@@ -747,22 +781,6 @@ export default function NewFeedPage() {
            /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|tiff|heic|heif|avif)\?/i.test(url)
   }
 
-  const getVideoMimeType = (url: string): string => {
-    const ext = url.toLowerCase().split(/[\?#]/)[0].split('.').pop() || ''
-    const mimeMap: { [key: string]: string } = {
-      'mp4': 'video/mp4',
-      'webm': 'video/webm',
-      'ogg': 'video/ogg',
-      'mov': 'video/quicktime',
-      'avi': 'video/x-msvideo',
-      'mkv': 'video/x-matroska',
-      'flv': 'video/x-flv',
-      'wmv': 'video/x-ms-wmv',
-      'm3u8': 'application/x-mpegURL',
-    }
-    return mimeMap[ext] || 'video/mp4'
-  }
-
   const getImageMimeType = (url: string): string => {
     const ext = url.toLowerCase().split(/[\?#]/)[0].split('.').pop() || ''
     const mimeMap: { [key: string]: string } = {
@@ -1035,6 +1053,11 @@ export default function NewFeedPage() {
         </Button>
       </div>
 
+      {/* Feature Stats Cards */}
+      <div className="mb-2">
+        <FeatureCards />
+      </div>
+
       {/* Posts */}
       {isLoading ? (
         // Initial loading skeletons
@@ -1045,6 +1068,7 @@ export default function NewFeedPage() {
             const mediaArray = getMediaArray(post.media)
             const currentMediaIndex = mediaCarouselIndex.get(post.id) || 0
             const mediaUrl = getMediaUrl(post.media, currentMediaIndex)
+            const locationFlag = getFlagAssetFromLocation(post.location_name)
             const comments = postComments.get(post.id) || []
             const isExpanded = expandedComments.has(post.id)
             const commentValue = newComments.get(post.id) || ""
@@ -1075,7 +1099,17 @@ export default function NewFeedPage() {
                       </Avatar>
                       <div>
                         <Link href={`/user/${post.user.id}`} className="hover:underline">
-                          <p className="font-semibold text-sm">{post.user.display_name}</p>
+                          <p className="font-semibold text-sm flex items-center gap-1.5">
+                            <span>{post.user.display_name}</span>
+                            <Image
+                              src={locationFlag.src}
+                              alt={`${locationFlag.name} flag`}
+                              width={16}
+                              height={16}
+                              className="h-4 w-4 rounded-[2px] object-cover"
+                              unoptimized
+                            />
+                          </p>
                         </Link>
                         <p className="text-xs text-muted-foreground">
                           @{post.user.display_name || post.user.full_name} • {timeAgo}
@@ -1093,7 +1127,7 @@ export default function NewFeedPage() {
                   {/* Post Content */}
                   <div className="mb-4">
                     {post.user_id === session?.user?.id ? (
-                      <Link href={`/user/${session.user.id}`}>
+                      <Link href={`/user/${session?.user?.id}`}>
                         <p className="text-sm mb-3 cursor-pointer hover:text-primary transition-colors whitespace-pre-wrap">{post.content}</p>
                       </Link>
                     ) : (
@@ -1107,7 +1141,7 @@ export default function NewFeedPage() {
                       <div className="relative w-full rounded-lg overflow-hidden mb-4 bg-black">
                         <div
                           className="relative w-full bg-black flex items-center justify-center rounded-lg overflow-hidden"
-                          onClick={() => post.user_id === session?.user?.id ? router.push(`/user/${session.user.id}`) : router.push(`/post/${post.id}`)}
+                          onClick={() => post.user_id === session?.user?.id ? router.push(`/user/${session?.user?.id}`) : router.push(`/post/${post.id}`)}
                           data-media-id={`${post.id}-${currentMediaIndex}`}
                           data-is-video={isVideo(mediaUrl)}
                           ref={(el) => {
@@ -1120,13 +1154,16 @@ export default function NewFeedPage() {
                             isVideo(mediaUrl) ? (
                               <video
                                 className="w-screen max-w-[calc(100vw-24px)] sm:max-w-[calc(100vw-32px)] max-h-[600px] object-contain"
+                                src={mediaUrl}
                                 controls
                                 controlsList="nofullscreen nodownload"
                                 disablePictureInPicture
-                                preload="none"
+                                playsInline
+                                preload="metadata"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <source src={mediaUrl} type={getVideoMimeType(mediaUrl)} />
+                                <track kind="captions" />
+                                Your browser does not support this video format.
                               </video>
                             ) : (
                               <>
@@ -1155,7 +1192,7 @@ export default function NewFeedPage() {
                                   }}
                                   onClick={(e) => {
                                     e.stopPropagation()
-                                    post.user_id === session?.user?.id ? router.push(`/user/${session.user.id}`) : router.push(`/post/${post.id}`)
+                                    post.user_id === session?.user?.id ? router.push(`/user/${session?.user?.id}`) : router.push(`/post/${post.id}`)
                                   }}
                                 />
                               </>

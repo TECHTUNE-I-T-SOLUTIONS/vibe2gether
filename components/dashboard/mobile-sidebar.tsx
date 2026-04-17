@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n/context"
 import {
   LayoutDashboard,
-  User,
+  Users,
   Wallet,
   MessageCircle,
   Bell,
@@ -22,6 +22,9 @@ import {
   Rss,
   Copy,
   Star,
+  Eye,
+  Briefcase,
+  Sparkles,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -39,25 +42,25 @@ interface SidebarItem {
 }
 
 const mainItems: SidebarItem[] = [
-  { icon: LayoutDashboard, label: "dashboard", href: "/dashboard" },
-  { icon: Rss, label: "feed", href: "/dashboard/feed" },
-  { icon: User, label: "profile", href: "/dashboard/profile" },
-  { icon: Heart, label: "yourMatches", href: "/dashboard/matches" },
-  { icon: MessageCircle, label: "messages", href: "/dashboard/messages" },
-  { icon: Bell, label: "notifications", href: "/dashboard/notifications" },
+  { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
+  { icon: Rss, label: "Insights", href: "/dashboard/feed" },
+  { icon: Users, label: "Network", href: "/dashboard/matches" },
+  { icon: MessageCircle, label: "Inbox", href: "/dashboard/messages" },
+  { icon: Bell, label: "Notifications", href: "/dashboard/notifications" },
 ]
 
 const secondaryItems: SidebarItem[] = [
-  { icon: Wallet, label: "wallet", href: "/dashboard/wallet" },
-  { icon: ShoppingBag, label: "marketplace", href: "/dashboard/marketplace/manage" },
-  { icon: Calendar, label: "events", href: "/dashboard/events/manage" },
-  { icon: Star, label: "testimonies", href: "/dashboard/testimonies" },
-  { icon: Bookmark, label: "saved", href: "/dashboard/saved" },
+  { icon: Eye, label: "Opportunities", href: "/dashboard/opportunities" },
+  { icon: ShoppingBag, label: "Marketplace", href: "/dashboard/marketplace/manage" },
+  { icon: Calendar, label: "Events & Webinars", href: "/dashboard/events/manage" },
+  { icon: Briefcase, label: "Learn & Grow", href: "/dashboard/learn" },
+  { icon: Star, label: "Testimonies", href: "/dashboard/testimonies" },
+  { icon: Bookmark, label: "Saved", href: "/dashboard/saved" },
 ]
 
 const bottomItems: SidebarItem[] = [
-  { icon: Settings, label: "settings", href: "/dashboard/settings" },
-  { icon: HelpCircle, label: "help", href: "/contact" },
+  { icon: Settings, label: "Settings", href: "/dashboard/settings" },
+  { icon: HelpCircle, label: "Help", href: "/contact" },
 ]
 
 export function MobileSidebar() {
@@ -68,10 +71,26 @@ export function MobileSidebar() {
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [messageBadge, setMessageBadge] = useState(0)
   const [notificationBadge, setNotificationBadge] = useState(0)
+  const [stats, setStats] = useState({
+    connections: 0,
+    views: 0,
+    opportunities: 0,
+  })
 
   useEffect(() => {
     async function fetchBadgeCounts() {
       try {
+        const statsRes = await fetch("/api/dashboard/stats", { method: "POST" })
+        if (statsRes.ok) {
+          const statsData = await statsRes.json()
+          const findStat = (label: string) => statsData.stats.find((s: any) => s.label === label)?.value || "0"
+          setStats({
+            connections: parseInt(findStat("followers")),
+            views: parseInt(findStat("totalViews")),
+            opportunities: parseInt(findStat("yourMatches")),
+          })
+        }
+
         const notifRes = await fetch("/api/notifications")
         if (notifRes.ok) {
           const notifData = await notifRes.json()
@@ -129,18 +148,41 @@ export function MobileSidebar() {
 
       {/* User Profile Section */}
       <div className="p-4 border-b border-sidebar-border space-y-3">
-        <Link href="/dashboard/profile" className="flex gap-3 items-start">
+        <div className="flex gap-3 items-start">
           <Avatar className="w-12 h-12 ring-2 ring-primary/20 flex-shrink-0">
-            <AvatarImage src={session?.user?.image || user?.profile_picture} />
+            <AvatarImage src={(session?.user?.image || user?.profile_picture) as string} />
             <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-primary-foreground">
               {getInitials(session?.user?.name || "User")}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm text-sidebar-foreground truncate">{session?.user?.name || "User"}</p>
+            <div className="flex items-center gap-1">
+              <p className="font-semibold text-sm text-sidebar-foreground truncate">{session?.user?.name || "User"}</p>
+              {user?.is_premium && <Sparkles className="w-3.5 h-3.5 text-primary fill-primary" />}
+            </div>
             <p className="text-xs text-sidebar-foreground/60 truncate">{session?.user?.email || ""}</p>
+            {user?.is_premium && (
+              <Badge variant="outline" className="mt-1 text-[8px] h-4">Pro Member</Badge>
+            )}
           </div>
-        </Link>
+        </div>
+
+        {/* Stats Row */}
+        <div className="grid grid-cols-3 gap-2 py-2 border-y border-sidebar-border/50">
+          <div className="text-center">
+            <p className="text-sm font-bold text-sidebar-foreground">{stats.connections}</p>
+            <p className="text-[8px] text-sidebar-foreground/60 uppercase tracking-wider">{t("connections")}</p>
+          </div>
+          <div className="text-center border-x border-sidebar-border/50">
+            <p className="text-sm font-bold text-sidebar-foreground">{stats.views}</p>
+            <p className="text-[8px] text-sidebar-foreground/60 uppercase tracking-wider">{t("views")}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-bold text-sidebar-foreground">{stats.opportunities}</p>
+            <p className="text-[8px] text-sidebar-foreground/60 uppercase tracking-wider">{t("opportunities")}</p>
+          </div>
+        </div>
+
         {user?.referral_code && (
           <div className="bg-primary/5 rounded-lg p-3 border border-primary/20">
             <p className="text-xs text-muted-foreground mb-1">Referral Code</p>
@@ -148,7 +190,9 @@ export function MobileSidebar() {
               <code className="text-sm font-mono font-bold text-primary flex-1">{user.referral_code}</code>
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(user.referral_code)
+                  if (user.referral_code) {
+                    navigator.clipboard.writeText(user.referral_code)
+                  }
                 }}
                 className="text-muted-foreground hover:text-foreground transition-colors"
                 title="Copy referral code"

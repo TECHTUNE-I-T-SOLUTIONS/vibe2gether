@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n/context"
 import {
   LayoutDashboard,
-  User,
+  Users,
   Wallet,
   MessageCircle,
   Bell,
@@ -25,6 +25,8 @@ import {
   Rss,
   Copy,
   Star,
+  Eye,
+  Briefcase,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -42,20 +44,21 @@ interface SidebarItem {
 }
 
 const mainItems: SidebarItem[] = [
-  { icon: LayoutDashboard, label: "dashboard", href: "/dashboard" },
-  { icon: Rss, label: "feed", href: "/dashboard/feed" },
-  { icon: User, label: "profile", href: "/dashboard/profile" },
-  { icon: Heart, label: "yourMatches", href: "/dashboard/matches" },
-  { icon: MessageCircle, label: "messages", href: "/dashboard/messages" },
-  { icon: Bell, label: "notifications", href: "/dashboard/notifications" },
+  { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
+  { icon: Rss, label: "Insights", href: "/dashboard/feed" },
+  { icon: Users, label: "Network", href: "/dashboard/matches" },
+  { icon: MessageCircle, label: "Inbox", href: "/dashboard/messages" },
+  { icon: Bell, label: "Notifications", href: "/dashboard/notifications" },
 ]
 
 const secondaryItems: SidebarItem[] = [
-  { icon: Wallet, label: "wallet", href: "/dashboard/wallet" },
-  { icon: ShoppingBag, label: "marketplace", href: "/dashboard/marketplace/manage" },
-  { icon: Calendar, label: "events", href: "/dashboard/events/manage" },
-  { icon: Star, label: "testimonies", href: "/dashboard/testimonies" },
-  { icon: Bookmark, label: "saved", href: "/dashboard/saved" },
+  { icon: Eye, label: "Opportunities", href: "/dashboard/opportunities" },
+  { icon: ShoppingBag, label: "Marketplace", href: "/dashboard/marketplace/manage" },
+  { icon: Calendar, label: "Events & Webinars", href: "/dashboard/events/manage" },
+  { icon: Briefcase, label: "Learn & Grow", href: "/dashboard/learn" },
+  { icon: Star, label: "Testimonies", href: "/dashboard/testimonies" },
+  { icon: Bookmark, label: "Saved", href: "/dashboard/saved" },
+  // { icon: Wallet, label: "Wallet", href: "/dashboard/wallet" },
 ]
 
 const bottomItems: SidebarItem[] = [
@@ -71,10 +74,26 @@ function SidebarContent() {
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [messageBadge, setMessageBadge] = useState(0)
   const [notificationBadge, setNotificationBadge] = useState(0)
+  const [stats, setStats] = useState({
+    connections: 0,
+    views: 0,
+    opportunities: 0,
+  })
 
   useEffect(() => {
     async function fetchBadgeCounts() {
       try {
+        const statsRes = await fetch("/api/dashboard/stats", { method: "POST" })
+        if (statsRes.ok) {
+          const statsData = await statsRes.json()
+          const findStat = (label: string) => statsData.stats.find((s: any) => s.label === label)?.value || "0"
+          setStats({
+            connections: parseInt(findStat("followers")),
+            views: parseInt(findStat("totalViews")),
+            opportunities: parseInt(findStat("yourMatches")),
+          })
+        }
+
         const notifRes = await fetch("/api/notifications")
         if (notifRes.ok) {
           const notifData = await notifRes.json()
@@ -134,19 +153,33 @@ function SidebarContent() {
             <AvatarFallback>{initials}</AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="font-semibold truncate">{userName}</p>
-            <p className="text-sm text-muted-foreground truncate">{userEmail}</p>
+            <div className="flex items-center gap-1">
+              <p className="font-semibold truncate">{userName}</p>
+              {user?.is_premium && <Sparkles className="w-3.5 h-3.5 text-primary fill-primary" />}
+            </div>
+            <p className="text-xs text-muted-foreground truncate">{userEmail}</p>
           </div>
         </div>
+
+        {/* Stats Row */}
+        <div className="grid grid-cols-3 gap-2 py-2 border-y border-sidebar-border/50">
+          <div className="text-center">
+            <p className="text-sm font-bold">{stats.connections}</p>
+            <p className="text-[8px] text-muted-foreground uppercase tracking-wider">{t("connections")}</p>
+          </div>
+          <div className="text-center border-x border-sidebar-border/50">
+            <p className="text-sm font-bold">{stats.views}</p>
+            <p className="text-[8px] text-muted-foreground uppercase tracking-wider">{t("views")}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-bold">{stats.opportunities}</p>
+            <p className="text-[8px] text-muted-foreground uppercase tracking-wider">{t("opportunities")}</p>
+          </div>
+        </div>
+
         <div>
           <div className="flex items-center justify-between text-xs mb-1">
             <span className="text-muted-foreground">Profile: {profileCompletion}%</span>
-            {user?.is_premium && (
-              <Badge variant="outline" className="text-xs">
-                <Sparkles className="w-3 h-3 mr-1" />
-                Premium
-              </Badge>
-            )}
           </div>
           <Progress value={profileCompletion} className="h-1.5" />
         </div>
@@ -157,7 +190,9 @@ function SidebarContent() {
               <code className="text-sm font-mono font-bold text-primary flex-1">{user.referral_code}</code>
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(user.referral_code)
+                  if (user.referral_code) {
+                    navigator.clipboard.writeText(user.referral_code)
+                  }
                 }}
                 className="text-muted-foreground hover:text-foreground transition-colors"
                 title="Copy referral code"

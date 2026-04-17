@@ -418,7 +418,7 @@ export function PaystackPaymentModal({
               {(paymentStatus === "idle" || paymentStatus === "processing" || paymentStatus === "error") && !paymentReference && (
                 <Button
                   onClick={handlePayment}
-                  disabled={isProcessing || !email || !fullName || isLoading || paymentAmount < 1500}
+                  disabled={isProcessing || !email || !fullName || isLoading || Number(paymentAmount) < 1500}
                   className="gap-2"
                 >
                   {isProcessing && <Loader2 className="w-4 h-4 animate-spin" />}

@@ -149,12 +149,36 @@ export async function uploadEventMedia(userId: string, file: File) {
   }
 }
 
-export async function uploadBlogThumbnail(userId: string, file: File) {
+export async function uploadOpportunityMedia(userId: string, file: File) {
   try {
     const formData = new FormData()
     formData.append("file", file)
     formData.append("userId", userId)
-    formData.append("bucket", "blog-images")
+    formData.append("bucket", "opportunities")
+
+    const response = await fetch("/api/upload-file", {
+      method: "POST",
+      body: formData,
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      return { url: null, error: data.error || "Upload failed" }
+    }
+
+    return { url: data.url, error: null }
+  } catch (error) {
+    return { url: null, error: error instanceof Error ? error.message : "Upload failed" }
+  }
+}
+
+export async function uploadLearnMedia(userId: string, file: File) {
+  try {
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("userId", userId)
+    formData.append("bucket", "learn-resources")
 
     const response = await fetch("/api/upload-file", {
       method: "POST",

@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("transactions")
-      .select("*, users(full_name, email, id), admins(full_name)", { count: "exact" })
+      .select("*, users(full_name, email, id), admins:admins!transactions_admin_id_fkey(full_name)", { count: "exact" })
       .order("created_at", { ascending: false });
 
     if (status) {

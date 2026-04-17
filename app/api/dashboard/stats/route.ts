@@ -48,7 +48,7 @@ export async function POST() {
       { data: recentPosts },
       { data: previousPosts },
       likesResult,
-      { count: matchesCount },
+      { count: savedOppsCount },
       { data: activities }
     ] = await Promise.all([
       // Get recent posts (last 7 days)
@@ -74,12 +74,11 @@ export async function POST() {
             .in("post_id", postIds)
         : Promise.resolve({ count: 0 }),
       
-      // Get matched count
+      // Get saved opportunities count
       supabase
-        .from("matches")
+        .from("opportunity_bookmarks")
         .select("*", { count: "exact", head: true })
-        .eq("status", "matched")
-        .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`),
+        .eq("user_id", user.id),
       
       // Get recent activities
       supabase
@@ -174,7 +173,7 @@ export async function POST() {
       {
         icon: "matches",
         label: "yourMatches",
-        value: (matchesCount || 0).toString(),
+        value: (savedOppsCount || 0).toString(),
         trend: "+0%",
         coins: 0,
       },

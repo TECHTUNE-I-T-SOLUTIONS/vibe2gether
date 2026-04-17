@@ -13,6 +13,8 @@ import {
   Flag,
   ShoppingBag,
   Calendar,
+  Briefcase,
+  GraduationCap,
   BookOpen,
   MessageSquare,
   CreditCard,
@@ -94,6 +96,8 @@ export function AdminMobileSidebar({ onLogoutClick }: AdminMobileSidebarProps) {
   const secondaryItems: NavItem[] = [
     { icon: ShoppingBag, label: "marketplace", href: "/admin/marketplace" },
     { icon: Calendar, label: "events", href: "/admin/events" },
+    { icon: Briefcase, label: "opportunities", href: "/admin/opportunities" },
+    { icon: GraduationCap, label: "learn", href: "/admin/learn" },
     { icon: BookOpen, label: "blog", href: "/admin/blog" },
     { icon: Mail, label: "contacts", href: "/admin/contacts" },
     { icon: MessageSquare, label: "messages", href: "/admin/messages" },

@@ -22,6 +22,8 @@ import {
   CreditCard,
   Shield,
   Calendar,
+  Briefcase,
+  GraduationCap,
   BookOpen,
   Bell,
   Mail,
@@ -47,6 +49,8 @@ const mainItems: SidebarItem[] = [
 const secondaryItems: SidebarItem[] = [
   { icon: ShoppingBag, label: "marketplace", href: "/admin/marketplace" },
   { icon: Calendar, label: "events", href: "/admin/events" },
+  { icon: Briefcase, label: "opportunities", href: "/admin/opportunities" },
+  { icon: GraduationCap, label: "learn", href: "/admin/learn" },
   { icon: BookOpen, label: "blog", href: "/admin/blog" },
   { icon: Bell, label: "announcements", href: "/admin/announcements" },
   { icon: Star, label: "testimonies", href: "/admin/testimonies" },

@@ -18,6 +18,7 @@ const footerLinks = {
     { label: "Marketplace", href: "/marketplace" },
     { label: "Events", href: "/events" },
     { label: "Premium", href: "/premium" },
+    { label: "Opportunities", href: "/opportunities" },
   ],
   support: [
     { label: "Help Center", href: "/help" },

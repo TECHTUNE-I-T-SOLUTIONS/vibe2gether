@@ -51,7 +51,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${plusJakartaSans.variable} ${geistMono.variable} font-sans antialiased`}>
+      <body className={`${plusJakartaSans.variable} ${geistMono.variable} font-sans antialiased`} suppressHydrationWarning>
         <Providers>{children}</Providers>
         <Analytics />
       </body>

@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/sheet"
 import { useSession, signOut } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import { useUserProfile } from "@/hooks/use-user-profile"
+
 
 export function Header() {
   const { language, setLanguage, t } = useLanguage()
@@ -32,6 +34,8 @@ export function Header() {
   const [showUserImage, setShowUserImage] = useState(true)
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { user } = useUserProfile()
+  
 
   useEffect(() => {
     setMounted(true)
@@ -73,10 +77,10 @@ export function Header() {
               {t("features")}
             </Link>
             <Link
-              href="/#testimonials"
+              href="/opportunities"
               className="text-foreground/80 hover:text-foreground font-medium transition-colors"
             >
-              {t("testimonials")}
+              {t("opportunities")}
             </Link>
             <Link href="/premium" className="text-foreground/80 hover:text-foreground font-medium transition-colors">
               {t("premium")}
@@ -138,7 +142,7 @@ export function Header() {
                   onClick={() => router.push("/dashboard/wallet")}
                 >
                   <Coins className="w-4 h-4" />
-                  <span>{session.user.coins_balance || 0}</span>
+                  <span>{user?.coins_balance || 0}</span>
                 </Button>
 
                 {/* Notifications */}
@@ -177,7 +181,7 @@ export function Header() {
                     <div className="px-2 py-2">
                       <div className="flex items-center gap-2 mb-1">
                         <p className="font-semibold">{session.user.name}</p>
-                        {session.user.is_premium && (
+                        {session.user.isPremium && (
                           <span className="inline-flex items-center gap-0.5 bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-700 px-2 py-0.5 rounded-full text-xs font-semibold">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24">
                               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />

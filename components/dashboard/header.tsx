@@ -28,7 +28,7 @@ export function DashboardHeader() {
   const [searchLoading, setSearchLoading] = useState(false)
   const [showSearchResults, setShowSearchResults] = useState(false)
   const [showMobileSearch, setShowMobileSearch] = useState(false)
-  const searchTimeoutRef = useRef<NodeJS.Timeout>()
+  const searchTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const { user } = useUserProfile()
 
   useEffect(() => {

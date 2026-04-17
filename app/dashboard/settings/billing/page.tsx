@@ -172,11 +172,11 @@ export default function BillingSettingsPage() {
                 <span className="text-4xl md:text-5xl font-bold text-white">{(user?.coins_balance || 0).toLocaleString()}</span>
                 <span className="text-white/70 text-lg">coins</span>
               </div>
-              <div className="flex gap-4 mt-2 flex-wrap">
-                <p className="text-white/70 text-sm">≈ ${formatCurrency(user?.coins_balance || 0).usd} USD</p>
-                <p className="text-white/70 text-sm">≈ ₦{formatCurrency(user?.coins_balance || 0).ngn.toLocaleString(undefined, { maximumFractionDigits: 0 })} NGN</p>
-                <p className="text-white/70 text-sm">≈ Fr{formatCurrency(user?.coins_balance || 0).xaf.toLocaleString(undefined, { maximumFractionDigits: 0 })} XAF</p>
-              </div>
+                <div className="flex gap-4 mt-2 flex-wrap">
+                  <p className="text-white/70 text-sm">≈ ${formatCurrency(user?.coins_balance || 0).usd} USD</p>
+                  <p className="text-white/70 text-sm">≈ ₦{Number(formatCurrency(user?.coins_balance || 0).ngn).toLocaleString()} NGN</p>
+                  <p className="text-white/70 text-sm">≈ Fr{Number(formatCurrency(user?.coins_balance || 0).xaf).toLocaleString()} XAF</p>
+                </div>
             </div>
             <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center">
               <Coins className="w-8 h-8 text-white" />
@@ -209,7 +209,7 @@ export default function BillingSettingsPage() {
                 <div className="space-y-3">
                   <div className="flex items-baseline justify-between">
                     <span className="text-2xl font-bold text-primary">{pkg.coins}</span>
-                    <span className="text-xl font-semibold">{formatCurrency(pkg.price)}</span>
+                    <span className="text-xl font-semibold">${formatCurrency(pkg.coins).usd}</span>
                   </div>
                   <p className="text-sm text-muted-foreground">{pkg.label}</p>
                   {pkg.savings > 0 && (
@@ -294,7 +294,7 @@ export default function BillingSettingsPage() {
               >
                 <Coins className="w-6 h-6 text-primary mx-auto mb-2" />
                 <div className="font-bold text-lg text-primary">{pkg.coins}</div>
-                <div className="text-sm font-semibold">{formatCurrency(pkg.price)}</div>
+                <div className="text-sm font-semibold">${formatCurrency(pkg.coins).usd}</div>
                 {pkg.savings > 0 && <div className="text-xs text-green-600">Save {pkg.savings}%</div>}
               </button>
             ))}

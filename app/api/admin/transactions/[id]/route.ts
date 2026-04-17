@@ -107,7 +107,7 @@ export async function GET(
 
     const { data: transaction, error } = await supabase
       .from("transactions")
-      .select("*, users(full_name, email), admins(full_name)")
+      .select("*, users(full_name, email), admins:admins!transactions_admin_id_fkey(full_name)")
       .eq("id", params.id)
       .single();
 
