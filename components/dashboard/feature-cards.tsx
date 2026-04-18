@@ -52,8 +52,15 @@ export function FeatureCards() {
         return (
           <Card 
             key={stat.id} 
-            className="min-w-[80px] sm:min-w-[100px] border-none shadow-sm cursor-pointer hover:shadow-md transition-all active:scale-95 bg-card/50 backdrop-blur-sm"
-            onClick={() => router.push(stat.id === 'tips' ? '/dashboard/learn' : '/dashboard/opportunities')}
+            className="min-w-[90px] sm:min-w-[100px] border-none shadow-sm cursor-pointer hover:shadow-md transition-all active:scale-95 bg-card/50 backdrop-blur-sm"
+            onClick={() => {
+              // Stats cards navigate without opening modal
+              if (stat.id === 'tips') {
+                router.push('/dashboard/learn')
+              } else {
+                router.push('/dashboard/opportunities')
+              }
+            }}
           >
             <CardContent className="p-3 sm:p-4 flex flex-col items-center text-center space-y-1.5">
               <div className={cn("w-9 sm:w-10 h-9 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center text-white flex-shrink-0", stat.color)}>
@@ -68,10 +75,13 @@ export function FeatureCards() {
         )
       })}
       
-      {/* Create Room / Call to Action card */}
+      {/* Create New button - Opens page with modal */}
       <Card 
         className="min-w-[100px] sm:min-w-[100px] border-2 border-dashed border-primary/20 bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer"
-        onClick={() => router.push('/dashboard/opportunities?showCreateModal=true')}
+        onClick={() => {
+          // Only this button opens the modal
+          router.push('/dashboard/opportunities?showCreateModal=true')
+        }}
       >
         <CardContent className="p-3 sm:p-4 flex flex-col items-center justify-center text-center h-full space-y-1.5">
           <div className="w-9 sm:w-10 h-9 sm:h-10 rounded-full border-2 border-primary/30 flex items-center justify-center text-primary flex-shrink-0">

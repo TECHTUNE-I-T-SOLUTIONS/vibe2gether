@@ -26,7 +26,7 @@ export async function GET() {
       { id: "opps", label: "Opportunities", count: allNew || 0, color: "bg-orange-500", icon: "Briefcase" },
       { id: "jobs", label: "Jobs", count: jobsNew || 0, color: "bg-blue-500", icon: "Users" },
       { id: "funding", label: "Funding", count: fundingNew || 0, color: "bg-green-600", icon: "CircleDollarSign" },
-      { id: "tips", label: "Business Tips", count: tipsNew || 0, color: "bg-purple-600", icon: "Lightbulb" },
+      { id: "tips", label: "Marketing & Business Tips", count: tipsNew || 0, color: "bg-purple-600", icon: "Lightbulb" },
     ]
 
     return NextResponse.json({ success: true, stats })
