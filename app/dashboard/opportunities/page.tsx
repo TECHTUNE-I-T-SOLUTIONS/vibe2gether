@@ -145,6 +145,7 @@ function OpportunitiesContent() {
                   key={opp.id} 
                   opportunity={opp} 
                   isOwner={activeTab === "my"}
+                  isAuthenticated={status === "authenticated"}
                   onEdit={(o) => {
                     setEditingOpportunity(o)
                     setShowCreateModal(true)
