@@ -193,6 +193,10 @@ export function Header() {
                       <p className="text-sm text-muted-foreground break-words">{session.user.email}</p>
                     </div>
                     <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => router.push("/dashboard/profile")}>
+                      <User className="w-4 h-4 mr-2" />
+                      My Profile
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => router.push("/dashboard")}>
                       <User className="w-4 h-4 mr-2" />
                       {t("dashboard")}
