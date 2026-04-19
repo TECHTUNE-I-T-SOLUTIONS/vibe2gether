@@ -497,8 +497,19 @@ export default function NewFeedPage() {
 
       if (!response.ok) throw new Error("Failed to like post")
 
-      // Invalidate and refetch the feed data
-      queryClient.invalidateQueries({ queryKey: ["new-feed-posts", session?.user?.id] })
+      // Update the cache to mark post as liked/unliked without refetching
+      queryClient.setQueryData(["new-feed-posts", session?.user?.id], (oldData: any) => {
+        if (!oldData?.posts) return oldData
+
+        return {
+          ...oldData,
+          posts: oldData.posts.map((post: any) =>
+            post.id === postId
+              ? { ...post, isLiked: !currentlyLiked }
+              : post
+          )
+        }
+      })
 
       toast({
         title: "Success",
@@ -531,8 +542,19 @@ export default function NewFeedPage() {
 
       if (!response.ok) throw new Error("Failed to save post")
 
-      // Invalidate and refetch the feed data
-      queryClient.invalidateQueries({ queryKey: ["new-feed-posts", session?.user?.id] })
+      // Update the cache to mark post as saved/unsaved without refetching
+      queryClient.setQueryData(["new-feed-posts", session?.user?.id], (oldData: any) => {
+        if (!oldData?.posts) return oldData
+
+        return {
+          ...oldData,
+          posts: oldData.posts.map((post: any) =>
+            post.id === postId
+              ? { ...post, isSaved: !currentlySaved }
+              : post
+          )
+        }
+      })
 
       toast({
         title: "Success",
