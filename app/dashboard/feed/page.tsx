@@ -284,18 +284,15 @@ export default function NewFeedPage() {
 
       // Update view count in the React Query cache
       queryClient.setQueryData(["new-feed-posts", session?.user?.id], (oldData: any) => {
-        if (!oldData?.pages) return oldData
+        if (!oldData?.posts) return oldData
 
         return {
           ...oldData,
-          pages: oldData.pages.map((page: any) => ({
-            ...page,
-            posts: page.posts.map((post: any) =>
-              post.id === postId
-                ? { ...post, views_count: newViewCount }
-                : post
-            )
-          }))
+          posts: oldData.posts.map((post: any) =>
+            post.id === postId
+              ? { ...post, views_count: newViewCount }
+              : post
+          )
         }
       })
 
@@ -441,8 +438,22 @@ export default function NewFeedPage() {
 
       setNewComments((prev) => new Map(prev).set(postId, ""))
 
-      // Invalidate the query to ensure data consistency
-      queryClient.invalidateQueries({ queryKey: ["new-feed-posts", session?.user?.id] })
+      // Update the comment count locally to avoid feed refetch and reorder
+      queryClient.setQueryData(["new-feed-posts", session?.user?.id], (oldData: any) => {
+        if (!oldData?.posts) return oldData
+
+        return {
+          ...oldData,
+          posts: oldData.posts.map((post: any) =>
+            post.id === postId
+              ? {
+                  ...post,
+                  comments_count: (post.comments_count || 0) + 1,
+                }
+              : post
+          )
+        }
+      })
 
       toast({
         title: "Success",
@@ -505,7 +516,11 @@ export default function NewFeedPage() {
           ...oldData,
           posts: oldData.posts.map((post: any) =>
             post.id === postId
-              ? { ...post, isLiked: !currentlyLiked }
+              ? {
+                  ...post,
+                  isLiked: !currentlyLiked,
+                  likes_count: currentlyLiked ? Math.max((post.likes_count || 1) - 1, 0) : (post.likes_count || 0) + 1,
+                }
               : post
           )
         }
