@@ -602,7 +602,17 @@ export default function NewFeedPage() {
 
   const handleFileSelect = (files: FileList | null) => {
     if (!files) return
-    const newFiles = Array.from(files)
+    const allFiles = Array.from(files)
+    const newFiles = allFiles.filter(file => file.type.startsWith('image/'))
+    
+    if (newFiles.length !== allFiles.length) {
+      toast({
+        title: "Invalid file format",
+        description: "Only image files are allowed. Videos have been removed.",
+        variant: "destructive",
+      })
+    }
+    
     setPostFiles(prev => [...prev, ...newFiles].slice(0, 10)) // Max 10 files
   }
 
@@ -1015,7 +1025,7 @@ export default function NewFeedPage() {
                 <div className="flex items-center gap-1 sm:gap-2">
                   <input
                     type="file"
-                    accept="image/*,video/*"
+                    accept="image/*"
                     multiple
                     className="hidden"
                     id="media-upload"
@@ -1026,10 +1036,10 @@ export default function NewFeedPage() {
                     size="sm"
                     onClick={() => document.getElementById('media-upload')?.click()}
                     className="text-muted-foreground hover:text-foreground p-2 sm:px-3"
-                    title="Photo/Video"
+                    title="Photo"
                   >
                     <ImagePlus className="w-4 h-4" />
-                    <span className="hidden sm:inline ml-2">Photo/Video</span>
+                    <span className="hidden sm:inline ml-2">Photo</span>
                   </Button>
 
                   <Button
