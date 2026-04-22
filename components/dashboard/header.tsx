@@ -159,7 +159,7 @@ export function DashboardHeader() {
             )}
           </div>
         ) : (
-          <Link href="/dashboard" className="lg:hidden">
+          <Link href="/dashboard/feed" className="lg:hidden">
             <div className="relative w-8 h-8 rounded-full overflow-hidden">
               <Image src="/v2g-logo.png" alt="V2G" fill className="object-cover" />
             </div>
