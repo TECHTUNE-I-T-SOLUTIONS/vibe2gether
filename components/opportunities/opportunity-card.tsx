@@ -6,7 +6,7 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { MapPin, Briefcase, Eye, Bookmark, Calendar, Trash2, Edit } from "lucide-react"
+import { MapPin, Briefcase, Eye, Bookmark, Calendar, Trash2, Edit, ExternalLink, MessageSquare } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
@@ -41,11 +41,12 @@ export function OpportunityCard({
   const [loadingBookmark, setLoadingBookmark] = useState(false)
   const [isBookmarked, setIsBookmarked] = useState(opportunity.isBookmarked)
   const [showLoginModal, setShowLoginModal] = useState(false)
+  const [showDetailsModal, setShowDetailsModal] = useState(false)
 
   const handleToggleBookmark = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    
+
     try {
       setLoadingBookmark(true)
       const res = await fetch(`/api/opportunities/${opportunity.id}/bookmark`, { method: "POST" })
@@ -81,9 +82,7 @@ export function OpportunityCard({
 
     await handleRecordView()
 
-    if (opportunity.link_url) {
-      window.open(opportunity.link_url, "_blank", "noopener,noreferrer")
-    }
+    setShowDetailsModal(true)
   }
 
   const handleLoginRedirect = () => {
@@ -230,6 +229,42 @@ export function OpportunityCard({
                 Go to login
               </Button>
             </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
+        <DialogContent className="max-w-md rounded-3xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">{opportunity.title}</DialogTitle>
+            <DialogDescription className="mt-2 text-sm leading-6">
+              {opportunity.description}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4 flex flex-col gap-3">
+            {opportunity.link_url && (
+              <Button
+                variant="outline"
+                className="w-full rounded-full gap-2"
+                onClick={() => window.open(opportunity.link_url, "_blank", "noopener,noreferrer")}
+              >
+                <ExternalLink className="w-4 h-4" />
+                Visit Link
+              </Button>
+            )}
+
+            {!opportunity.admin && opportunity.user?.id && (
+              <Button
+                className="w-full rounded-full gradient-bg gap-2"
+                onClick={() => {
+                  router.push(`/dashboard/messages?userId=${opportunity.user.id}`);
+                  setShowDetailsModal(false);
+                }}
+              >
+                <MessageSquare className="w-4 h-4" />
+                Contact User
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

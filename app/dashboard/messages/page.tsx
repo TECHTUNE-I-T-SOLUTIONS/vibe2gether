@@ -273,15 +273,15 @@ export default function MessagesPage() {
       setPendingMatchUser(null)
 
       toast({
-        title: "Match created!",
-        description: `You are now matched with ${pendingMatchUser.display_name}`,
+        title: "Connection created!",
+        description: `You are now Connected with ${pendingMatchUser.display_name}`,
       })
 
     } catch (error) {
-      console.error("Error creating match:", error)
+      console.error("Error creating connect:", error)
       toast({
         title: "Error",
-        description: "Could not create match. Please try again.",
+        description: "Could not create connect. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -369,7 +369,7 @@ export default function MessagesPage() {
     const subscribeToMessages = async () => {
       try {
         const supabase = createClient()
-        
+
         // Unsubscribe from previous subscription
         if (realtimeSubscriptionRef.current) {
           await realtimeSubscriptionRef.current.unsubscribe()
@@ -389,24 +389,24 @@ export default function MessagesPage() {
             (payload) => {
               const newMessage = payload.new as Message
               const messageId = newMessage.id || (newMessage as any).message_id
-              
+
               console.log("Realtime message received:", messageId, "Is in justSentIds?", justSentMessageIds.has(messageId))
-              
+
               // CRITICAL: Only add if we didn't just send it AND it's not already in the array
               if (!justSentMessageIds.has(messageId)) {
                 setMessages((prev) => {
                   // Aggressive duplicate check
                   const isDuplicate = prev.some(
-                    (m) => (m.id === messageId) || 
-                           ((m as any).message_id === messageId) ||
-                           (m.id === newMessage.id)
+                    (m) => (m.id === messageId) ||
+                      ((m as any).message_id === messageId) ||
+                      (m.id === newMessage.id)
                   )
-                  
+
                   if (isDuplicate) {
                     console.log("Message already exists in state, skipping:", messageId)
                     return prev
                   }
-                  
+
                   console.log("Adding new message from realtime:", messageId)
                   return [...prev, newMessage]
                 })
@@ -600,7 +600,7 @@ export default function MessagesPage() {
             return prev + 1
           })
         }, 1000)
-        ;(mediaRecorder as any).timerInterval = timer
+          ; (mediaRecorder as any).timerInterval = timer
       }
 
       mediaRecorder.ondataavailable = (event) => {
@@ -645,10 +645,10 @@ export default function MessagesPage() {
 
       if (uploadResponse.ok) {
         const uploadData = await uploadResponse.json()
-        
+
         // Send with caption if provided, otherwise use default
         const messageContent = mediaCaption.trim() || "[Audio message]"
-        
+
         const response = await fetch("/api/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -663,7 +663,7 @@ export default function MessagesPage() {
         if (response.ok) {
           const data = await response.json()
           const sentMessage = data.message
-          
+
           // Track this message ID to prevent duplicate from realtime
           if (sentMessage?.id) {
             setJustSentMessageIds((prev) => new Set(prev).add(sentMessage.id))
@@ -676,7 +676,7 @@ export default function MessagesPage() {
               })
             }, 2000)
           }
-          
+
           // Add message to state with duplicate check
           setMessages((prev) => {
             // Check if message already exists to prevent duplication
@@ -719,7 +719,7 @@ export default function MessagesPage() {
 
     try {
       setSendingMessage(true)
-      
+
       // Combine caption with content - use fallback for empty media messages
       let messageContent: string
       if (mediaUrl) {
@@ -729,7 +729,7 @@ export default function MessagesPage() {
         // For text messages, use the actual text
         messageContent = newMessage.trim()
       }
-      
+
       const payload = {
         matchId: selectedChat.id,
         content: messageContent,
@@ -738,7 +738,7 @@ export default function MessagesPage() {
       }
 
       console.log("Sending message payload:", payload)
-      
+
       const response = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -754,13 +754,13 @@ export default function MessagesPage() {
 
       const data = await response.json()
       const sentMessage = data.message
-      
+
       if (!sentMessage) {
         console.error("No message returned from API")
         toast({ title: "Error", description: "Message created but not returned", variant: "destructive" })
         return
       }
-      
+
       // Mark this message ID to prevent duplicate from realtime subscription
       const msgId = sentMessage.id || (sentMessage as any).message_id
       if (msgId) {
@@ -774,7 +774,7 @@ export default function MessagesPage() {
           })
         }, 2000)
       }
-      
+
       // Add message to state IMMEDIATELY for optimistic update
       setMessages((prev) => {
         // Check if message already exists to prevent duplication
@@ -789,10 +789,10 @@ export default function MessagesPage() {
       setMediaCaption("")
       setSelectedImage(null)
       setAudioPreview(null)
-      
+
       // Refetch message count
       await fetchMonthlyMessageCount()
-      
+
       // Show warning if approaching limit
       if (messagesCount + 1 >= 4 && !isPremium) {
         toast({
@@ -801,7 +801,7 @@ export default function MessagesPage() {
           variant: "destructive",
         })
       }
-      
+
       toast({ title: "Success", description: "Message sent" })
     } catch (err) {
       console.error("Send message error:", err)
@@ -871,19 +871,19 @@ export default function MessagesPage() {
         <Button size="sm" variant={user.isFollowing ? "outline" : "default"} onClick={() => handleFollow(user.id)}>
           {user.isFollowing ? "Following" : "Follow"}
         </Button>
-        <Button 
-          size="sm" 
-          variant="outline" 
+        <Button
+          size="sm"
+          variant="outline"
           onClick={() => {
-            setSelectedChat({ 
-              id: user.id, 
-              name: user.display_name, 
-              avatar: user.profile_picture, 
-              lastMessage: "", 
-              lastMessageTime: "", 
-              unreadCount: 0, 
-              online: false, 
-              userId: user.id 
+            setSelectedChat({
+              id: user.id,
+              name: user.display_name,
+              avatar: user.profile_picture,
+              lastMessage: "",
+              lastMessageTime: "",
+              unreadCount: 0,
+              online: false,
+              userId: user.id
             })
             setModalOpen(false)
           }}
@@ -1139,132 +1139,132 @@ export default function MessagesPage() {
 
             {/* Input - Hidden when showing media preview */}
             {!selectedImage && !audioPreview && (
-            <div className="p-4 border-t border-border bg-background space-y-3">
-              {/* Monthly Message Limit Warning */}
-              {messagesCount > 0 && !isPremium && (
-                <div className={cn(
-                  "px-3 py-2 rounded-lg text-sm",
-                  messagesCount >= 4
-                    ? "bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300"
-                    : "bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-300"
-                )}>
-                  <div className="font-medium mb-1">
-                    {messagesCount >= 4
-                      ? "Monthly message limit reached"
-                      : `${messagesRemaining} message${messagesRemaining !== 1 ? 's' : ''} remaining this month`
-                    }
+              <div className="p-4 border-t border-border bg-background space-y-3">
+                {/* Monthly Message Limit Warning */}
+                {messagesCount > 0 && !isPremium && (
+                  <div className={cn(
+                    "px-3 py-2 rounded-lg text-sm",
+                    messagesCount >= 4
+                      ? "bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300"
+                      : "bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-300"
+                  )}>
+                    <div className="font-medium mb-1">
+                      {messagesCount >= 4
+                        ? "Monthly message limit reached"
+                        : `${messagesRemaining} message${messagesRemaining !== 1 ? 's' : ''} remaining this month`
+                      }
+                    </div>
+                    <p className="text-xs opacity-90">
+                      Free users can send 4 messages per month. Upgrade to Premium to send unlimited messages.
+                    </p>
                   </div>
-                  <p className="text-xs opacity-90">
-                    Free users can send 4 messages per month. Upgrade to Premium to send unlimited messages.
-                  </p>
-                </div>
-              )}
+                )}
 
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="rounded-full text-muted-foreground hover:bg-muted active:scale-95 flex-shrink-0"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingImage || (messagesCount >= 4 && !isPremium)}
-                >
-                  {uploadingImage ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImagePlus className="w-5 h-5" />}
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files?.[0]) {
-                      handleImageUpload(e.target.files[0])
-                    }
-                  }}
-                />
-
-                <div className="flex-1 relative min-w-0">
-                  <Input
-                    value={newMessage}
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-full text-muted-foreground hover:bg-muted active:scale-95 flex-shrink-0"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingImage || (messagesCount >= 4 && !isPremium)}
+                  >
+                    {uploadingImage ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImagePlus className="w-5 h-5" />}
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
                     onChange={(e) => {
-                      setNewMessage(e.target.value)
-                      // Broadcast typing status
-                      if (selectedChat && realtimeSubscriptionRef.current) {
-                        realtimeSubscriptionRef.current.send({
-                          type: "broadcast",
-                          event: "typing",
-                          payload: { userId: currentUserId },
-                        })
+                      if (e.target.files?.[0]) {
+                        handleImageUpload(e.target.files[0])
                       }
                     }}
-                    onKeyPress={(e) => {
-                      if (e.key === "Enter" && newMessage.trim() && !sendingMessage && !(messagesCount >= 4 && !isPremium)) {
-                        e.preventDefault()
-                        sendMessage()
-                      }
-                    }}
-                    placeholder={messagesCount >= 4 && !isPremium ? "Daily limit reached. Upgrade to Premium to continue." : "Type a message..."}
-                    className="pr-10 rounded-full bg-muted/50 border-0 text-base"
-                    disabled={sendingMessage || (messagesCount >= 4 && !isPremium)}
                   />
-                  <div className="absolute right-1 top-1/2 -translate-y-1/2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="w-8 h-8 hover:bg-transparent active:scale-95"
-                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    >
-                      <Smile className="w-5 h-5 text-muted-foreground" />
-                    </Button>
-                  </div>
-                </div>
 
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "rounded-full active:scale-95 flex-shrink-0",
-                    isRecording ? "bg-red-500 text-white" : "text-muted-foreground hover:bg-muted"
-                  )}
-                  onClick={isRecording ? stopRecording : startRecording}
-                  disabled={audioPreview !== null}
-                >
-                  <Mic className="w-5 h-5" />
-                </Button>
-
-                <Button
-                  size="icon"
-                  className="rounded-full gradient-bg hover:opacity-90 active:scale-95 flex-shrink-0"
-                  onClick={() => sendMessage()}
-                  disabled={sendingMessage || (!newMessage.trim() && !selectedImage && !audioPreview) || (messagesCount >= 4 && !isPremium)}
-                >
-                  {sendingMessage ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                </Button>
-              </div>
-
-              {showEmojiPicker && (
-                <div className="mt-3 p-3 bg-muted rounded-lg grid grid-cols-8 gap-2">
-                  {EMOJIS.map((emoji) => (
-                    <button
-                      key={emoji}
-                      onClick={() => {
-                        setNewMessage((prev) => prev + emoji)
-                        setShowEmojiPicker(false)
+                  <div className="flex-1 relative min-w-0">
+                    <Input
+                      value={newMessage}
+                      onChange={(e) => {
+                        setNewMessage(e.target.value)
+                        // Broadcast typing status
+                        if (selectedChat && realtimeSubscriptionRef.current) {
+                          realtimeSubscriptionRef.current.send({
+                            type: "broadcast",
+                            event: "typing",
+                            payload: { userId: currentUserId },
+                          })
+                        }
                       }}
-                      className="text-xl hover:scale-125 transition-transform cursor-pointer"
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              )}
+                      onKeyPress={(e) => {
+                        if (e.key === "Enter" && newMessage.trim() && !sendingMessage && !(messagesCount >= 4 && !isPremium)) {
+                          e.preventDefault()
+                          sendMessage()
+                        }
+                      }}
+                      placeholder={messagesCount >= 4 && !isPremium ? "Daily limit reached. Upgrade to Premium to continue." : "Type a message..."}
+                      className="pr-10 rounded-full bg-muted/50 border-0 text-base"
+                      disabled={sendingMessage || (messagesCount >= 4 && !isPremium)}
+                    />
+                    <div className="absolute right-1 top-1/2 -translate-y-1/2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="w-8 h-8 hover:bg-transparent active:scale-95"
+                        onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                      >
+                        <Smile className="w-5 h-5 text-muted-foreground" />
+                      </Button>
+                    </div>
+                  </div>
 
-              {isRecording && (
-                <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
-                  <span className="w-2 h-2 bg-red-600 rounded-full animate-pulse" />
-                  Recording... {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, "0")}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      "rounded-full active:scale-95 flex-shrink-0",
+                      isRecording ? "bg-red-500 text-white" : "text-muted-foreground hover:bg-muted"
+                    )}
+                    onClick={isRecording ? stopRecording : startRecording}
+                    disabled={audioPreview !== null}
+                  >
+                    <Mic className="w-5 h-5" />
+                  </Button>
+
+                  <Button
+                    size="icon"
+                    className="rounded-full gradient-bg hover:opacity-90 active:scale-95 flex-shrink-0"
+                    onClick={() => sendMessage()}
+                    disabled={sendingMessage || (!newMessage.trim() && !selectedImage && !audioPreview) || (messagesCount >= 4 && !isPremium)}
+                  >
+                    {sendingMessage ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                  </Button>
                 </div>
-              )}
-            </div>
+
+                {showEmojiPicker && (
+                  <div className="mt-3 p-3 bg-muted rounded-lg grid grid-cols-8 gap-2">
+                    {EMOJIS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        onClick={() => {
+                          setNewMessage((prev) => prev + emoji)
+                          setShowEmojiPicker(false)
+                        }}
+                        className="text-xl hover:scale-125 transition-transform cursor-pointer"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {isRecording && (
+                  <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
+                    <span className="w-2 h-2 bg-red-600 rounded-full animate-pulse" />
+                    Recording... {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, "0")}
+                  </div>
+                )}
+              </div>
             )}
           </>
         ) : (
@@ -1430,7 +1430,7 @@ export default function MessagesPage() {
       <Dialog open={showMatchConfirmation} onOpenChange={setShowMatchConfirmation}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Match with User</DialogTitle>
+            <DialogTitle>Connect with User</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -1476,7 +1476,7 @@ export default function MessagesPage() {
 
                 {/* Match Benefits */}
                 <div className="p-3 bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-950/20 dark:to-purple-950/20 rounded-lg border border-pink-200 dark:border-pink-800">
-                  <p className="text-sm font-medium mb-2 text-pink-700 dark:text-pink-300">✨ What happens when you match?</p>
+                  <p className="text-sm font-medium mb-2 text-pink-700 dark:text-pink-300">✨ What happens when you Connect?</p>
                   <ul className="text-xs text-pink-600 dark:text-pink-400 space-y-1">
                     <li>• Start private conversations</li>
                     <li>• Share photos and media</li>
@@ -1488,7 +1488,7 @@ export default function MessagesPage() {
             )}
 
             <div className="text-sm text-muted-foreground text-center">
-              <p>Ready to connect? Matching is the first step to meaningful conversations!</p>
+              <p>Ready to connect? Connecting is the first step to meaningful conversations!</p>
             </div>
 
             <div className="flex gap-2">
@@ -1499,10 +1499,10 @@ export default function MessagesPage() {
                 {creatingMatch ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Creating Match...
+                    Connecting...
                   </>
                 ) : (
-                  "Match & Message"
+                  "Connect & Message"
                 )}
               </Button>
             </div>
