@@ -887,8 +887,18 @@ export default function DashboardEventsManagePage() {
                       <p className="text-lg font-semibold">Free</p>
                     ) : (
                       <>
-                        <p className="text-lg font-semibold">${selectedEvent.ticket_price || "0"}</p>
-                        <p className="text-sm text-muted-foreground">₦{((selectedEvent.ticket_price || 0) * 1450).toLocaleString()}</p>
+                        {(() => {
+                          const usd = Number(selectedEvent.ticket_price) || 0
+                          const USD_TO_NGN = 1450 // $1 = N1450 (update as needed)
+                          const USD_TO_XAF = 605 // $1 = XAF605 (Central African CFA franc) — update as needed
+                          return (
+                            <>
+                              <p className="text-lg font-semibold">${usd}</p>
+                              <p className="text-sm text-muted-foreground">₦{Math.round(usd * USD_TO_NGN).toLocaleString()}</p>
+                              <p className="text-sm text-muted-foreground">XAF {Math.round(usd * USD_TO_XAF).toLocaleString()}</p>
+                            </>
+                          )
+                        })()}
                       </>
                     )}
                   </div>

@@ -45,7 +45,7 @@ export default function DashboardMarketplaceManagePage() {
   const router = useRouter()
   const { user } = useUserProfile()
   const { toast } = useToast()
-  const [activeTab, setActiveTab] = useState<"my-products" | "purchased" | "all">("my-products")
+  const [activeTab, setActiveTab] = useState<"my-products" | "purchased" | "all">("all")
   const [products, setProducts] = useState<any[]>([])
   const [purchases, setPurchases] = useState<any[]>([])
   const [allProducts, setAllProducts] = useState<any[]>([])
@@ -488,8 +488,8 @@ export default function DashboardMarketplaceManagePage() {
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="my-products">My Products</TabsTrigger>
               <TabsTrigger value="all">All Products</TabsTrigger>
+              <TabsTrigger value="my-products">My Products</TabsTrigger>
               <TabsTrigger value="purchased">Purchases</TabsTrigger>
             </TabsList>
 
