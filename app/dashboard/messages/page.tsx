@@ -153,6 +153,11 @@ export default function MessagesPage() {
 
   const handleStartNewConversation = async (userId: string) => {
     try {
+      // Prevent users from starting a conversation with themselves
+      if (userId === currentUserId) {
+        toast({ title: "Error", description: "You cannot message yourself.", variant: "destructive" })
+        return
+      }
       // Fetch user data first
       const userResponse = await fetch(`/api/user/${userId}`)
       if (!userResponse.ok) {
@@ -244,25 +249,42 @@ export default function MessagesPage() {
   // Handle match confirmation
   const handleConfirmMatch = async () => {
     if (!pendingMatchUser) return
+    // Prevent users from creating a match with themselves
+    if (pendingMatchUser.id === currentUserId) {
+      toast({ title: "Error", description: "You cannot message yourself.", variant: "destructive" })
+      setShowMatchConfirmation(false)
+      setPendingMatchUser(null)
+      return
+    }
 
     try {
       setCreatingMatch(true)
 
-      // Create the match
+      // Create the match (include credentials and surface server error body)
       const createMatchResponse = await fetch("/api/matches", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({
           userId: pendingMatchUser.id,
-          compatibilityScore: 50
+          compatibilityScore: 50,
         }), // Default compatibility score
       })
 
-      if (!createMatchResponse.ok) {
-        throw new Error("Failed to create match")
+      // Try to read response body for better error visibility
+      const createMatchText = await createMatchResponse.text()
+      let matchData: any = {}
+      try {
+        matchData = createMatchText ? JSON.parse(createMatchText) : {}
+      } catch (e) {
+        console.error("Failed to parse match response body:", createMatchText)
       }
 
-      const matchData = await createMatchResponse.json()
+      if (!createMatchResponse.ok) {
+        console.error("[createMatch] Server responded with error:", createMatchResponse.status, matchData)
+        throw new Error(matchData?.error || matchData?.message || `Failed to create match (${createMatchResponse.status})`)
+      }
+
       const matchId = matchData.matchId
 
       // Create conversation with the new match
@@ -272,16 +294,12 @@ export default function MessagesPage() {
       setShowMatchConfirmation(false)
       setPendingMatchUser(null)
 
-      toast({
-        title: "Connection created!",
-        description: `You are now Connected with ${pendingMatchUser.display_name}`,
-      })
-
     } catch (error) {
-      console.error("Error creating connect:", error)
+      console.error("Error sending message:", error)
+      const message = (error as any)?.message || "Could not send message. Please try again."
       toast({
         title: "Error",
-        description: "Could not create connect. Please try again.",
+        description: message,
         variant: "destructive",
       })
     } finally {
@@ -1390,6 +1408,7 @@ export default function MessagesPage() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Reason *</label>
               <select
+                title="Select a reason for reporting"
                 value={reportReason}
                 onChange={(e) => setReportReason(e.target.value)}
                 className="w-full px-3 py-2 border border-border rounded-lg bg-background text-sm"
@@ -1430,7 +1449,7 @@ export default function MessagesPage() {
       <Dialog open={showMatchConfirmation} onOpenChange={setShowMatchConfirmation}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Connect with User</DialogTitle>
+            <DialogTitle>{pendingMatchUser ? `Message ${pendingMatchUser.display_name}` : "Send Message"}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -1474,21 +1493,21 @@ export default function MessagesPage() {
                   </div>
                 )}
 
-                {/* Match Benefits */}
-                <div className="p-3 bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-950/20 dark:to-purple-950/20 rounded-lg border border-pink-200 dark:border-pink-800">
-                  <p className="text-sm font-medium mb-2 text-pink-700 dark:text-pink-300">✨ What happens when you Connect?</p>
-                  <ul className="text-xs text-pink-600 dark:text-pink-400 space-y-1">
-                    <li>• Start private conversations</li>
-                    <li>• Share photos and media</li>
-                    <li>• Connect and build relationships</li>
-                    <li>• Access exclusive features together</li>
+                {/* Safety / guidance section for buyers */}
+                <div className="p-3 bg-muted/50 rounded-lg">
+                  <p className="text-sm font-medium mb-2">Safety tip</p>
+                  <ul className="text-xs text-muted-foreground space-y-1">
+                    <li>• Confirm product details and condition with the seller before payment.</li>
+                    <li>• Ask for a phone number and clear product description from the seller.</li>
+                    <li>• Meet in a public place and verify the item in person when possible.</li>
+                    <li>• Never send payment until you've verified the seller and the item.</li>
                   </ul>
                 </div>
               </div>
             )}
 
             <div className="text-sm text-muted-foreground text-center">
-              <p>Ready to connect? Connecting is the first step to meaningful conversations!</p>
+              <p>Send a short message to the seller to ask about the item or arrange a safe pickup.</p>
             </div>
 
             <div className="flex gap-2">
@@ -1499,10 +1518,10 @@ export default function MessagesPage() {
                 {creatingMatch ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Connecting...
+                    Sending...
                   </>
                 ) : (
-                  "Connect & Message"
+                  "Message"
                 )}
               </Button>
             </div>

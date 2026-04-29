@@ -427,7 +427,7 @@ CREATE TABLE public.learn_resource_views (
 );
 CREATE TABLE public.learn_resources (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  user_id uuid NOT NULL,
+  user_id uuid,
   title character varying NOT NULL,
   description text NOT NULL,
   content text,
@@ -442,9 +442,11 @@ CREATE TABLE public.learn_resources (
   saves_count integer DEFAULT 0,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  admin_id uuid,
   CONSTRAINT learn_resources_pkey PRIMARY KEY (id),
   CONSTRAINT learn_resources_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
-  CONSTRAINT learn_resources_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.admins(id)
+  CONSTRAINT learn_resources_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.admins(id),
+  CONSTRAINT learn_resources_admin_id_fkey FOREIGN KEY (admin_id) REFERENCES public.admins(id)
 );
 CREATE TABLE public.likes (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -586,7 +588,7 @@ CREATE TABLE public.notifications (
 );
 CREATE TABLE public.opportunities (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  user_id uuid NOT NULL,
+  user_id uuid,
   title character varying NOT NULL,
   description text NOT NULL,
   content text,
@@ -602,9 +604,11 @@ CREATE TABLE public.opportunities (
   bookmarks_count integer DEFAULT 0,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  admin_id uuid,
   CONSTRAINT opportunities_pkey PRIMARY KEY (id),
-  CONSTRAINT opportunities_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
-  CONSTRAINT opportunities_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.admins(id)
+  CONSTRAINT opportunities_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.admins(id),
+  CONSTRAINT opportunities_admin_id_fkey FOREIGN KEY (admin_id) REFERENCES public.admins(id),
+  CONSTRAINT opportunities_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
 CREATE TABLE public.opportunity_bookmarks (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),

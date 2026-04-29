@@ -171,7 +171,14 @@ export default function DashboardPage() {
           }
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : "An error occurred"
+        const errorMsg = err instanceof Error ? err.message : String(err)
+
+        // Treat AbortError (timeout or navigation) as non-fatal and avoid spamming the console
+        if ((err as any)?.name === "AbortError" || (typeof errorMsg === "string" && errorMsg.toLowerCase().includes("abort"))) {
+          console.warn("[Dashboard] Fetch aborted:", errorMsg)
+          return
+        }
+
         console.error("[Dashboard] Fetch error:", errorMsg, err)
         setError(errorMsg)
         // Set default values on error so UI doesn't stay loading forever

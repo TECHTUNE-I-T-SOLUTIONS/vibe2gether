@@ -17,6 +17,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Target user ID required" }, { status: 400 })
     }
 
+    // Prevent creating a match with yourself
+    if (userId === session.user.id) {
+      console.warn(`[POST /api/matches] Attempt to create match with self: ${session.user.id}`)
+      return NextResponse.json({ error: "Cannot create match with yourself" }, { status: 400 })
+    }
+
     console.log(`[POST /api/matches] Creating match between ${session.user.id} and ${userId}`)
 
     const supabase = await createClient()
@@ -30,7 +36,7 @@ export async function POST(request: NextRequest) {
 
     if (checkError && checkError.code !== 'PGRST116') {
       console.error("[POST /api/matches] Error checking existing match:", checkError)
-      throw checkError
+      return NextResponse.json({ error: checkError?.message || "Error checking matches" }, { status: 500 })
     }
 
     if (existingMatch) {
@@ -57,7 +63,7 @@ export async function POST(request: NextRequest) {
 
     if (createError) {
       console.error("[POST /api/matches] Error creating match:", createError)
-      throw createError
+      return NextResponse.json({ error: createError?.message || "Error creating match" }, { status: 500 })
     }
 
     console.log(`[POST /api/matches] Match created successfully: ${newMatch.id}`)
@@ -70,7 +76,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("[POST /api/matches] Unexpected error:", error)
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: (error as any)?.message || "Internal server error" },
       { status: 500 }
     )
   }

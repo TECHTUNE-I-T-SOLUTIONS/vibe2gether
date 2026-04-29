@@ -19,6 +19,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Prevent sending messages to self
+    if (recipientId === session.user.id) {
+      return NextResponse.json({ error: "Cannot send message to yourself" }, { status: 400 })
+    }
+
     const supabase = await createClient()
     const senderId = session.user.id
 

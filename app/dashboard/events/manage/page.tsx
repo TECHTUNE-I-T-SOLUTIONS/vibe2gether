@@ -16,7 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
-import { Loader2, Plus, Upload, Calendar, Clock, MapPin, Users, Trash2, LogOut } from "lucide-react"
+import { Loader2, Plus, Upload, Calendar, Clock, MapPin, Users, Trash2, LogOut, MessageCircle } from "lucide-react"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { createClient } from "@/lib/supabase/client"
 
@@ -37,7 +37,7 @@ export default function DashboardEventsManagePage() {
   const router = useRouter()
   const { user } = useUserProfile()
   const { toast } = useToast()
-  const [activeTab, setActiveTab] = useState<"my-events" | "registered" | "all">("my-events")
+  const [activeTab, setActiveTab] = useState<"my-events" | "registered" | "all">("all")
   const [events, setEvents] = useState<any[]>([])
   const [registrations, setRegistrations] = useState<any[]>([])
   const [allEvents, setAllEvents] = useState<any[]>([])
@@ -345,8 +345,8 @@ export default function DashboardEventsManagePage() {
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="my-events">My Events</TabsTrigger>
               <TabsTrigger value="all">All Events</TabsTrigger>
+              <TabsTrigger value="my-events">My Events</TabsTrigger>
               <TabsTrigger value="registered">Registered</TabsTrigger>
             </TabsList>
 
