@@ -5,9 +5,10 @@ import { createClient } from "@/lib/supabase/server"
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { eventId: string } }
+  { params }: { params: Promise<{ eventId: string }> }
 ) {
   try {
+    const { eventId } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -23,7 +24,7 @@ export async function GET(
       .from("event_registrations")
       .select("*")
       .eq("user_id", session.user.id)
-      .eq("event_id", params.eventId)
+      .eq("event_id", eventId)
       .limit(1)
 
     return NextResponse.json({

@@ -37,7 +37,7 @@ const contactInfo = [
   {
     icon: Mail,
     title: "Email",
-    value: "officialvibe2gether@gmail.com",
+    value: "info@vibe2gether.com",
     description: "For general inquiries",
   },
   // {

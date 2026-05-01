@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js"
 import { NextRequest, NextResponse } from "next/server"
 import crypto from "crypto"
+import { generateTicketPDF } from "@/lib/ticket-generator"
+import { sendTicketEmail } from "@/lib/email-service"
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || "",
@@ -110,21 +112,115 @@ export async function POST(request: NextRequest) {
         // Seller can see transactions to know they have a purchase
         console.log(`[Paystack] Marketplace purchase confirmed for transaction: ${transaction.id}`)
       } else if (transaction.type === "event_registration") {
-        // Update event registration status
-        const { error: regError } = await supabase
-          .from("event_registrations")
-          .update({
-            status: "confirmed",
-            payment_status: "completed",
-            payment_id: transaction.id,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", transaction.metadata?.registration_id)
+        const metadata = transaction.metadata || {}
 
-        if (regError) {
-          console.error("[Paystack] Failed to update event registration:", regError)
-        } else {
-          console.log(`[Paystack] Event registration confirmed: ${transaction.metadata?.registration_id}`)
+        if (metadata.registration_id) {
+          const { error: regError } = await supabase
+            .from("event_registrations")
+            .update({
+              status: "confirmed",
+              payment_status: "completed",
+              payment_reference: reference,
+              transaction_id: transaction.id,
+              paid_at: new Date().toISOString(),
+              amount_paid: amount,
+              currency: "NGN",
+              payment_method: "paystack",
+            })
+            .eq("id", metadata.registration_id)
+
+          if (regError) {
+            console.error("[Paystack] Failed to update event registration:", regError)
+          }
+        } else if (transaction.user_id && metadata.eventId) {
+          const { data: existingReg } = await supabase
+            .from("event_registrations")
+            .select("id")
+            .eq("event_id", metadata.eventId)
+            .eq("user_id", transaction.user_id)
+            .single()
+
+          if (!existingReg) {
+            const { error: regError } = await supabase
+              .from("event_registrations")
+              .insert({
+                event_id: metadata.eventId,
+                user_id: transaction.user_id,
+                status: "confirmed",
+                payment_status: "completed",
+                payment_reference: reference,
+                transaction_id: transaction.id,
+                paid_at: new Date().toISOString(),
+                amount_paid: amount,
+                currency: "NGN",
+                payment_method: "paystack",
+              })
+
+            if (regError) {
+              console.error("[Paystack] Failed to create event registration:", regError)
+            }
+          }
+        }
+
+        if (metadata.isTicketPurchase) {
+          const { data: ticket, error: ticketError } = await supabase
+            .from("event_tickets")
+            .update({ status: "paid" })
+            .eq("payment_reference", reference)
+            .select()
+            .single()
+
+          if (ticketError || !ticket) {
+            console.error("[Paystack] Failed to update ticket status:", ticketError)
+          } else {
+            const { data: event } = await supabase
+              .from("events")
+              .select("*")
+              .eq("id", ticket.event_id)
+              .single()
+
+            if (event) {
+              const pdfBuffer = await generateTicketPDF({
+                eventName: event.title,
+                eventDate: new Date(event.event_date).toLocaleDateString(),
+                eventTime: new Date(event.event_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                venue: event.location_name || "Online / TBD",
+                address: event.location_name || "Not specified",
+                ticketType: event.is_free ? "Free Pass" : "General Access",
+                attendeeName: ticket.attendee_name,
+                barcode: ticket.barcode,
+              })
+
+              const emailHtml = `
+                <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee;">
+                  <h1 style="color: #6366f1;">Vibe2Gether Event Ticket</h1>
+                  <p>Hi ${ticket.attendee_name},</p>
+                  <p>Thank you for purchasing a ticket for <strong>${event.title}</strong>!</p>
+                  <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                    <p><strong>Event:</strong> ${event.title}</p>
+                    <p><strong>Date:</strong> ${new Date(event.event_date).toLocaleDateString()}</p>
+                    <p><strong>Time:</strong> ${new Date(event.event_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+                    <p><strong>Venue:</strong> ${event.location_name || "Not specified"}</p>
+                  </div>
+                  <p>Your official ticket PDF is attached to this email. Please present it at the venue for scanning.</p>
+                  <p>Best regards,<br/>The Vibe2Gether Team</p>
+                </div>
+              `
+
+              await sendTicketEmail({
+                to: ticket.attendee_email,
+                subject: `Your Ticket for ${event.title} - Vibe2Gether`,
+                html: emailHtml,
+                attachments: [
+                  {
+                    filename: `ticket-${event.title.replace(/\s+/g, "-").toLowerCase()}.pdf`,
+                    content: pdfBuffer,
+                    contentType: "application/pdf",
+                  },
+                ],
+              })
+            }
+          }
         }
       } else if (transaction.type === "premium_subscription") {
         // Update premium subscription
@@ -279,6 +375,24 @@ export async function POST(request: NextRequest) {
           is_read: false,
           created_at: new Date().toISOString(),
         })
+      }
+
+      if (transaction.metadata?.isTicketPurchase) {
+        await supabase
+          .from("event_tickets")
+          .update({ status: "failed" })
+          .eq("payment_reference", reference)
+      }
+
+      if (transaction.type === "event_registration" && transaction.metadata?.registration_id) {
+        await supabase
+          .from("event_registrations")
+          .update({
+            payment_status: "failed",
+            payment_reference: reference,
+            transaction_id: transaction.id,
+          })
+          .eq("id", transaction.metadata.registration_id)
       }
 
       return NextResponse.json({ status: "ok" })

@@ -34,7 +34,7 @@ import {
 
 const categories = [
   { icon: User, title: "Account & Profile", description: "Manage your account and profile settings", count: 12 },
-  { icon: Heart, title: "Matching & Dating", description: "How matching works and dating tips", count: 15 },
+  { icon: Heart, title: "Connection & Messaging", description: "How connection works and messaging tips", count: 15 },
   { icon: MessageCircle, title: "Messaging", description: "Chat features and troubleshooting", count: 8 },
   { icon: CreditCard, title: "Payments & Subscriptions", description: "Billing, refunds, and premium", count: 10 },
   { icon: Shield, title: "Safety & Privacy", description: "Keep your account secure", count: 14 },
@@ -48,7 +48,7 @@ const faqs = [
       "Go to the login page and click 'Forgot Password'. Enter your email address and we'll send you a link to reset your password. The link expires after 24 hours for security.",
   },
   {
-    question: "How does matching work?",
+    question: "How does connection work?",
     answer:
       "Our AI analyzes your profile, preferences, and behavior to find compatible matches. The more you use the app, the better our recommendations become. Swipe right on profiles you like and left on those you don't.",
   },
@@ -376,9 +376,9 @@ export default function HelpPage() {
                   </div>
                   <h3 className="font-semibold mb-2">Email</h3>
                   <p className="text-sm text-muted-foreground mb-4">We&apos;ll respond within 24 hours</p>
-                  <a href="mailto:officialvibe2gether@gmail.com">
+                  <a href="mailto:info@vibe2gether.com">
                     <Button variant="outline" className="rounded-full bg-transparent">
-                      officialvibe2gether@gmail.com
+                      info@vibe2gether.com
                     </Button>
                   </a>
                 </CardContent>

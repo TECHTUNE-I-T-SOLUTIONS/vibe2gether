@@ -179,10 +179,10 @@ export default function TermsPage() {
             <p className="text-white/80 mb-8 max-w-xl mx-auto">
               If you have any questions about these Terms of Service, please contact our legal team.
             </p>
-            <link href="mailto:officialvibe2gether@gmail.com" />
+            <link href="mailto:info@vibe2gether.com" />
             <button className="px-8 py-3 rounded-full bg-white text-primary font-semibold hover:bg-white/90 transition-colors flex items-center gap-2 mx-auto">
               <Mail className="w-5 h-5" />
-              officialvibe2gether@gmail.com
+              info@vibe2gether.com
             </button>
             <link/>
           </div>

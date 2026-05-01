@@ -353,7 +353,7 @@ CREATE OR REPLACE FUNCTION public.update_event_attendees_on_register()
 RETURNS TRIGGER AS $$
 BEGIN
   UPDATE public.events
-  SET current_attendees = (
+  SET registered_count = (
     SELECT COUNT(*) FROM public.event_registrations 
     WHERE event_id = NEW.event_id AND status = 'registered'
   )
@@ -375,7 +375,7 @@ CREATE OR REPLACE FUNCTION public.update_event_attendees_on_unregister()
 RETURNS TRIGGER AS $$
 BEGIN
   UPDATE public.events
-  SET current_attendees = (
+  SET registered_count = (
     SELECT COUNT(*) FROM public.event_registrations 
     WHERE event_id = OLD.event_id AND status = 'registered'
   )

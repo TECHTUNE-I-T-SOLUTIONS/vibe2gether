@@ -5,9 +5,10 @@ import { createClient } from "@/lib/supabase/server"
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { eventId: string } }
+  { params }: { params: Promise<{ eventId: string }> }
 ) {
   try {
+    const { eventId } = await params
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -23,7 +24,7 @@ export async function POST(
       .from("event_registrations")
       .insert({
         user_id: session.user.id,
-        event_id: params.eventId,
+        event_id: eventId,
       })
 
     if (error) {
@@ -38,14 +39,14 @@ export async function POST(
     const { data: event } = await supabase
       .from("events")
       .select("registered_count")
-      .eq("id", params.eventId)
+      .eq("id", eventId)
       .single()
 
     if (event) {
       await supabase
         .from("events")
         .update({ registered_count: (event.registered_count || 0) + 1 })
-        .eq("id", params.eventId)
+        .eq("id", eventId)
     }
 
     return NextResponse.json({

@@ -67,6 +67,36 @@ export default function EventsPage() {
             { id: "all", label: "All Events", icon: Sparkles },
             ...dynamicCategories,
           ])
+          
+          // Check for event_id in URL and open modal
+          const urlParams = new URLSearchParams(window.location.search);
+          const eventId = urlParams.get('event_id');
+          if (eventId && data) {
+            const sharedEvent = data.find((e: any) => e.id === eventId);
+            if (sharedEvent) {
+              setSelectedEvent(sharedEvent);
+              setDetailsModalOpen(true);
+              
+              // Fetch creator info
+              try {
+                const creatorId = sharedEvent.created_by || sharedEvent.creator_id;
+                if (creatorId) {
+                  const supabase = await createClient();
+                  const { data: creatorData } = await supabase
+                    .from("users")
+                    .select("*")
+                    .eq("id", creatorId)
+                    .single();
+          
+                  if (creatorData) {
+                    setCreatorInfo(creatorData);
+                  }
+                }
+              } catch (error) {
+                console.error("Failed to fetch creator info:", error);
+              }
+            }
+          }
         }
       } catch (err) {
         setError("Failed to load events")
@@ -211,6 +241,7 @@ export default function EventsPage() {
                           src={event.thumbnail_url || event.thumbnail || "/placeholder.svg"}
                           alt={event.title}
                           fill
+                          loading="eager"
                           className="object-cover transition-transform duration-500 group-hover:scale-105"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
@@ -280,6 +311,7 @@ export default function EventsPage() {
                         <Image
                           src={event.thumbnail_url || event.thumbnail || "/placeholder.svg"}
                           alt={event.title}
+                          loading="eager"
                           fill
                           className="object-cover transition-transform duration-500 group-hover:scale-105"
                         />

@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { createClient } from "@/lib/supabase/client"
+import AdminEventEditModal from "@/components/admin-event-edit-modal"
 
 export default function EventsAdminPage() {
   const router = useRouter()
@@ -94,9 +95,12 @@ export default function EventsAdminPage() {
         .neq("status", "rejected")
         .order("event_date", { ascending: true })
 
-      setAdminEvents(adminEventsData || [])
+      const updatedAdminEvents = await updatePastEvents(adminEventsData || [])
+      const updatedAllEvents = await updatePastEvents(all || [])
+
+      setAdminEvents(updatedAdminEvents)
       setPendingEvents(pending || [])
-      setAllEvents(all || [])
+      setAllEvents(updatedAllEvents)
     } catch (error: any) {
       console.error("Error fetching events:", error?.message || JSON.stringify(error))
       toast({
@@ -213,8 +217,10 @@ export default function EventsAdminPage() {
     }
   }
 
-  async function handleEditEvent() {
-    if (!editingEvent?.title || !editingEvent?.event_date || !editingEvent?.location) {
+  async function handleEditEvent(edited?: any) {
+    const target = edited ?? editingEvent
+
+    if (!target?.title || !target?.event_date || !target?.location) {
       toast({
         title: "Validation Error",
         description: "Please fill in title, date, and location",
@@ -226,29 +232,29 @@ export default function EventsAdminPage() {
     setEditingEventLoading(true)
 
     try {
-      let thumbnailUrl = editingEvent.thumbnail_url
-      if (editingEvent.newThumbnail) {
-        thumbnailUrl = await uploadThumbnail(editingEvent.id, editingEvent.newThumbnail)
+      let thumbnailUrl = target.thumbnail_url
+      if (target.newThumbnail) {
+        thumbnailUrl = await uploadThumbnail(target.id, target.newThumbnail)
       }
 
       const { error } = await supabase
         .from("events")
         .update({
-          title: editingEvent.title,
-          description: editingEvent.description,
-          category: editingEvent.category,
-          event_date: editingEvent.event_date,
-          event_end_date: editingEvent.event_end_date,
-          location_name: editingEvent.location,
-          capacity: editingEvent.capacity ? parseInt(editingEvent.capacity) : null,
-          is_free: editingEvent.is_free,
-          ticket_price: !editingEvent.is_free ? parseFloat(editingEvent.ticket_price) : null,
-          organizer_name: editingEvent.organizer_name,
-          organizer_contact: editingEvent.organizer_contact,
-          tags: Array.isArray(editingEvent?.tags) ? editingEvent.tags : editingEvent.tags.split(",").map((t) => t.trim()),
+          title: target.title,
+          description: target.description,
+          category: target.category,
+          event_date: target.event_date,
+          event_end_date: target.event_end_date,
+          location_name: target.location,
+          capacity: target.capacity ? parseInt(target.capacity) : null,
+          is_free: target.is_free,
+          ticket_price: !target.is_free ? parseFloat(target.ticket_price) : null,
+          organizer_name: target.organizer_name,
+          organizer_contact: target.organizer_contact,
+          tags: Array.isArray(target?.tags) ? target.tags : (typeof target.tags === "string" ? target.tags.split(",").map((t: string) => t.trim()) : []),
           thumbnail_url: thumbnailUrl,
         })
-        .eq("id", editingEvent.id)
+        .eq("id", target.id)
 
       if (error) throw error
 
@@ -323,12 +329,24 @@ export default function EventsAdminPage() {
   // Show loading while authentication is being determined
   if (authLoading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center space-y-2">
-          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
+      <>
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center space-y-2">
+            <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          </div>
         </div>
-      </div>
+
+        <AdminEventEditModal
+          open={!!editingEvent}
+          event={editingEvent}
+          loading={editingEventLoading}
+          onOpenChange={(open) => {
+            if (!open) setEditingEvent(null)
+          }}
+          onSave={(edited: any) => handleEditEvent(edited)}
+        />
+      </>
     )
   }
 
@@ -356,295 +374,162 @@ export default function EventsAdminPage() {
     const thumbnailUrl = event.thumbnail || event.thumbnail_url
 
     return (
-    <Card className="overflow-hidden hover:shadow-lg transition-shadow">
-      <div className="relative h-48 bg-muted">
-        {thumbnailUrl ? (
-          <Image
-            src={thumbnailUrl}
-            alt={event.title}
-            fill
-            className="object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-muted-foreground">No thumbnail</div>
-        )}
-        <Badge className="absolute top-2 right-2">{event.category}</Badge>
-      </div>
-      <CardContent className="pt-4">
-        <h3 className="font-semibold line-clamp-2 mb-2">{event.title}</h3>
-        <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{event.description}</p>
-        <div className="flex items-center gap-2 mb-2 text-sm">
-          <Calendar className="w-4 h-4" />
-          {formatDate(event.event_date)}
+      <Card className="overflow-hidden hover:shadow-lg transition-shadow">
+        <div className="relative h-48 bg-muted">
+          {thumbnailUrl ? (
+            <Image src={thumbnailUrl} alt={event.title} fill className="object-cover" loading="eager" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-muted-foreground">No thumbnail</div>
+          )}
+          <Badge className="absolute top-2 right-2">{event.category}</Badge>
         </div>
-        <p className="text-sm text-muted-foreground mb-3">📍 {event.location_name || event.location}</p>
-        <div className="flex items-center justify-between mb-4">
-          <span className="font-semibold">{event.is_free ? "Free" : `${event.currency || "$"}${event.ticket_price}`}</span>
-          <Badge
-            variant="secondary"
-            className={
-              event.status === "upcoming"
-                ? "bg-green-500/20 text-green-600"
-                : event.status === "inactive"
-                  ? "bg-yellow-500/20 text-yellow-600"
-                  : "bg-red-500/20 text-red-600"
-            }
-          >
-            {event.status}
-          </Badge>
-        </div>
-        <div className="flex gap-2">
-          <Dialog open={editingEvent?.id === event.id} onOpenChange={(open) => { if (!open) setEditingEvent(null) }}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="flex-1" onClick={() => setEditingEvent({ ...event, location: event.location_name, newThumbnail: null, thumbnailPreview: null })}>
-                <Edit2 className="w-4 h-4 mr-2" />
-                Edit
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Edit Event</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label>Title *</Label>
-                  <Input
-                    value={editingEvent?.title || ""}
-                    onChange={(e) => setEditingEvent({ ...editingEvent, title: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label>Description</Label>
-                  <Textarea
-                    value={editingEvent?.description || ""}
-                    onChange={(e) => setEditingEvent({ ...editingEvent, description: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Category</Label>
-                    <Input
-                      value={editingEvent?.category || ""}
-                      onChange={(e) => setEditingEvent({ ...editingEvent, category: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label>Location *</Label>
-                    <Input
-                      value={editingEvent?.location || ""}
-                      onChange={(e) => setEditingEvent({ ...editingEvent, location: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Event Date *</Label>
-                    <Input
-                      type="datetime-local"
-                      value={editingEvent?.event_date?.slice(0, 16) || ""}
-                      onChange={(e) => setEditingEvent({ ...editingEvent, event_date: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label>Event End Date</Label>
-                    <Input
-                      type="datetime-local"
-                      value={editingEvent?.event_end_date?.slice(0, 16) || ""}
-                      onChange={(e) => setEditingEvent({ ...editingEvent, event_end_date: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Capacity</Label>
-                    <Input
-                      type="number"
-                      value={editingEvent?.capacity || ""}
-                      onChange={(e) => setEditingEvent({ ...editingEvent, capacity: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label>
-                      <input
-                        type="checkbox"
-                        checked={editingEvent?.is_free}
-                        onChange={(e) => setEditingEvent({ ...editingEvent, is_free: e.target.checked })}
-                        className="mr-2"
-                      />
-                      Free Event
-                    </Label>
-                  </div>
-                </div>
-                {!editingEvent?.is_free && (
-                  <div>
-                    <Label>Ticket Price</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={editingEvent?.ticket_price || ""}
-                      onChange={(e) => setEditingEvent({ ...editingEvent, ticket_price: e.target.value })}
-                    />
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Organizer Name</Label>
-                    <Input
-                      value={editingEvent?.organizer_name || ""}
-                      onChange={(e) => setEditingEvent({ ...editingEvent, organizer_name: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label>Organizer Contact</Label>
-                    <Input
-                      value={editingEvent?.organizer_contact || ""}
-                      onChange={(e) => setEditingEvent({ ...editingEvent, organizer_contact: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label>Tags (comma separated)</Label>
-                  <Input
-                    value={Array.isArray(editingEvent?.tags) ? editingEvent.tags.join(", ") : (editingEvent?.tags || "")}
-                    onChange={(e) => setEditingEvent({ ...editingEvent, tags: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label>Thumbnail</Label>
-                  {editingEvent?.thumbnailPreview && (
-                    <div className="mb-3 relative w-40 h-24">
-                      <img
-                        src={editingEvent.thumbnailPreview}
-                        alt="New Thumbnail"
-                        className="w-full h-full object-cover rounded border-2 border-green-500"
-                      />
-                      <p className="text-xs text-green-600 mt-1">New thumbnail</p>
-                    </div>
-                  )}
-                  {editingEvent?.thumbnail_url && !editingEvent?.thumbnailPreview && (
-                    <div className="mb-3 relative w-40 h-24">
-                      <Image
-                        src={editingEvent.thumbnail_url}
-                        alt="Current Thumbnail"
-                        fill
-                        className="object-cover rounded"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">Current thumbnail</p>
-                    </div>
-                  )}
+        <CardContent className="pt-4">
+          <h3 className="font-semibold line-clamp-2 mb-2">{event.title}</h3>
+          <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{event.description}</p>
+          <div className="flex items-center gap-2 mb-2 text-sm">
+            <Calendar className="w-4 h-4" />
+            {formatDate(event.event_date)}
+          </div>
+          <p className="text-sm text-muted-foreground mb-3">📍 {event.location_name || event.location}</p>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col">
+              {event.is_free ? (
+                <span className="font-semibold">Free</span>
+              ) : (
+                <>
+                  {(() => {
+                    const usd = Number(event.ticket_price) || 0
+                    const USD_TO_NGN = 1450
+                    const USD_TO_XAF = 605
+                    return (
+                      <>
+                        <span className="font-semibold">${usd}</span>
+                        <span className="text-xs text-muted-foreground">NGN {Math.round(usd * USD_TO_NGN).toLocaleString()} • XAF {Math.round(usd * USD_TO_XAF).toLocaleString()}</span>
+                      </>
+                    )
+                  })()}
+                </>
+              )}
+            </div>
+            <Badge
+              variant="secondary"
+              className={
+                event.status === "upcoming"
+                  ? "bg-green-500/20 text-green-600"
+                  : event.status === "inactive"
+                    ? "bg-yellow-500/20 text-yellow-600"
+                    : "bg-red-500/20 text-red-600"
+              }
+            >
+              {event.status}
+            </Badge>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={() => setEditingEvent({ ...event, location: event.location_name, newThumbnail: null, thumbnailPreview: null })}
+            >
+              <Edit2 className="w-4 h-4 mr-2" />
+              Edit
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="flex-1"
+              onClick={() => handleDeleteEvent(event.id)}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </Button>
+            {showStatusButton && (
+              <Dialog open={statusDialogOpen && statusEvent?.id === event.id} onOpenChange={setStatusDialogOpen}>
+                <DialogTrigger asChild>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    {editingEvent?.thumbnailPreview ? "Change" : "Upload"} Thumbnail
-                  </Button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        const reader = new FileReader()
-                        reader.onloadend = () => {
-                          setEditingEvent((prev: any) => ({
-                            ...prev,
-                            newThumbnail: file,
-                            thumbnailPreview: reader.result as string,
-                          }))
-                        }
-                        reader.readAsDataURL(file)
-                      }
+                    onClick={() => {
+                      setStatusEvent(event)
+                      setNewStatus(event.status === "pending" ? "upcoming" : "rejected")
                     }}
-                  />
-                </div>
-                <Button 
-                  className="w-full gradient-bg" 
-                  onClick={handleEditEvent}
-                  disabled={editingEventLoading}
-                >
-                  {editingEventLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    "Save Changes"
-                  )}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-          <Button
-            variant="destructive"
-            size="sm"
-            className="flex-1"
-            onClick={() => handleDeleteEvent(event.id)}
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Delete
-          </Button>
-          {showStatusButton && (
-            <Dialog open={statusDialogOpen && statusEvent?.id === event.id} onOpenChange={setStatusDialogOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setStatusEvent(event)
-                    setNewStatus(event.status === "pending" ? "upcoming" : "rejected")
-                  }}
-                >
-                  {event.status === "pending" ? (
-                    <>
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                      Approve
-                    </>
-                  ) : (
-                    <>
-                      <XCircle className="w-4 h-4 mr-2" />
-                      Reject
-                    </>
-                  )}
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Update Event Status</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label>New Status</Label>
-                    <select
-                      value={newStatus}
-                      onChange={(e) => setNewStatus(e.target.value)}
-                      className="w-full px-3 py-2 border border-input rounded-md bg-background"
-                    >
-                      <option value="upcoming">Approve (Upcoming)</option>
-                      <option value="pending">Keep Pending</option>
-                      <option value="rejected">Reject</option>
-                    </select>
-                  </div>
-                  <Button className="w-full gradient-bg" onClick={handleStatusUpdate}>
-                    Update Status
+                  >
+                    {event.status === "pending" ? (
+                      <>
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Approve
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="w-4 h-4 mr-2" />
+                        Reject
+                      </>
+                    )}
                   </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Update Event Status</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label>New Status</Label>
+                      <select
+                        title="Select new status"
+                        value={newStatus}
+                        onChange={(e) => setNewStatus(e.target.value)}
+                        className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                      >
+                        <option value="upcoming">Approve (Upcoming)</option>
+                        <option value="pending">Keep Pending</option>
+                        <option value="rejected">Reject</option>
+                      </select>
+                    </div>
+                    <Button className="w-full gradient-bg" onClick={handleStatusUpdate}>
+                      Update Status
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     )
+  }
+
+  async function updatePastEvents(list: any[]) {
+    const now = new Date()
+    const pastIds = list
+      .filter((event) => event?.status === "upcoming" && event?.event_date && new Date(event.event_date) < now)
+      .map((event) => event.id)
+
+    if (pastIds.length === 0) return list
+
+    const { error } = await supabase
+      .from("events")
+      .update({ status: "inactive" })
+      .in("id", pastIds)
+
+    if (error) {
+      console.error("Error updating past events:", error.message || error)
+      return list
+    }
+
+    return list.map((event) => (pastIds.includes(event.id) ? { ...event, status: "inactive" } : event))
   }
 
   return (
     <div className="space-y-6">
+      <AdminEventEditModal
+        open={!!editingEvent}
+        event={editingEvent}
+        loading={editingEventLoading}
+        onOpenChange={(open) => {
+          if (!open) setEditingEvent(null)
+        }}
+        onSave={(edited: any) => handleEditEvent(edited)}
+      />
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Events Admin</h1>
         <Dialog open={creatingEvent} onOpenChange={setCreatingEvent}>

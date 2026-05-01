@@ -136,9 +136,9 @@ export default function SafetyPage() {
         {/* Dating Tips */}
         <section className="py-20 bg-muted/30">
           <div className="container mx-auto px-4">
-            <h2 className="text-3xl font-bold text-center mb-4">Safe Dating Tips</h2>
+            <h2 className="text-3xl font-bold text-center mb-4">Safe Connection Tips</h2>
             <p className="text-muted-foreground text-center mb-12 max-w-2xl mx-auto">
-              Follow these tips to have safe and enjoyable dating experiences
+              Follow these tips to have safe and enjoyable connection experiences
             </p>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
               {datingTips.map((tip, i) => (

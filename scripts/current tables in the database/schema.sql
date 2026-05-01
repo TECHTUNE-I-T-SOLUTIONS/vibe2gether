@@ -349,6 +349,25 @@ CREATE TABLE public.event_registrations (
   CONSTRAINT event_registrations_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
   CONSTRAINT event_registrations_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.transactions(id)
 );
+CREATE TABLE public.event_tickets (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  event_id uuid NOT NULL,
+  user_id uuid,
+  attendee_name character varying NOT NULL,
+  attendee_email character varying NOT NULL,
+  attendee_phone character varying,
+  attendee_address text,
+  amount_paid numeric NOT NULL,
+  platform_fee numeric NOT NULL,
+  payout_amount numeric NOT NULL,
+  status character varying DEFAULT 'paid'::character varying,
+  barcode character varying NOT NULL UNIQUE,
+  payment_reference character varying,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT event_tickets_pkey PRIMARY KEY (id),
+  CONSTRAINT event_tickets_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id),
+  CONSTRAINT event_tickets_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
+);
 CREATE TABLE public.events (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   created_by uuid NOT NULL,

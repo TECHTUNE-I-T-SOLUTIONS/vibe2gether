@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -16,7 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
-import { Loader2, Plus, Upload, Calendar, Clock, MapPin, Users, Trash2, LogOut, MessageCircle } from "lucide-react"
+import { Loader2, Plus, Upload, Calendar, Clock, MapPin, Users, Trash2, LogOut, MessageCircle, Ticket, Eye, Search, Phone, Mail, Home } from "lucide-react"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { createClient } from "@/lib/supabase/client"
 
@@ -44,9 +44,22 @@ export default function DashboardEventsManagePage() {
   const [loading, setLoading] = useState(true)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showDetailDialog, setShowDetailDialog] = useState(false)
+  const [showBuyDialog, setShowBuyDialog] = useState(false)
+  const [showTicketsDialog, setShowTicketsDialog] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<any>(null)
+  const [eventTickets, setEventTickets] = useState<any[]>([])
+  const [loadingTickets, setLoadingTickets] = useState(false)
+  const [purchasing, setPurchasing] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const verificationHandledRef = useRef(false)
   
+  // Ticket Purchase Form
+  const [ticketForm, setTicketForm] = useState({
+    attendeeName: "",
+    attendeeEmail: "",
+    attendeePhone: "",
+    attendeeAddress: ""
+  })
   // Form state
   const [formData, setFormData] = useState({
     title: "",
@@ -66,6 +79,10 @@ export default function DashboardEventsManagePage() {
 
   const supabase = createClient()
   const isAdmin = user?.is_admin === true
+  const USD_TO_NGN = 1450
+  const USD_TO_XAF = 605
+  const NGN_TO_USD = 1 / USD_TO_NGN
+  const NGN_TO_XAF = USD_TO_XAF / USD_TO_NGN
 
   // Check authentication and redirect if not logged in
   useEffect(() => {
@@ -95,6 +112,39 @@ export default function DashboardEventsManagePage() {
     }
   }, [activeTab, session?.user?.id])
 
+  useEffect(() => {
+    if (!session?.user?.id) return
+    fetchRegisteredEvents()
+  }, [session?.user?.id])
+
+  useEffect(() => {
+    if (!session?.user?.id || verificationHandledRef.current) return
+
+    const params = new URLSearchParams(window.location.search)
+    const reference = params.get("reference") || params.get("trxref")
+
+    if (!reference) return
+
+    verificationHandledRef.current = true
+
+    const verifyAndRefresh = async () => {
+      try {
+        const res = await fetch(`/api/payments/verify?reference=${encodeURIComponent(reference)}`)
+        const data = await res.json()
+        if (data?.success) {
+          await fetchRegisteredEvents()
+          await fetchAllEvents()
+        }
+      } catch (error) {
+        console.error("Payment verification error:", error)
+      } finally {
+        router.replace("/dashboard/events/manage")
+      }
+    }
+
+    verifyAndRefresh()
+  }, [session?.user?.id, router])
+
   async function fetchUserEvents() {
     try {
       setLoading(true)
@@ -112,7 +162,8 @@ export default function DashboardEventsManagePage() {
         console.error("Error fetching events:", error.message || error)
         throw error
       }
-      setEvents(data || [])
+      const updatedEvents = await updatePastEvents(data || [])
+      setEvents(updatedEvents)
     } catch (error: any) {
       console.error("Error fetching events:", error?.message || JSON.stringify(error) || "Unknown error")
       toast({ title: "Error", description: "Failed to load events", variant: "destructive" })
@@ -140,7 +191,18 @@ export default function DashboardEventsManagePage() {
         console.error("Error fetching registrations:", error.message || error)
         throw error
       }
-      setRegistrations(data || [])
+      const registrations = data || []
+      const updatedEvents = await updatePastEvents(
+        registrations.map((registration: any) => registration.event).filter(Boolean)
+      )
+      const updatedById = new Map(updatedEvents.map((event: any) => [event.id, event]))
+      setRegistrations(
+        registrations.map((registration: any) =>
+          registration.event && updatedById.has(registration.event.id)
+            ? { ...registration, event: updatedById.get(registration.event.id) }
+            : registration
+        )
+      )
     } catch (error: any) {
       console.error("Error fetching registrations:", error?.message || JSON.stringify(error) || "Unknown error")
       toast({ title: "Error", description: "Failed to load registrations", variant: "destructive" })
@@ -160,13 +222,35 @@ export default function DashboardEventsManagePage() {
         console.error("Error fetching all events:", error.message || error)
         throw error
       }
-      setAllEvents(data || [])
+      const updatedEvents = await updatePastEvents(data || [])
+      setAllEvents(updatedEvents)
     } catch (error: any) {
       console.error("Error fetching all events:", error?.message || JSON.stringify(error) || "Unknown error")
       toast({ title: "Error", description: "Failed to load events", variant: "destructive" })
     } finally {
       setLoading(false)
     }
+  }
+
+  async function updatePastEvents(list: any[]) {
+    const now = new Date()
+    const pastIds = list
+      .filter((event) => event?.status === "upcoming" && event?.event_date && new Date(event.event_date) < now)
+      .map((event) => event.id)
+
+    if (pastIds.length === 0) return list
+
+    const { error } = await supabase
+      .from("events")
+      .update({ status: "inactive" })
+      .in("id", pastIds)
+
+    if (error) {
+      console.error("Error updating past events:", error.message || error)
+      return list
+    }
+
+    return list.map((event) => (pastIds.includes(event.id) ? { ...event, status: "inactive" } : event))
   }
 
   async function handleThumbnailUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -307,7 +391,7 @@ export default function DashboardEventsManagePage() {
   }
 
   async function handleUnregister(registrationId: string) {
-    if (!confirm("Are you sure you want to unregister from this event?")) return
+    if (!confirm("There's no refund when you unregister, are you sure you want to unregister from this event?")) return
 
     try {
       const { error } = await supabase
@@ -324,6 +408,99 @@ export default function DashboardEventsManagePage() {
       toast({ title: "Error", description: "Failed to unregister", variant: "destructive" })
     }
   }
+
+  async function fetchEventTickets(eventId: string) {
+    try {
+      setLoadingTickets(true)
+      const res = await fetch(`/api/events/${eventId}/tickets`)
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      setEventTickets(data.tickets || [])
+    } catch (error: any) {
+      console.error("Error fetching tickets:", error)
+      toast({ title: "Error", description: error.message || "Failed to load tickets", variant: "destructive" })
+    } finally {
+      setLoadingTickets(false)
+    }
+  }
+
+  async function handlePurchaseTicket(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selectedEvent) return
+
+    try {
+      setPurchasing(true)
+      if (selectedEvent.is_free || !selectedEvent.ticket_price) {
+        const res = await fetch("/api/events/tickets/purchase", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eventId: selectedEvent.id,
+            ...ticketForm,
+          }),
+        })
+
+        const data = await res.json()
+        if (data.error) throw new Error(data.error)
+
+        toast({
+          title: "Success",
+          description: "Ticket reserved successfully! Check your email for the ticket PDF.",
+          duration: 5000,
+        })
+
+        setShowBuyDialog(false)
+        setTicketForm({
+          attendeeName: "",
+          attendeeEmail: "",
+          attendeePhone: "",
+          attendeeAddress: "",
+        })
+        fetchRegisteredEvents()
+        return
+      }
+
+      const res = await fetch("/api/events/initialize-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: ticketForm.attendeeEmail,
+          fullName: ticketForm.attendeeName,
+          eventId: selectedEvent.id,
+          attendeeName: ticketForm.attendeeName,
+          attendeeEmail: ticketForm.attendeeEmail,
+          attendeePhone: ticketForm.attendeePhone,
+          attendeeAddress: ticketForm.attendeeAddress,
+        }),
+      })
+
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+
+      if (data.isFree) {
+        toast({
+          title: "Success",
+          description: "This is a free event. Ticket reserved successfully.",
+        })
+        setShowBuyDialog(false)
+        fetchRegisteredEvents()
+        return
+      }
+
+      if (data.authorizationUrl) {
+        window.location.href = data.authorizationUrl
+      }
+    } catch (error: any) {
+      console.error("Purchase error:", error)
+      toast({ title: "Error", description: error.message || "Failed to purchase ticket", variant: "destructive" })
+    } finally {
+      setPurchasing(false)
+    }
+  }
+
+  const totalSales = eventTickets.reduce((acc, t) => acc + Number(t.amount_paid || 0), 0)
+  const totalFees = eventTickets.reduce((acc, t) => acc + Number(t.platform_fee || 0), 0)
+  const totalPayout = eventTickets.reduce((acc, t) => acc + Number(t.payout_amount || 0), 0)
 
   return (
     <div className="min-h-screen w-full">
@@ -420,31 +597,64 @@ export default function DashboardEventsManagePage() {
                               {event.is_free ? (
                                 <Badge variant="outline" className="text-xs">Free</Badge>
                               ) : (
-                                <Badge variant="outline" className="text-xs">${event.ticket_price || "0"}</Badge>
+                                <div className="text-right">
+                                  {(() => {
+                                    const usd = Number(event.ticket_price) || 0
+                                    const USD_TO_NGN = 1450
+                                    const USD_TO_XAF = 605
+                                    return (
+                                      <>
+                                        <Badge variant="outline" className="text-xs">${usd}</Badge>
+                                        <div className="text-[10px] text-muted-foreground mt-1">
+                                          NGN {Math.round(usd * USD_TO_NGN).toLocaleString()} • XAF {Math.round(usd * USD_TO_XAF).toLocaleString()}
+                                        </div>
+                                      </>
+                                    )
+                                  })()}
+                                </div>
                               )}
                             </div>
                           </div>
 
                           <div className="flex gap-2">
-                            <Badge 
-                              variant={event.status === "upcoming" ? "default" : "secondary"} 
+                            <Badge
+                              variant={event.status === "upcoming" ? "default" : "secondary"}
                               className="text-xs"
                             >
-                              {event.status === "upcoming" ? "Upcoming" : "Pending"}
+                              {event.status === "upcoming"
+                                ? "Upcoming"
+                                : event.status === "inactive"
+                                  ? "Past"
+                                  : "Pending"}
                             </Badge>
                           </div>
                         </div>
 
                         {/* Actions */}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDeleteEvent(event.id)}
-                          className="w-full gap-1 text-xs mt-3"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          Delete
-                        </Button>
+                        <div className="flex flex-col gap-2 mt-3">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              setSelectedEvent(event)
+                              fetchEventTickets(event.id)
+                              setShowTicketsDialog(true)
+                            }}
+                            className="w-full gap-1 text-xs"
+                          >
+                            <Ticket className="w-3 h-3" />
+                            View Tickets
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeleteEvent(event.id)}
+                            className="w-full gap-1 text-xs text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Delete
+                          </Button>
+                        </div>
                       </CardContent>
                     </Card>
                   ))}
@@ -504,7 +714,19 @@ export default function DashboardEventsManagePage() {
                               </div>
                             ) : (
                               <div className="flex items-center gap-2">
-                                <span className="font-medium">${reg.event?.ticket_price || "0"}</span>
+                                {(() => {
+                                  const usd = Number(reg.event?.ticket_price) || 0
+                                  const USD_TO_NGN = 1450
+                                  const USD_TO_XAF = 605
+                                  return (
+                                    <div>
+                                      <span className="font-medium">${usd}</span>
+                                      <div className="text-[10px] text-muted-foreground">
+                                        NGN {Math.round(usd * USD_TO_NGN).toLocaleString()} • XAF {Math.round(usd * USD_TO_XAF).toLocaleString()}
+                                      </div>
+                                    </div>
+                                  )
+                                })()}
                               </div>
                             )}
                           </div>
@@ -512,6 +734,12 @@ export default function DashboardEventsManagePage() {
                           <div className="text-xs text-muted-foreground">
                             Registered: {new Date(reg.registered_at).toLocaleDateString()}
                           </div>
+
+                          <div>
+                          <p className="text-xs md:text-sm text-muted-foreground mt-2">
+                            Note: Unregistering from an event does not guarantee a refund, refunds are very unlikely for events tickets. Please check the event's refund policy or contact the organizer of the event. Vibe2gether is not liable or responsible for any refunds or cancellations, all sales/purchases are final.
+                          </p>
+                        </div>
 
                           {/* Unregister Button */}
                           <Button
@@ -551,6 +779,9 @@ export default function DashboardEventsManagePage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {allEvents.map((event) => {
                     const isOwnEvent = event.created_by === session?.user?.id
+                    const alreadyPurchased = registrations.some(
+                      (reg) => (reg.event?.id || reg.event_id) === event.id
+                    )
                     return (
                       <Card key={event.id} className="overflow-hidden hover:shadow-lg transition-shadow flex flex-col">
                         {/* Event Thumbnail */}
@@ -602,7 +833,21 @@ export default function DashboardEventsManagePage() {
                                 {event.is_free ? (
                                   <Badge variant="outline" className="text-xs">Free</Badge>
                                 ) : (
-                                  <Badge variant="outline" className="text-xs">${event.ticket_price || "0"}</Badge>
+                                  <div className="text-right">
+                                    {(() => {
+                                      const usd = Number(event.ticket_price) || 0
+                                      const USD_TO_NGN = 1450
+                                      const USD_TO_XAF = 605
+                                      return (
+                                        <>
+                                          <Badge variant="outline" className="text-xs">${usd}</Badge>
+                                          <div className="text-[10px] text-muted-foreground mt-1">
+                                            NGN {Math.round(usd * USD_TO_NGN).toLocaleString()} • XAF {Math.round(usd * USD_TO_XAF).toLocaleString()}
+                                          </div>
+                                        </>
+                                      )
+                                    })()}
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -614,16 +859,36 @@ export default function DashboardEventsManagePage() {
                               Your Event
                             </Button>
                           ) : (
-                            <Button 
-                              className="w-full gap-1 text-xs mt-3"
-                              onClick={() => {
-                                setSelectedEvent(event)
-                                setShowDetailDialog(true)
-                              }}
-                            >
-                              <Users className="w-3 h-3" />
-                              Register
-                            </Button>
+                            <div className="flex gap-2 mt-3">
+                              <Button 
+                                variant="outline"
+                                className="flex-1 gap-1 text-xs"
+                                onClick={() => {
+                                  setSelectedEvent(event)
+                                  setShowDetailDialog(true)
+                                }}
+                              >
+                                <Eye className="w-3 h-3" />
+                                Details
+                              </Button>
+                              <Button 
+                                className="flex-1 gap-1 text-xs gradient-bg"
+                                disabled={alreadyPurchased}
+                                onClick={() => {
+                                  if (alreadyPurchased) return
+                                  setSelectedEvent(event)
+                                  setTicketForm(prev => ({
+                                    ...prev,
+                                    attendeeName: user?.display_name || "",
+                                    attendeeEmail: session?.user?.email || ""
+                                  }))
+                                  setShowBuyDialog(true)
+                                }}
+                              >
+                                <Ticket className="w-3 h-3" />
+                                {alreadyPurchased ? "Already Purchased" : "Get Ticket"}
+                              </Button>
+                            </div>
                           )}
                         </CardContent>
                       </Card>
@@ -751,7 +1016,7 @@ export default function DashboardEventsManagePage() {
 
                 {!formData.isFree && (
                   <div className="space-y-2">
-                    <Label htmlFor="ticketPrice">Ticket Price *</Label>
+                    <Label htmlFor="ticketPrice">Ticket Price ($) *</Label>
                     <Input
                       id="ticketPrice"
                       type="number"
@@ -856,35 +1121,35 @@ export default function DashboardEventsManagePage() {
 
       {/* Event Detail Dialog */}
       <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-xl sm:max-w-2xl max-h-[85vh] overflow-y-auto p-4 sm:p-6">
           {selectedEvent && (
-            <div className="space-y-4">
-              <DialogHeader>
-                <DialogTitle>{selectedEvent.title}</DialogTitle>
+            <div className="space-y-3 sm:space-y-4">
+              <DialogHeader className="space-y-1">
+                <DialogTitle className="text-base sm:text-lg">{selectedEvent.title}</DialogTitle>
               </DialogHeader>
               
               {selectedEvent.thumbnail && (
-                <div className="w-full aspect-video rounded-lg overflow-hidden bg-muted">
-                  <img 
-                    src={selectedEvent.thumbnail} 
+                <div className="w-full aspect-[16/8] sm:aspect-video rounded-lg overflow-hidden bg-muted">
+                  <img
+                    src={selectedEvent.thumbnail}
                     alt={selectedEvent.title}
                     className="w-full h-full object-cover"
                   />
                 </div>
               )}
-              
-              <div className="grid grid-cols-2 gap-4">
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">Date</label>
-                  <p className="text-lg font-semibold">
+                  <label className="text-xs font-medium text-muted-foreground">Date</label>
+                  <p className="text-sm sm:text-base font-semibold">
                     {selectedEvent.event_date ? new Date(selectedEvent.event_date).toLocaleDateString() : "Not specified"}
                   </p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">Price</label>
-                  <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Price</label>
+                  <div className="space-y-0.5">
                     {selectedEvent.is_free ? (
-                      <p className="text-lg font-semibold">Free</p>
+                      <p className="text-sm sm:text-base font-semibold">Free</p>
                     ) : (
                       <>
                         {(() => {
@@ -893,9 +1158,9 @@ export default function DashboardEventsManagePage() {
                           const USD_TO_XAF = 605 // $1 = XAF605 (Central African CFA franc) — update as needed
                           return (
                             <>
-                              <p className="text-lg font-semibold">${usd}</p>
-                              <p className="text-sm text-muted-foreground">₦{Math.round(usd * USD_TO_NGN).toLocaleString()}</p>
-                              <p className="text-sm text-muted-foreground">XAF {Math.round(usd * USD_TO_XAF).toLocaleString()}</p>
+                              <p className="text-sm sm:text-base font-semibold">${usd}</p>
+                              <p className="text-xs text-muted-foreground">₦{Math.round(usd * USD_TO_NGN).toLocaleString()}</p>
+                              <p className="text-xs text-muted-foreground">XAF {Math.round(usd * USD_TO_XAF).toLocaleString()}</p>
                             </>
                           )
                         })()}
@@ -906,31 +1171,77 @@ export default function DashboardEventsManagePage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Location</label>
-                <p className="mt-2">{selectedEvent.location || "Not specified"}</p>
+                <label className="text-xs font-medium text-muted-foreground">Location</label>
+                <p className="mt-1 text-sm sm:text-base">{selectedEvent.location_name || selectedEvent.location || "Not specified"}</p>
+                {(selectedEvent.latitude || selectedEvent.longitude) && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {selectedEvent.latitude ?? "-"}, {selectedEvent.longitude ?? "-"}
+                  </p>
+                )}
               </div>
               
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Description</label>
-                <p className="mt-2">{selectedEvent.description}</p>
+                <label className="text-xs font-medium text-muted-foreground">Description</label>
+                <p className="mt-1 text-sm sm:text-base">{selectedEvent.description}</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">Capacity</label>
-                  <p className="text-lg font-semibold">{selectedEvent.capacity || "Unlimited"}</p>
+                  <label className="text-xs font-medium text-muted-foreground">Capacity</label>
+                  <p className="text-sm sm:text-base font-semibold">{selectedEvent.capacity || "Unlimited"}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">Organizer</label>
-                  <p className="text-lg font-semibold">{selectedEvent.users?.display_name || selectedEvent.organizer_name || "Unknown"}</p>
+                  <label className="text-xs font-medium text-muted-foreground">Organizer</label>
+                  <p className="text-sm sm:text-base font-semibold">{selectedEvent.organizer_name || selectedEvent.users?.display_name || "Unknown"}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Category</label>
+                  <p className="text-sm sm:text-base font-semibold">{selectedEvent.category || "Not specified"}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Status</label>
+                  <p className="text-sm sm:text-base font-semibold">{selectedEvent.status || "Not specified"}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Start</label>
+                  <p className="text-sm sm:text-base font-semibold">
+                    {selectedEvent.event_date ? new Date(selectedEvent.event_date).toLocaleString() : "Not specified"}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">End</label>
+                  <p className="text-sm sm:text-base font-semibold">
+                    {selectedEvent.event_end_date ? new Date(selectedEvent.event_end_date).toLocaleString() : "Not specified"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Organizer Contact</label>
+                  <p className="text-sm sm:text-base font-semibold break-words">{selectedEvent.organizer_contact || "Not specified"}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Tags</label>
+                  <p className="text-sm sm:text-base font-semibold break-words">
+                    {Array.isArray(selectedEvent.tags)
+                      ? selectedEvent.tags.join(", ")
+                      : selectedEvent.tags || "Not specified"}
+                  </p>
                 </div>
               </div>
               
-              <DialogFooter className="pt-4 gap-2">
-                <Button variant="outline" onClick={() => setShowDetailDialog(false)}>
+              <DialogFooter className="pt-2 gap-2">
+                <Button size="sm" variant="outline" onClick={() => setShowDetailDialog(false)}>
                   Close
                 </Button>
-                <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => {
+                <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => {
                   if (selectedEvent && selectedEvent.users?.id) {
                     window.location.href = `/dashboard/messages?userId=${selectedEvent.users.id}`
                   }
@@ -942,6 +1253,280 @@ export default function DashboardEventsManagePage() {
             </div>
           )}
         </DialogContent>
-      </Dialog>    </div>
+      </Dialog>
+
+      {/* Buy Ticket Dialog */}
+      <Dialog open={showBuyDialog} onOpenChange={setShowBuyDialog}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          {selectedEvent && (
+            <div className="space-y-6">
+              <DialogHeader>
+                <DialogTitle>Get Ticket: {selectedEvent.title}</DialogTitle>
+                <DialogDescription>
+                  Complete the form below to secure your spot.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="relative w-full h-40 rounded-xl overflow-hidden bg-muted">
+                {selectedEvent.thumbnail ? (
+                  <Image src={selectedEvent.thumbnail} alt={selectedEvent.title} fill className="object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center"><Calendar className="w-12 h-12 text-muted-foreground" /></div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-4">
+                  <h4 className="text-white font-bold truncate">{selectedEvent.title}</h4>
+                  <p className="text-white/80 text-xs flex items-center gap-1">
+                    <Calendar className="w-3 h-3" /> {new Date(selectedEvent.event_date).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handlePurchaseTicket} className="space-y-4">
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="attendeeName">Full Name *</Label>
+                    <div className="relative">
+                      <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input 
+                        id="attendeeName" 
+                        className="pl-10" 
+                        placeholder="FLAMMAH" 
+                        value={ticketForm.attendeeName}
+                        onChange={e => setTicketForm({...ticketForm, attendeeName: e.target.value})}
+                        required 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="attendeeEmail">Email Address *</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input 
+                        id="attendeeEmail" 
+                        type="email" 
+                        className="pl-10" 
+                        placeholder="your@email.com" 
+                        value={ticketForm.attendeeEmail}
+                        onChange={e => setTicketForm({...ticketForm, attendeeEmail: e.target.value})}
+                        required 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="attendeePhone">Phone Number</Label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input 
+                          id="attendeePhone" 
+                          className="pl-10" 
+                          placeholder="+234..." 
+                          value={ticketForm.attendeePhone}
+                          onChange={e => setTicketForm({...ticketForm, attendeePhone: e.target.value})}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="attendeeAddress">Address</Label>
+                      <div className="relative">
+                        <Home className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input 
+                          id="attendeeAddress" 
+                          className="pl-10" 
+                          placeholder="Lagos, Nigeria" 
+                          value={ticketForm.attendeeAddress}
+                          onChange={e => setTicketForm({...ticketForm, attendeeAddress: e.target.value})}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-muted/50 rounded-xl space-y-2 border border-border/50">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Ticket Price</span>
+                    <span className="font-bold">{selectedEvent.is_free ? "FREE" : `$${selectedEvent.ticket_price}`}</span>
+                  </div>
+                  {!selectedEvent.is_free && (
+                    <div className="text-xs text-muted-foreground">
+                      {(() => {
+                        const usd = Number(selectedEvent.ticket_price) || 0
+                        const USD_TO_NGN = 1450
+                        const USD_TO_XAF = 605
+                        return (
+                          <span>
+                            NGN {Math.round(usd * USD_TO_NGN).toLocaleString()} • XAF {Math.round(usd * USD_TO_XAF).toLocaleString()}
+                          </span>
+                        )
+                      })()}
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center text-lg font-black border-t border-border/50 pt-2">
+                    <span>Total Amount</span>
+                    <span className="text-primary">{selectedEvent.is_free ? "FREE" : `$${selectedEvent.ticket_price}`}</span>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground">
+                    Note: By purchasing this ticket, you agree to the event's terms and conditions. Please review the event details and refund policy or contact the organizer before completing your purchase. Vibe2gether is not responsible for any refunds or cancellations, all sales are final.
+                  </div>
+                </div>
+
+                <Button type="submit" className="w-full h-12 rounded-xl gradient-bg text-lg font-bold shadow-lg" disabled={purchasing}>
+                  {purchasing ? <Loader2 className="w-5 h-5 animate-spin" /> : (selectedEvent.is_free ? "Get Free Ticket" : "Pay & Get Ticket")}
+                </Button>
+              </form>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Tickets Dialog */}
+      <Dialog open={showTicketsDialog} onOpenChange={setShowTicketsDialog}>
+        <DialogContent className="w-[95vw] max-w-[95vw] sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Ticket Sales Management</DialogTitle>
+            <DialogDescription>
+              Monitor ticket purchases and revenue for your event.
+            </DialogDescription>
+          </DialogHeader>
+
+          {loadingTickets ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+              <Loader2 className="w-10 h-10 animate-spin text-primary" />
+              <p className="text-muted-foreground">Loading ticket data...</p>
+            </div>
+          ) : eventTickets.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
+              <Ticket className="w-16 h-16 text-muted-foreground/30" />
+              <h3 className="text-xl font-bold">No tickets sold yet</h3>
+              <p className="text-muted-foreground max-w-xs">Share your event to start getting attendees!</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Stats Summary */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10">
+                  <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Total Sales</p>
+                  <p className="text-2xl font-black text-primary">₦{totalSales.toFixed(2)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    ${ (totalSales * NGN_TO_USD).toFixed(2) } • XAF {Math.round(totalSales * NGN_TO_XAF).toLocaleString()}
+                  </p>
+                </div>
+                <div className="p-4 rounded-2xl bg-orange-500/5 border border-orange-500/10">
+                  <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Platform Fee (3%)</p>
+                  <p className="text-2xl font-black text-orange-600">-₦{totalFees.toFixed(2)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    -${ (totalFees * NGN_TO_USD).toFixed(2) } • XAF {Math.round(totalFees * NGN_TO_XAF).toLocaleString()}
+                  </p>
+                </div>
+                <div className="p-4 rounded-2xl bg-green-500/5 border border-green-500/10">
+                  <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Net Payout</p>
+                  <p className="text-2xl font-black text-green-600">₦{totalPayout.toFixed(2)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    ${ (totalPayout * NGN_TO_USD).toFixed(2) } • XAF {Math.round(totalPayout * NGN_TO_XAF).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Tickets Table (Desktop) */}
+              <div className="hidden lg:block rounded-2xl border border-border/50 overflow-hidden bg-muted/20">
+                <div className="overflow-x-hidden">
+                  <table className="w-full table-fixed text-sm text-left">
+                    <thead className="bg-muted text-muted-foreground uppercase text-[10px] font-bold">
+                      <tr>
+                        <th className="px-3 py-3 w-[20%]">Attendee</th>
+                        <th className="px-3 py-3 w-[30%]">Contact</th>
+                        <th className="px-3 py-3 w-[18%]">Amount</th>
+                        <th className="px-3 py-3 w-[18%]">Net Payout</th>
+                        <th className="px-3 py-3 w-[14%] text-right">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/30">
+                      {eventTickets.map((ticket) => (
+                        <tr key={ticket.id} className="hover:bg-muted/30 transition-colors">
+                          <td className="px-3 py-3 align-top">
+                            <p className="font-bold">{ticket.attendee_name}</p>
+                            <p className="text-[10px] text-muted-foreground font-mono">{ticket.barcode}</p>
+                          </td>
+                          <td className="px-3 py-3 align-top">
+                            <p className="flex items-start gap-1 break-words">
+                              <Mail className="w-3 h-3 mt-0.5" />
+                              <span className="break-all text-xs">{ticket.attendee_email}</span>
+                            </p>
+                            {ticket.attendee_phone && (
+                              <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                                <Phone className="w-3 h-3" /> {ticket.attendee_phone}
+                              </p>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 align-top font-medium">
+                            ₦{Number(ticket.amount_paid).toFixed(2)}
+                            <p className="text-[11px] text-muted-foreground leading-snug">
+                              ${(Number(ticket.amount_paid) * NGN_TO_USD).toFixed(2)} • XAF {Math.round(Number(ticket.amount_paid) * NGN_TO_XAF).toLocaleString()}
+                            </p>
+                          </td>
+                          <td className="px-3 py-3 align-top text-green-600 font-bold">
+                            ₦{Number(ticket.payout_amount).toFixed(2)}
+                            <p className="text-[11px] text-muted-foreground leading-snug">
+                              ${(Number(ticket.payout_amount) * NGN_TO_USD).toFixed(2)} • XAF {Math.round(Number(ticket.payout_amount) * NGN_TO_XAF).toLocaleString()}
+                            </p>
+                          </td>
+                          <td className="px-3 py-3 text-right text-muted-foreground text-xs align-top whitespace-nowrap">
+                            {new Date(ticket.created_at).toLocaleDateString()}<br/>
+                            {new Date(ticket.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Tickets Cards (Mobile/Tablet) */}
+              <div className="lg:hidden space-y-3">
+                {eventTickets.map((ticket) => (
+                  <div key={ticket.id} className="rounded-2xl border border-border/50 bg-muted/20 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="font-bold">{ticket.attendee_name}</p>
+                        <p className="text-[10px] text-muted-foreground font-mono">{ticket.barcode}</p>
+                      </div>
+                      <div className="text-right text-xs text-muted-foreground">
+                        <div>{new Date(ticket.created_at).toLocaleDateString()}</div>
+                        <div>{new Date(ticket.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 space-y-1 text-sm">
+                      <p className="flex items-center gap-2"><Mail className="w-3 h-3" /> {ticket.attendee_email}</p>
+                      {ticket.attendee_phone && <p className="flex items-center gap-2 text-xs text-muted-foreground"><Phone className="w-3 h-3" /> {ticket.attendee_phone}</p>}
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Amount</p>
+                        <p className="font-semibold">₦{Number(ticket.amount_paid).toFixed(2)}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          ${(Number(ticket.amount_paid) * NGN_TO_USD).toFixed(2)} • XAF {Math.round(Number(ticket.amount_paid) * NGN_TO_XAF).toLocaleString()}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Net Payout</p>
+                        <p className="font-semibold text-green-600">₦{Number(ticket.payout_amount).toFixed(2)}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          ${(Number(ticket.payout_amount) * NGN_TO_USD).toFixed(2)} • XAF {Math.round(Number(ticket.payout_amount) * NGN_TO_XAF).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }

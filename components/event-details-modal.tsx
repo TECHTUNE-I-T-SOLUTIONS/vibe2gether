@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { MapPin, Mail, Phone, Copy, ExternalLink, Loader2, AlertCircle, Calendar, Clock, Users, MessageSquare } from "lucide-react"
+import { MapPin, Mail, Phone, Copy, ExternalLink, Loader2, AlertCircle, Calendar, Clock, Users, MessageSquare, Share2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
@@ -222,7 +222,11 @@ export function EventDetailsModal({ isOpen, onClose, event, creator }: EventDeta
                     </Avatar>
                     <div className="flex-1">
                       <p className="font-semibold">{creator.full_name || "Unknown Organizer"}</p>
-                      <p className="text-sm text-muted-foreground mb-2">{creator.city || "N/A"}, {creator.country || "N/A"}</p>
+                      {(creator.city || creator.country) && (
+                        <p className="text-sm text-muted-foreground mb-2">
+                          {[creator.city, creator.country].filter(Boolean).join(", ")}
+                        </p>
+                      )}
 
                       {hasAccessDetails ? (
                         <div className="space-y-2 text-sm">
@@ -264,7 +268,7 @@ export function EventDetailsModal({ isOpen, onClose, event, creator }: EventDeta
                           <AlertCircle className="h-4 w-4" />
                           <AlertDescription>
                             Price: {priceDisplay}, <br /> 
-                            Message {creator.full_name} to {isRestaurant ? "book a table" : "register"} and get organizer details
+                            Message {creator.full_name} to {isRestaurant ? "book a ticket" : "register"} and get organizer details
                           </AlertDescription>
                         </Alert>
                       )}
@@ -294,6 +298,17 @@ export function EventDetailsModal({ isOpen, onClose, event, creator }: EventDeta
             <Button variant="outline" onClick={onClose}>
               Close
             </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                const url = `${process.env.NEXT_PUBLIC_APP_BASE_URL || window.location.origin}/events?event_id=${event.id}`;
+                navigator.clipboard.writeText(url);
+                toast({ title: "Link Copied", description: "Event link has been copied to clipboard." });
+              }}
+            >
+              <Share2 className="w-4 h-4 mr-2" />
+              Share
+            </Button>
             
             {/* Message Button - Only show if creator exists and user is logged in */}
             {session?.user?.id && creator && creator.id && (
@@ -302,23 +317,24 @@ export function EventDetailsModal({ isOpen, onClose, event, creator }: EventDeta
                 onClick={handleMessageCreator}
               >
                 <MessageSquare className="w-4 h-4" />
-                Message Organizer
+                Message
               </Button>
             )}
 
             {/* Register Button - Payment is handled by organizer */}
             {!session?.user?.id ? (
               <Button className="rounded-full gradient-bg" onClick={() => router.push("/login")}>
-                Login to {isRestaurant ? "Book" : "Register"}
+                Login to {isRestaurant ? "Book Ticket" : "Register"}
               </Button>
             ) : (
               <Button
                 className="rounded-full gradient-bg"
-                onClick={handleRegister}
-                disabled={registering}
+                onClick={() => {
+                  onClose()
+                  router.push("/dashboard/events/manage")
+                }}
               >
-                {registering ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                {isRestaurant ? "Book Table" : "Register Now"}
+                {isRestaurant ? "Book Ticket" : "Book Ticket"}
               </Button>
             )}
           </DialogFooter>
