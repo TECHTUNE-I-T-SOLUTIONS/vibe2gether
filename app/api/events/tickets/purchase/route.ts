@@ -93,79 +93,87 @@ export async function POST(req: NextRequest) {
 
     const thumbnailUrl = event.thumbnail_url || event.thumbnail || "";
 
-    // Generate PDF
-    const pdfBuffer = await generateTicketPDF({
-      eventName: event.title,
-      eventDate: new Date(event.event_date).toLocaleDateString(),
-      eventTime: new Date(event.event_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      venue: event.location_name || "Online / TBD",
-      address: event.location_name || "Not specified",
-      ticketType: event.is_free ? "Free Pass" : "General Access",
-      attendeeName: attendeeName,
-      barcode: barcode,
-      thumbnailUrl: thumbnailUrl
-    });
+    // Generate PDF and send email for free ticket
+    try {
+      console.log("[FREE_TICKET] Generating PDF for:", event.title, "attendee:", attendeeName);
+      const pdfBuffer = await generateTicketPDF({
+        eventName: event.title,
+        eventDate: new Date(event.event_date).toLocaleDateString(),
+        eventTime: new Date(event.event_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        venue: event.location_name || "Online / TBD",
+        address: event.location_name || "Not specified",
+        ticketType: "Free Pass",
+        attendeeName: attendeeName,
+        barcode: barcode,
+        thumbnailUrl: thumbnailUrl
+      });
+      console.log("[FREE_TICKET] PDF generated successfully, size:", pdfBuffer.length);
 
-    // Send Email
-    const emailHtml = `
-      <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; background-color: #1a1a1a; color: #ffffff; border-radius: 12px;">
-        <div style="text-align: center; margin-bottom: 20px;">
-          <h1 style="color: #ffffff; margin: 0;">Vibe2Gether</h1>
-          <p style="color: #4ade80; margin: 5px 0 0 0;">✓ Confirmed</p>
+      const emailHtml = `
+        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; background-color: #1a1a1a; color: #ffffff; border-radius: 12px;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <h1 style="color: #ffffff; margin: 0;">Vibe2Gether</h1>
+            <p style="color: #4ade80; margin: 5px 0 0 0;">✓ Confirmed</p>
+          </div>
+          
+          <h2 style="text-align: center; font-size: 24px; margin-bottom: 20px;">
+            Hi ${attendeeName}, your ticket for<br/>
+            <span style="color: #f97316;">${event.title}</span><br/>
+            is confirmed.
+          </h2>
+
+          ${thumbnailUrl ? `
+            <div style="width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 20px;">
+              <img src="${thumbnailUrl}" alt="Event Flyer" style="width: 100%; height: auto; display: block;" />
+            </div>
+          ` : ""}
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; border-top: 1px solid #333; border-bottom: 1px solid #333; padding: 15px 0;">
+            <div>
+              <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Date</p>
+              <p style="margin: 5px 0 0 0; font-weight: bold;">${new Date(event.event_date).toLocaleDateString()}</p>
+            </div>
+            <div>
+              <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Time</p>
+              <p style="margin: 5px 0 0 0; font-weight: bold;">${new Date(event.event_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+            </div>
+            <div>
+              <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Venue</p>
+              <p style="margin: 5px 0 0 0; font-weight: bold;">${event.location_name || "Not specified"}</p>
+            </div>
+            <div>
+              <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Type</p>
+              <p style="margin: 5px 0 0 0; font-weight: bold;">Free Pass</p>
+            </div>
+          </div>
+
+          <div style="background: #222; padding: 15px; border-radius: 8px;">
+            <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Order #${barcode}</p>
+            <h3 style="margin: 10px 0;">${event.title}</h3>
+            <p style="color: #aaa; font-size: 14px; line-height: 1.5;">${event.description || ""}</p>
+            <p style="color: #888; font-size: 12px; margin-top: 15px;">Your official ticket PDF is attached to this email. Please present it at the venue.</p>
+          </div>
         </div>
-        
-        <h2 style="text-align: center; font-size: 24px; margin-bottom: 20px;">
-          Hi ${attendeeName}, your ticket for<br/>
-          <span style="color: #f97316;">${event.title}</span><br/>
-          is confirmed.
-        </h2>
+      `;
 
-        ${thumbnailUrl ? `
-          <div style="width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 20px;">
-            <img src="${thumbnailUrl}" alt="Event Flyer" style="width: 100%; height: auto; display: block;" />
-          </div>
-        ` : ""}
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; border-top: 1px solid #333; border-bottom: 1px solid #333; padding: 15px 0;">
-          <div>
-            <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Date</p>
-            <p style="margin: 5px 0 0 0; font-weight: bold;">${new Date(event.event_date).toLocaleDateString()}</p>
-          </div>
-          <div>
-            <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Time</p>
-            <p style="margin: 5px 0 0 0; font-weight: bold;">${new Date(event.event_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-          </div>
-          <div>
-            <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Venue</p>
-            <p style="margin: 5px 0 0 0; font-weight: bold;">${event.location_name || "Not specified"}</p>
-          </div>
-          <div>
-            <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Type</p>
-            <p style="margin: 5px 0 0 0; font-weight: bold;">${event.is_free ? "Free Pass" : "General Access"}</p>
-          </div>
-        </div>
-
-        <div style="background: #222; padding: 15px; border-radius: 8px;">
-          <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Order #${barcode}</p>
-          <h3 style="margin: 10px 0;">${event.title}</h3>
-          <p style="color: #aaa; font-size: 14px; line-height: 1.5;">${event.description || ""}</p>
-          <p style="color: #888; font-size: 12px; margin-top: 15px;">Your official ticket PDF is attached to this email. Please present it at the venue.</p>
-        </div>
-      </div>
-    `;
-
-    await sendTicketEmail({
-      to: attendeeEmail,
-      subject: `Your Ticket for ${event.title} - Vibe2Gether`,
-      html: emailHtml,
-      attachments: [
-        {
-          filename: `ticket-${event.title.replace(/\s+/g, '-').toLowerCase()}.pdf`,
-          content: pdfBuffer,
-          contentType: "application/pdf"
-        }
-      ]
-    });
+      console.log("[FREE_TICKET] Sending email to:", attendeeEmail);
+      const emailResult = await sendTicketEmail({
+        to: attendeeEmail,
+        subject: `Your Free Ticket for ${event.title} - Vibe2Gether`,
+        html: emailHtml,
+        attachments: [
+          {
+            filename: `ticket-${event.title.replace(/\s+/g, '-').toLowerCase()}.pdf`,
+            content: pdfBuffer,
+            contentType: "application/pdf"
+          }
+        ]
+      });
+      console.log("[FREE_TICKET] Email send result:", JSON.stringify(emailResult));
+    } catch (emailError) {
+      // Log the error but don't fail the ticket creation
+      console.error("[FREE_TICKET] Failed to generate PDF or send email:", emailError);
+    }
 
     return NextResponse.json({ success: true, ticketId: ticket.id });
   } catch (error: any) {

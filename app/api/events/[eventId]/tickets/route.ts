@@ -38,6 +38,7 @@ export async function GET(
       .from("event_tickets")
       .select("*")
       .eq("event_id", eventId)
+      .eq("status", "paid")
       .order("created_at", { ascending: false });
 
     if (ticketsError) throw ticketsError;
