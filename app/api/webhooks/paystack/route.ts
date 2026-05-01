@@ -180,6 +180,8 @@ export async function POST(request: NextRequest) {
               .single()
 
             if (event) {
+              const thumbnailUrl = event.thumbnail_url || event.thumbnail || "";
+
               const pdfBuffer = await generateTicketPDF({
                 eventName: event.title,
                 eventDate: new Date(event.event_date).toLocaleDateString(),
@@ -189,21 +191,53 @@ export async function POST(request: NextRequest) {
                 ticketType: event.is_free ? "Free Pass" : "General Access",
                 attendeeName: ticket.attendee_name,
                 barcode: ticket.barcode,
+                thumbnailUrl: thumbnailUrl
               })
 
               const emailHtml = `
-                <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee;">
-                  <h1 style="color: #6366f1;">Vibe2Gether Event Ticket</h1>
-                  <p>Hi ${ticket.attendee_name},</p>
-                  <p>Thank you for purchasing a ticket for <strong>${event.title}</strong>!</p>
-                  <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                    <p><strong>Event:</strong> ${event.title}</p>
-                    <p><strong>Date:</strong> ${new Date(event.event_date).toLocaleDateString()}</p>
-                    <p><strong>Time:</strong> ${new Date(event.event_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
-                    <p><strong>Venue:</strong> ${event.location_name || "Not specified"}</p>
+                <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; background-color: #1a1a1a; color: #ffffff; border-radius: 12px;">
+                  <div style="text-align: center; margin-bottom: 20px;">
+                    <h1 style="color: #ffffff; margin: 0;">Vibe2Gether</h1>
+                    <p style="color: #4ade80; margin: 5px 0 0 0;">✓ Confirmed</p>
                   </div>
-                  <p>Your official ticket PDF is attached to this email. Please present it at the venue for scanning.</p>
-                  <p>Best regards,<br/>The Vibe2Gether Team</p>
+                  
+                  <h2 style="text-align: center; font-size: 24px; margin-bottom: 20px;">
+                    Hi ${ticket.attendee_name}, your ticket for<br/>
+                    <span style="color: #f97316;">${event.title}</span><br/>
+                    is confirmed.
+                  </h2>
+
+                  ${thumbnailUrl ? `
+                    <div style="width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 20px;">
+                      <img src="${thumbnailUrl}" alt="Event Flyer" style="width: 100%; height: auto; display: block;" />
+                    </div>
+                  ` : ""}
+
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; border-top: 1px solid #333; border-bottom: 1px solid #333; padding: 15px 0;">
+                    <div>
+                      <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Date</p>
+                      <p style="margin: 5px 0 0 0; font-weight: bold;">${new Date(event.event_date).toLocaleDateString()}</p>
+                    </div>
+                    <div>
+                      <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Time</p>
+                      <p style="margin: 5px 0 0 0; font-weight: bold;">${new Date(event.event_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                    </div>
+                    <div>
+                      <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Venue</p>
+                      <p style="margin: 5px 0 0 0; font-weight: bold;">${event.location_name || "Not specified"}</p>
+                    </div>
+                    <div>
+                      <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Type</p>
+                      <p style="margin: 5px 0 0 0; font-weight: bold;">${event.is_free ? "Free Pass" : "General Access"}</p>
+                    </div>
+                  </div>
+
+                  <div style="background: #222; padding: 15px; border-radius: 8px;">
+                    <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Order #${ticket.barcode}</p>
+                    <h3 style="margin: 10px 0;">${event.title}</h3>
+                    <p style="color: #aaa; font-size: 14px; line-height: 1.5;">${event.description || ""}</p>
+                    <p style="color: #888; font-size: 12px; margin-top: 15px;">Your official ticket PDF is attached to this email. Please present it at the venue.</p>
+                  </div>
                 </div>
               `
 

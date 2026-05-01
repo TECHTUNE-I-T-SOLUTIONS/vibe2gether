@@ -14,6 +14,7 @@ interface TicketData {
   ticketType: string;
   attendeeName: string;
   barcode: string;
+  thumbnailUrl?: string;
 }
 
 export async function generateTicketPDF(data: TicketData): Promise<Buffer> {
@@ -49,10 +50,23 @@ export async function generateTicketPDF(data: TicketData): Promise<Buffer> {
   doc.setFont("helvetica", "normal");
   doc.setTextColor(100);
 
+  // Fetch and add Thumbnail
+  let startY = 75;
+  if (data.thumbnailUrl) {
+    try {
+      const response = await fetch(data.thumbnailUrl);
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const base64 = `data:image/jpeg;base64,${buffer.toString("base64")}`;
+      doc.addImage(base64, "JPEG", 20, 65, 170, 95);
+      startY = 175; // Shift the rest down
+    } catch (e) {
+      console.error("Failed to load thumbnail for PDF:", e);
+    }
+  }
+
   // Content Section
-  const startY = 75;
   const leftColX = 20;
-  const rightColX = 140;
 
   doc.text(`Event: ${data.eventName}`, leftColX, startY);
   doc.text(`Date: ${data.eventDate}`, leftColX, startY + 10);
