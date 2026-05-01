@@ -16,7 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
-import { Loader2, Plus, Upload, Calendar, Clock, MapPin, Users, Trash2, LogOut, MessageCircle, Ticket, Eye, Search, Phone, Mail, Home } from "lucide-react"
+import { Loader2, Plus, Upload, Calendar, Clock, MapPin, Users, Trash2, LogOut, MessageCircle, Ticket, Eye, Search, Phone, Mail, Home, Download } from "lucide-react"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { createClient } from "@/lib/supabase/client"
 
@@ -422,6 +422,34 @@ export default function DashboardEventsManagePage() {
     } finally {
       setLoadingTickets(false)
     }
+  }
+
+  const downloadTicketsCSV = () => {
+    if (!eventTickets || eventTickets.length === 0) return
+
+    const headers = ["Attendee Name", "Email", "Phone", "Address", "Amount Paid (NGN)", "Net Payout (NGN)", "Date", "Barcode"]
+    const rows = eventTickets.map(ticket => [
+      `"${(ticket.attendee_name || '').replace(/"/g, '""')}"`,
+      `"${(ticket.attendee_email || '').replace(/"/g, '""')}"`,
+      `"${(ticket.attendee_phone || '').replace(/"/g, '""')}"`,
+      `"${(ticket.attendee_address || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`,
+      ticket.amount_paid || 0,
+      ticket.payout_amount || 0,
+      `"${new Date(ticket.created_at).toLocaleString()}"`,
+      `"${ticket.barcode || ''}"`
+    ])
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + headers.join(",") + "\n" 
+      + rows.map(e => e.join(",")).join("\n")
+
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement("a")
+    link.setAttribute("href", encodedUri)
+    link.setAttribute("download", `tickets_${selectedEvent?.title?.replace(/\s+/g, '_') || 'event'}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   async function handlePurchaseTicket(e: React.FormEvent) {
@@ -1392,10 +1420,20 @@ export default function DashboardEventsManagePage() {
       <Dialog open={showTicketsDialog} onOpenChange={setShowTicketsDialog}>
         <DialogContent className="w-[95vw] max-w-[95vw] sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Ticket Sales Management</DialogTitle>
-            <DialogDescription>
-              Monitor ticket purchases and revenue for your event.
-            </DialogDescription>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <DialogTitle>Ticket Sales Management</DialogTitle>
+                <DialogDescription>
+                  Monitor ticket purchases and revenue for your event.
+                </DialogDescription>
+              </div>
+              {eventTickets && eventTickets.length > 0 && (
+                <Button variant="outline" size="sm" onClick={downloadTicketsCSV} className="w-full sm:w-auto">
+                  <Download className="w-4 h-4 mr-2" />
+                  Export as Excel
+                </Button>
+              )}
+            </div>
           </DialogHeader>
 
           {loadingTickets ? (
