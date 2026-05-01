@@ -135,8 +135,17 @@ export function EventDetailsModal({ isOpen, onClose, event, creator }: EventDeta
   }
 
   const isRestaurant = event?.type === "restaurant" || event?.type === "Food & Drink" || event?.category === "restaurant" || "Food & Drink" || event?.title.toLowerCase().includes("restaurant")
-  const bookingPrice = event?.ticket_price || 1500
-  const priceDisplay = event?.currency === "NGN" ? `₦${bookingPrice.toLocaleString()}` : `$${bookingPrice}`
+  const bookingPrice = event?.ticket_price || 0
+  const USD_TO_NGN = 1450
+  const USD_TO_XAF = 605
+  const priceDisplay = event?.ticket_price ? (
+    <div className="flex flex-col items-end">
+      <span>₦{Math.round(bookingPrice * USD_TO_NGN).toLocaleString()}</span>
+      <span className="text-sm text-muted-foreground font-normal">
+        ${bookingPrice} • XAF {Math.round(bookingPrice * USD_TO_XAF).toLocaleString()}
+      </span>
+    </div>
+  ) : "Free"
   const eventDate = event ? new Date(event.event_date) : new Date()
 
   if (!event) {
@@ -206,7 +215,7 @@ export function EventDetailsModal({ isOpen, onClose, event, creator }: EventDeta
                 <span className="font-semibold">
                   {isRestaurant ? "Booking Fee:" : "Ticket Price:"}
                 </span>
-                <span className="text-2xl font-bold gradient-text">{priceDisplay}</span>
+                <div className="text-2xl font-bold gradient-text">{priceDisplay}</div>
               </div>
             )}
 
@@ -267,7 +276,7 @@ export function EventDetailsModal({ isOpen, onClose, event, creator }: EventDeta
                         <Alert className="border-amber-200 bg-amber-50 text-amber-900">
                           <AlertCircle className="h-4 w-4" />
                           <AlertDescription>
-                            Price: {priceDisplay}, <br /> 
+                            Price: {event?.ticket_price ? `₦${Math.round(bookingPrice * USD_TO_NGN).toLocaleString()}` : "Free"}, <br /> 
                             Message {creator.full_name} to {isRestaurant ? "book a ticket" : "register"} and get organizer details
                           </AlertDescription>
                         </Alert>

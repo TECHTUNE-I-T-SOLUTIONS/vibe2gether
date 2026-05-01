@@ -162,7 +162,7 @@ export default function EventsAdminPage() {
           location: newEvent.location,
           capacity: newEvent.capacity ? parseInt(newEvent.capacity) : null,
           is_free: newEvent.is_free,
-          ticket_price: !newEvent.is_free ? parseFloat(newEvent.ticketPrice) : null,
+          ticket_price: !newEvent.is_free ? parseFloat((parseFloat(newEvent.ticketPrice) / 1450).toFixed(2)) : null,
           organizer_name: newEvent.organizer_name,
           organizer_contact: newEvent.organizer_contact,
           tags: newEvent.tags.split(",").map((t) => t.trim()),
@@ -248,7 +248,7 @@ export default function EventsAdminPage() {
           location_name: target.location,
           capacity: target.capacity ? parseInt(target.capacity) : null,
           is_free: target.is_free,
-          ticket_price: !target.is_free ? parseFloat(target.ticket_price) : null,
+          ticket_price: !target.is_free ? parseFloat((parseFloat(target.ticket_price) / 1450).toFixed(2)) : null,
           organizer_name: target.organizer_name,
           organizer_contact: target.organizer_contact,
           tags: Array.isArray(target?.tags) ? target.tags : (typeof target.tags === "string" ? target.tags.split(",").map((t: string) => t.trim()) : []),
@@ -377,7 +377,7 @@ export default function EventsAdminPage() {
       <Card className="overflow-hidden hover:shadow-lg transition-shadow">
         <div className="relative h-48 bg-muted">
           {thumbnailUrl ? (
-            <Image src={thumbnailUrl} alt={event.title} fill className="object-cover" loading="eager" />
+            <Image loading="eager" src={thumbnailUrl} alt={event.title} fill className="object-cover" loading="eager" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-muted-foreground">No thumbnail</div>
           )}
@@ -403,8 +403,8 @@ export default function EventsAdminPage() {
                     const USD_TO_XAF = 605
                     return (
                       <>
-                        <span className="font-semibold">${usd}</span>
-                        <span className="text-xs text-muted-foreground">NGN {Math.round(usd * USD_TO_NGN).toLocaleString()} • XAF {Math.round(usd * USD_TO_XAF).toLocaleString()}</span>
+                        <span className="font-semibold">₦{Math.round(usd * USD_TO_NGN).toLocaleString()}</span>
+                        <span className="text-xs text-muted-foreground">${usd} • XAF {Math.round(usd * USD_TO_XAF).toLocaleString()}</span>
                       </>
                     )
                   })()}
@@ -622,7 +622,7 @@ export default function EventsAdminPage() {
               </div>
               {!newEvent.is_free && (
                 <div>
-                  <Label>Ticket Price</Label>
+                  <Label>Ticket Price (₦)</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -630,6 +630,11 @@ export default function EventsAdminPage() {
                     value={newEvent.ticketPrice}
                     onChange={(e) => setNewEvent({ ...newEvent, ticketPrice: e.target.value })}
                   />
+                  {newEvent.ticketPrice && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Equivalent: ${(parseFloat(newEvent.ticketPrice) / 1450).toFixed(2)}
+                    </p>
+                  )}
                 </div>
               )}
               <div className="grid grid-cols-2 gap-4">

@@ -153,14 +153,18 @@ export default function EventsPage() {
   const formatPrice = (event: any) => {
     if (!event?.ticket_price || event?.is_free) return "Free"
     
-    // Get currency from event (NGN or USD)
-    const currency = event.currency || "USD"
     const price = event.ticket_price
+    const USD_TO_NGN = 1450
+    const USD_TO_XAF = 605
     
-    if (currency === "NGN") {
-      return `₦${price.toLocaleString()}`
-    }
-    return `$${price}`
+    return (
+      <div className="flex flex-col items-end">
+        <span>₦{Math.round(price * USD_TO_NGN).toLocaleString()}</span>
+        <span className="text-[10px] text-muted-foreground font-normal">
+          ${price} • XAF {Math.round(price * USD_TO_XAF).toLocaleString()}
+        </span>
+      </div>
+    )
   }
 
   return (
@@ -342,7 +346,7 @@ export default function EventsPage() {
                           </div>
                           <div className="flex items-center gap-3">
                             {!event.is_free && event.ticket_price ? (
-                              <span className="font-bold gradient-text">{formatPrice(event)}</span>
+                              <div className="font-bold gradient-text">{formatPrice(event)}</div>
                             ) : (
                               <Badge variant="secondary">Free</Badge>
                             )}

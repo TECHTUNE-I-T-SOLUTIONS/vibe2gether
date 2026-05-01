@@ -32,6 +32,7 @@ export default function AdminEventEditModal({ open, onOpenChange, event, onSave,
 
     setLocal({
       ...event,
+      ticket_price: event.ticket_price ? String(Math.round(event.ticket_price * 1450)) : "",
       location: event.location_name ?? event.location,
       tags: Array.isArray(event.tags) ? event.tags.join(", ") : event.tags ?? "",
       newThumbnail: null,
@@ -122,8 +123,13 @@ export default function AdminEventEditModal({ open, onOpenChange, event, onSave,
 
           {!local.is_free && (
             <div>
-              <Label>Ticket Price</Label>
+              <Label>Ticket Price (₦)</Label>
               <Input type="number" step="0.01" value={local.ticket_price || ""} onChange={(e) => setLocal({ ...local, ticket_price: e.target.value })} />
+              {local.ticket_price && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Equivalent: ${(parseFloat(local.ticket_price) / 1450).toFixed(2)}
+                </p>
+              )}
             </div>
           )}
 

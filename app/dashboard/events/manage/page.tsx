@@ -52,7 +52,7 @@ export default function DashboardEventsManagePage() {
   const [purchasing, setPurchasing] = useState(false)
   const [uploading, setUploading] = useState(false)
   const verificationHandledRef = useRef(false)
-  
+
   // Ticket Purchase Form
   const [ticketForm, setTicketForm] = useState({
     attendeeName: "",
@@ -315,7 +315,7 @@ export default function DashboardEventsManagePage() {
           location_name: formData.location,
           capacity: formData.capacity ? parseInt(formData.capacity) : null,
           is_free: formData.isFree,
-          ticket_price: !formData.isFree ? parseFloat(formData.ticketPrice) : null,
+          ticket_price: !formData.isFree ? parseFloat((parseFloat(formData.ticketPrice) / 1450).toFixed(2)) : null,
           organizer_name: formData.organizerName,
           organizer_contact: formData.organizerContact,
           tags: formData.tags.split(",").map(t => t.trim()).filter(Boolean),
@@ -558,6 +558,7 @@ export default function DashboardEventsManagePage() {
                             src={event.thumbnail}
                             alt={event.title}
                             fill
+                            loading="eager"
                             className="object-cover"
                           />
                         ) : (
@@ -720,9 +721,9 @@ export default function DashboardEventsManagePage() {
                                   const USD_TO_XAF = 605
                                   return (
                                     <div>
-                                      <span className="font-medium">${usd}</span>
+                                      <span className="font-medium">₦{Math.round(usd * USD_TO_NGN).toLocaleString()}</span>
                                       <div className="text-[10px] text-muted-foreground">
-                                        NGN {Math.round(usd * USD_TO_NGN).toLocaleString()} • XAF {Math.round(usd * USD_TO_XAF).toLocaleString()}
+                                        ${usd} • XAF {Math.round(usd * USD_TO_XAF).toLocaleString()}
                                       </div>
                                     </div>
                                   )
@@ -736,10 +737,10 @@ export default function DashboardEventsManagePage() {
                           </div>
 
                           <div>
-                          <p className="text-xs md:text-sm text-muted-foreground mt-2">
-                            Note: Unregistering from an event does not guarantee a refund, refunds are very unlikely for events tickets. Please check the event's refund policy or contact the organizer of the event. Vibe2gether is not liable or responsible for any refunds or cancellations, all sales/purchases are final.
-                          </p>
-                        </div>
+                            <p className="text-xs md:text-sm text-muted-foreground mt-2">
+                              Note: Unregistering from an event does not guarantee a refund, refunds are very unlikely for events tickets. Please check the event's refund policy or contact the organizer of the event. Vibe2gether is not liable or responsible for any refunds or cancellations, all sales/purchases are final.
+                            </p>
+                          </div>
 
                           {/* Unregister Button */}
                           <Button
@@ -840,9 +841,9 @@ export default function DashboardEventsManagePage() {
                                       const USD_TO_XAF = 605
                                       return (
                                         <>
-                                          <Badge variant="outline" className="text-xs">${usd}</Badge>
+                                          <Badge variant="outline" className="text-xs">₦{Math.round(usd * USD_TO_NGN).toLocaleString()}</Badge>
                                           <div className="text-[10px] text-muted-foreground mt-1">
-                                            NGN {Math.round(usd * USD_TO_NGN).toLocaleString()} • XAF {Math.round(usd * USD_TO_XAF).toLocaleString()}
+                                            ${usd} • XAF {Math.round(usd * USD_TO_XAF).toLocaleString()}
                                           </div>
                                         </>
                                       )
@@ -860,7 +861,7 @@ export default function DashboardEventsManagePage() {
                             </Button>
                           ) : (
                             <div className="flex gap-2 mt-3">
-                              <Button 
+                              <Button
                                 variant="outline"
                                 className="flex-1 gap-1 text-xs"
                                 onClick={() => {
@@ -871,7 +872,7 @@ export default function DashboardEventsManagePage() {
                                 <Eye className="w-3 h-3" />
                                 Details
                               </Button>
-                              <Button 
+                              <Button
                                 className="flex-1 gap-1 text-xs gradient-bg"
                                 disabled={alreadyPurchased}
                                 onClick={() => {
@@ -1016,7 +1017,7 @@ export default function DashboardEventsManagePage() {
 
                 {!formData.isFree && (
                   <div className="space-y-2">
-                    <Label htmlFor="ticketPrice">Ticket Price ($) *</Label>
+                    <Label htmlFor="ticketPrice">Ticket Price (₦) *</Label>
                     <Input
                       id="ticketPrice"
                       type="number"
@@ -1027,6 +1028,11 @@ export default function DashboardEventsManagePage() {
                       onChange={(e) => setFormData({ ...formData, ticketPrice: e.target.value })}
                       required={!formData.isFree}
                     />
+                    {formData.ticketPrice && (
+                      <p className="text-xs text-muted-foreground">
+                        Equivalent: ${(parseFloat(formData.ticketPrice) / 1450).toFixed(2)} || Xaf {Math.round((parseFloat(formData.ticketPrice) / 1450) * 605).toLocaleString()}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -1083,8 +1089,8 @@ export default function DashboardEventsManagePage() {
                 {thumbnail && (
                   <div className="space-y-2">
                     <div className="w-full aspect-video rounded-lg overflow-hidden bg-muted border border-border">
-                      <img 
-                        src={URL.createObjectURL(thumbnail)} 
+                      <img
+                        src={URL.createObjectURL(thumbnail)}
                         alt="Thumbnail preview"
                         className="w-full h-full object-cover"
                       />
@@ -1127,7 +1133,7 @@ export default function DashboardEventsManagePage() {
               <DialogHeader className="space-y-1">
                 <DialogTitle className="text-base sm:text-lg">{selectedEvent.title}</DialogTitle>
               </DialogHeader>
-              
+
               {selectedEvent.thumbnail && (
                 <div className="w-full aspect-[16/8] sm:aspect-video rounded-lg overflow-hidden bg-muted">
                   <img
@@ -1158,8 +1164,8 @@ export default function DashboardEventsManagePage() {
                           const USD_TO_XAF = 605 // $1 = XAF605 (Central African CFA franc) — update as needed
                           return (
                             <>
-                              <p className="text-sm sm:text-base font-semibold">${usd}</p>
-                              <p className="text-xs text-muted-foreground">₦{Math.round(usd * USD_TO_NGN).toLocaleString()}</p>
+                              <p className="text-sm sm:text-base font-semibold">₦{Math.round(usd * USD_TO_NGN).toLocaleString()}</p>
+                              <p className="text-xs text-muted-foreground">${usd}</p>
                               <p className="text-xs text-muted-foreground">XAF {Math.round(usd * USD_TO_XAF).toLocaleString()}</p>
                             </>
                           )
@@ -1179,7 +1185,7 @@ export default function DashboardEventsManagePage() {
                   </p>
                 )}
               </div>
-              
+
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Description</label>
                 <p className="mt-1 text-sm sm:text-base">{selectedEvent.description}</p>
@@ -1236,7 +1242,7 @@ export default function DashboardEventsManagePage() {
                   </p>
                 </div>
               </div>
-              
+
               <DialogFooter className="pt-2 gap-2">
                 <Button size="sm" variant="outline" onClick={() => setShowDetailDialog(false)}>
                   Close
@@ -1269,7 +1275,7 @@ export default function DashboardEventsManagePage() {
 
               <div className="relative w-full h-40 rounded-xl overflow-hidden bg-muted">
                 {selectedEvent.thumbnail ? (
-                  <Image src={selectedEvent.thumbnail} alt={selectedEvent.title} fill className="object-cover" />
+                  <Image loading="eager" src={selectedEvent.thumbnail} alt={selectedEvent.title} fill className="object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center"><Calendar className="w-12 h-12 text-muted-foreground" /></div>
                 )}
@@ -1287,13 +1293,13 @@ export default function DashboardEventsManagePage() {
                     <Label htmlFor="attendeeName">Full Name *</Label>
                     <div className="relative">
                       <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input 
-                        id="attendeeName" 
-                        className="pl-10" 
-                        placeholder="FLAMMAH" 
+                      <Input
+                        id="attendeeName"
+                        className="pl-10"
+                        placeholder="FLAMMAH"
                         value={ticketForm.attendeeName}
-                        onChange={e => setTicketForm({...ticketForm, attendeeName: e.target.value})}
-                        required 
+                        onChange={e => setTicketForm({ ...ticketForm, attendeeName: e.target.value })}
+                        required
                       />
                     </div>
                   </div>
@@ -1302,14 +1308,14 @@ export default function DashboardEventsManagePage() {
                     <Label htmlFor="attendeeEmail">Email Address *</Label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input 
-                        id="attendeeEmail" 
-                        type="email" 
-                        className="pl-10" 
-                        placeholder="your@email.com" 
+                      <Input
+                        id="attendeeEmail"
+                        type="email"
+                        className="pl-10"
+                        placeholder="your@email.com"
                         value={ticketForm.attendeeEmail}
-                        onChange={e => setTicketForm({...ticketForm, attendeeEmail: e.target.value})}
-                        required 
+                        onChange={e => setTicketForm({ ...ticketForm, attendeeEmail: e.target.value })}
+                        required
                       />
                     </div>
                   </div>
@@ -1319,12 +1325,12 @@ export default function DashboardEventsManagePage() {
                       <Label htmlFor="attendeePhone">Phone Number</Label>
                       <div className="relative">
                         <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input 
-                          id="attendeePhone" 
-                          className="pl-10" 
-                          placeholder="+234..." 
+                        <Input
+                          id="attendeePhone"
+                          className="pl-10"
+                          placeholder="+234..."
                           value={ticketForm.attendeePhone}
-                          onChange={e => setTicketForm({...ticketForm, attendeePhone: e.target.value})}
+                          onChange={e => setTicketForm({ ...ticketForm, attendeePhone: e.target.value })}
                         />
                       </div>
                     </div>
@@ -1332,12 +1338,12 @@ export default function DashboardEventsManagePage() {
                       <Label htmlFor="attendeeAddress">Address</Label>
                       <div className="relative">
                         <Home className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input 
-                          id="attendeeAddress" 
-                          className="pl-10" 
-                          placeholder="Lagos, Nigeria" 
+                        <Input
+                          id="attendeeAddress"
+                          className="pl-10"
+                          placeholder="Lagos, Nigeria"
                           value={ticketForm.attendeeAddress}
-                          onChange={e => setTicketForm({...ticketForm, attendeeAddress: e.target.value})}
+                          onChange={e => setTicketForm({ ...ticketForm, attendeeAddress: e.target.value })}
                         />
                       </div>
                     </div>
@@ -1357,7 +1363,7 @@ export default function DashboardEventsManagePage() {
                         const USD_TO_XAF = 605
                         return (
                           <span>
-                            NGN {Math.round(usd * USD_TO_NGN).toLocaleString()} • XAF {Math.round(usd * USD_TO_XAF).toLocaleString()}
+                            ${usd} • XAF {Math.round(usd * USD_TO_XAF).toLocaleString()}
                           </span>
                         )
                       })()}
@@ -1411,21 +1417,21 @@ export default function DashboardEventsManagePage() {
                   <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Total Sales</p>
                   <p className="text-2xl font-black text-primary">₦{totalSales.toFixed(2)}</p>
                   <p className="text-xs text-muted-foreground">
-                    ${ (totalSales * NGN_TO_USD).toFixed(2) } • XAF {Math.round(totalSales * NGN_TO_XAF).toLocaleString()}
+                    ${(totalSales * NGN_TO_USD).toFixed(2)} • XAF {Math.round(totalSales * NGN_TO_XAF).toLocaleString()}
                   </p>
                 </div>
                 <div className="p-4 rounded-2xl bg-orange-500/5 border border-orange-500/10">
                   <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Platform Fee (3%)</p>
                   <p className="text-2xl font-black text-orange-600">-₦{totalFees.toFixed(2)}</p>
                   <p className="text-xs text-muted-foreground">
-                    -${ (totalFees * NGN_TO_USD).toFixed(2) } • XAF {Math.round(totalFees * NGN_TO_XAF).toLocaleString()}
+                    -${(totalFees * NGN_TO_USD).toFixed(2)} • XAF {Math.round(totalFees * NGN_TO_XAF).toLocaleString()}
                   </p>
                 </div>
                 <div className="p-4 rounded-2xl bg-green-500/5 border border-green-500/10">
                   <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Net Payout</p>
                   <p className="text-2xl font-black text-green-600">₦{totalPayout.toFixed(2)}</p>
                   <p className="text-xs text-muted-foreground">
-                    ${ (totalPayout * NGN_TO_USD).toFixed(2) } • XAF {Math.round(totalPayout * NGN_TO_XAF).toLocaleString()}
+                    ${(totalPayout * NGN_TO_USD).toFixed(2)} • XAF {Math.round(totalPayout * NGN_TO_XAF).toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -1474,7 +1480,7 @@ export default function DashboardEventsManagePage() {
                             </p>
                           </td>
                           <td className="px-3 py-3 text-right text-muted-foreground text-xs align-top whitespace-nowrap">
-                            {new Date(ticket.created_at).toLocaleDateString()}<br/>
+                            {new Date(ticket.created_at).toLocaleDateString()}<br />
                             {new Date(ticket.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </td>
                         </tr>
