@@ -12,7 +12,7 @@ const pressReleases = [
     date: "December 5, 2024",
     title: "Vibe2Gether Reaches 10 Million Users Worldwide",
     excerpt:
-      "The dating platform celebrates a major milestone as it expands into 50 new countries across Asia and Europe.",
+      "The connection platform celebrates a major milestone as it expands into 50 new countries across Asia and Europe.",
   },
   {
     date: "November 20, 2024",

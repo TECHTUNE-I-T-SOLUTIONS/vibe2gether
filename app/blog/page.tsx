@@ -13,7 +13,7 @@ import Image from "next/image"
 import { Search, Clock, User, ArrowRight, Loader2 } from "lucide-react"
 import { getBlogPosts } from "@/lib/supabase/queries"
 
-const categories = ["All", "Relationships", "Dating Tips", "Profile Tips", "Industry", "Self Improvement"]
+const categories = ["All", "Opportunities", "Connection Tips", "Profile Tips", "Industry", "Self Improvement"]
 
 export default function BlogPage() {
   const router = useRouter()
@@ -199,7 +199,7 @@ export default function BlogPage() {
           <div className="container mx-auto px-4 text-center">
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Subscribe to Our Newsletter</h2>
             <p className="text-white/80 mb-8 max-w-xl mx-auto">
-              Get the latest dating tips and relationship advice delivered to your inbox weekly.
+              Get the latest connection tips and opportunities advice delivered to your inbox weekly.
             </p>
             <form className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
               <Input

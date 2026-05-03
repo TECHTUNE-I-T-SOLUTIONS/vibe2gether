@@ -75,7 +75,7 @@ export function ProfileCompletionModal({
         if (response.ok) {
           const data = await response.json()
           const user = data.user
-          
+
           const userData = {
             displayName: user.display_name || "",
             bio: user.bio || "",
@@ -127,7 +127,7 @@ export function ProfileCompletionModal({
 
     try {
       setSaving(true)
-      
+
       const [city, country] = formData.city.includes(',')
         ? formData.city.split(',').map(s => s.trim())
         : [formData.city, formData.country]
@@ -315,8 +315,8 @@ export function ProfileCompletionModal({
                             <SelectValue placeholder="Select preference" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="relationship">Relationship</SelectItem>
-                            <SelectItem value="casual-dating">Casual Dating</SelectItem>
+                            <SelectItem value="relationship">Connections</SelectItem>
+                            <SelectItem value="casual-dating">Casual Connections</SelectItem>
                             <SelectItem value="friendship">Friendship</SelectItem>
                             <SelectItem value="networking">Networking</SelectItem>
                             <SelectItem value="not-sure">Not Sure Yet</SelectItem>

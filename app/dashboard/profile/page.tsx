@@ -142,7 +142,7 @@ export default function ProfilePage() {
       try {
         setPostsLoading(true)
         if (!user?.id) return
-        
+
         const response = await fetch(`/api/posts?userId=${user.id}&limit=100`)
         if (response.ok) {
           const data = await response.json()
@@ -231,7 +231,7 @@ export default function ProfilePage() {
 
     try {
       setUploading(true)
-      
+
       // Parse location
       const [city, country] = formData.city.includes(',')
         ? formData.city.split(',').map(s => s.trim())
@@ -356,9 +356,9 @@ export default function ProfilePage() {
                 <X className="w-4 h-4 mr-1" />
                 Cancel
               </Button>
-              <Button 
-                size="sm" 
-                className="rounded-full gradient-bg flex-1 sm:flex-none" 
+              <Button
+                size="sm"
+                className="rounded-full gradient-bg flex-1 sm:flex-none"
                 onClick={handleSaveProfile}
                 disabled={uploading}
               >
@@ -641,18 +641,18 @@ export default function ProfilePage() {
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <Label>Full Name</Label>
-                    <Input 
-                      value={user.full_name || ""} 
-                      disabled={true} 
-                      className="mt-1.5" 
+                    <Input
+                      value={user.full_name || ""}
+                      disabled={true}
+                      className="mt-1.5"
                     />
                   </div>
                   <div>
                     <Label>Display Name</Label>
-                    <Input 
+                    <Input
                       value={formData.displayName}
                       onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
-                      className="mt-1.5" 
+                      className="mt-1.5"
                     />
                   </div>
                 </div>
@@ -662,11 +662,11 @@ export default function ProfilePage() {
                     <Label>Location (City, Country)</Label>
                     <div className="relative mt-1.5">
                       <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                      <Input 
+                      <Input
                         value={formData.city}
                         onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                         placeholder="e.g., Lagos, Nigeria"
-                        className="pl-10" 
+                        className="pl-10"
                       />
                     </div>
                   </div>
@@ -674,11 +674,11 @@ export default function ProfilePage() {
                     <Label>Birthday</Label>
                     <div className="relative mt-1.5">
                       <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                      <Input 
-                        type="date" 
-                        value={formData.dateOfBirth} 
+                      <Input
+                        type="date"
+                        value={formData.dateOfBirth}
                         onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
-                        className="pl-10" 
+                        className="pl-10"
                       />
                     </div>
                   </div>
@@ -707,8 +707,8 @@ export default function ProfilePage() {
                         <SelectValue placeholder="Select what you're looking for" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="relationship">Serious Relationship</SelectItem>
-                        <SelectItem value="casual">Casual Dating</SelectItem>
+                        <SelectItem value="relationship">Serious Connections</SelectItem>
+                        <SelectItem value="casual">Casual Connections</SelectItem>
                         <SelectItem value="friendship">Friendship</SelectItem>
                         <SelectItem value="networking">Networking</SelectItem>
                         <SelectItem value="not-sure">Not Sure Yet</SelectItem>
@@ -792,7 +792,7 @@ export default function ProfilePage() {
         {/* Posts Grid Section */}
         <div className="mt-12 mb-8">
           <h2 className="text-2xl font-black mb-6">Your Posts</h2>
-          
+
           {postsLoading ? (
             <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
               {[1, 2, 3, 4, 5, 6].map((i) => (

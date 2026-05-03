@@ -12,7 +12,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const { matchId, status } = await request.json()
-    
+
     if (!matchId || !status) {
       console.error("[PATCH /api/matches/status] Missing matchId or status")
       return NextResponse.json(
@@ -29,7 +29,7 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    console.log(`[PATCH /api/matches/status] Updating match ${matchId} to status: ${status}`)
+    console.log(`[PATCH /api/matches/status] Updating connect ${matchId} to status: ${status}`)
 
     const supabase = await createClient()
 

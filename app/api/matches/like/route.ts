@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       .eq("id", matchId)
 
     if (updateError) {
-      console.error("[POST /api/matches/like] Error updating match:", updateError)
+      console.error("[POST /api/matches/like] Error updating connection:", updateError)
       throw updateError
     }
 
