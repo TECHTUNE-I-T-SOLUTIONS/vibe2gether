@@ -527,7 +527,7 @@ export default function DashboardPage() {
               <CardTitle>{t("Your Connections")}</CardTitle>
               <Link href="/dashboard/matches">
                 <Button variant="ghost" size="sm" className="text-primary">
-                  View All
+                  All
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </Link>
