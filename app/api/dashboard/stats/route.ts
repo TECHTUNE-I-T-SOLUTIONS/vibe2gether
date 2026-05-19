@@ -151,14 +151,14 @@ export async function POST() {
     const stats = [
       {
         icon: "eye",
-        label: "totalViews",
+        label: "total Views",
         value: totalViews.toString(),
         trend: viewsTrend,
         coins: 0,
       },
       {
         icon: "heart",
-        label: "totalLikes",
+        label: "total Likes",
         value: totalLikes.toString(),
         trend: likesTrend,
         coins: 0,
@@ -171,15 +171,15 @@ export async function POST() {
         coins: 0,
       },
       {
-        icon: "matches",
-        label: "yourMatches",
+        icon: "connections",
+        label: "your Connections",
         value: (savedOppsCount || 0).toString(),
         trend: "+0%",
         coins: 0,
       },
       {
         icon: "coins",
-        label: "coinsEarned",
+        label: "coins Earned",
         value: (user.coins_balance || 0).toString(),
         trend: "+0%",
         coins: 0,

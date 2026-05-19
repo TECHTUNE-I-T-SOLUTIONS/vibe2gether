@@ -82,20 +82,20 @@ export default function MatchesPage() {
 
         // Fetch all matches using API
         const matchesResponse = await fetch("/api/matches/user")
-        if (!matchesResponse.ok) throw new Error("Failed to fetch matches")
+        if (!matchesResponse.ok) throw new Error("Failed to fetch connections")
         const matchesData = await matchesResponse.json()
         setActiveMatches(matchesData.matches || [])
 
         // Fetch potential matches using API
         const potentialResponse = await fetch("/api/matches/potential")
-        if (!potentialResponse.ok) throw new Error("Failed to fetch potential matches")
+        if (!potentialResponse.ok) throw new Error("Failed to fetch potential connections")
         const potentialData = await potentialResponse.json()
         setPotentialMatches(potentialData.potentialMatches || [])
       } catch (err) {
-        console.error("Failed to load matches:", err)
+        console.error("Failed to load connections:", err)
         toast({
           title: "Error",
-          description: "Failed to load matches",
+          description: "Failed to load connections",
           variant: "destructive",
         })
       } finally {
@@ -114,7 +114,7 @@ export default function MatchesPage() {
         body: JSON.stringify({ matchId, status: "accepted" }),
       })
 
-      if (!response.ok) throw new Error("Failed to accept match")
+      if (!response.ok) throw new Error("Failed to accept connection")
 
       setActiveMatches((prev) =>
         prev.map((m) => (m.id === matchId ? { ...m, status: "accepted" } : m))
@@ -125,7 +125,7 @@ export default function MatchesPage() {
         description: "You can now message each other",
       })
     } catch (err) {
-      console.error("Failed to accept match:", err)
+      console.error("Failed to accept connection:", err)
       toast({
         title: "Error",
         description: "Failed to accept vibe",
@@ -142,7 +142,7 @@ export default function MatchesPage() {
         body: JSON.stringify({ matchId, status: "rejected" }),
       })
 
-      if (!response.ok) throw new Error("Failed to reject match")
+      if (!response.ok) throw new Error("Failed to reject connection")
 
       setActiveMatches((prev) => prev.filter((m) => m.id !== matchId))
 
@@ -151,7 +151,7 @@ export default function MatchesPage() {
         description: "This vibe request has been declined",
       })
     } catch (err) {
-      console.error("Failed to reject match:", err)
+      console.error("Failed to reject connection:", err)
       toast({
         title: "Error",
         description: "Failed to decline vibe",
@@ -168,7 +168,7 @@ export default function MatchesPage() {
     if (!user) return
     try {
       console.log(
-        `[Matches Page] Creating match for user ${match.id} with compatibility ${match.compatibilityScore}%`
+        `[Matches Page] Creating connection for user ${match.id} with compatibility ${match.compatibilityScore}%`
       )
 
       const response = await fetch("/api/matches", {
@@ -182,13 +182,13 @@ export default function MatchesPage() {
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || "Failed to create match")
+        throw new Error(error.error || "Failed to create connection")
       }
 
       const newMatch = await response.json()
-      console.log("[Matches Page] Match created successfully:", newMatch.matchId)
+      console.log("[Matches Page] Connection created successfully:", newMatch.matchId)
 
-      // Remove from potential matches
+      // Remove from potential connections
       setPotentialMatches((prev) => prev.filter((m) => m.id !== match.id))
 
       toast({
@@ -196,7 +196,7 @@ export default function MatchesPage() {
         description: "They'll see your request and can accept it",
       })
     } catch (err) {
-      console.error("[Matches Page] Error creating match:", err)
+      console.error("[Matches Page] Error creating connection:", err)
       toast({
         title: "Error",
         description: "Failed to create vibe",
@@ -235,7 +235,7 @@ export default function MatchesPage() {
         </button>
         <button
           onClick={() => {
-            if (!checkPremium("View Matches")) {
+            if (!checkPremium("View Vibes")) {
               return
             }
             setTab("potential")

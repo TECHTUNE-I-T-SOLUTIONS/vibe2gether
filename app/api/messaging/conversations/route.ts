@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       .order("last_message_at", { ascending: false, nullsFirst: false })
 
     if (matchesError) {
-      console.error("[GET /api/messaging/conversations] Error fetching matches:", matchesError)
+      console.error("[GET /api/messaging/conversations] Error fetching connections:", matchesError)
       throw matchesError
     }
 

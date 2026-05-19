@@ -108,7 +108,7 @@ export async function GET(request: Request) {
       .order("last_message_at", { ascending: false })
 
     if (matchesError) {
-      console.error("Error fetching matches:", matchesError)
+      console.error("Error fetching connections:", matchesError)
       return Response.json({ error: "Failed to fetch conversations" }, { status: 500 })
     }
 

@@ -259,7 +259,7 @@ export function DashboardHeader() {
           <Link href="/dashboard/profile">
             <div className="relative">
               <Avatar className="w-9 h-9 ring-2 ring-primary/20 cursor-pointer hover:ring-primary transition-all">
-                <AvatarImage src={user?.profile_picture || "/man-avatar-happy.jpg"} />
+                <AvatarImage src={user?.profile_picture || "https://img.icons8.com/?size=100&id=7820&format=png&color=E0522D"} />
                 <AvatarFallback>{user?.display_name?.substring(0, 2).toUpperCase() || "U"}</AvatarFallback>
               </Avatar>
               {user?.is_premium && (

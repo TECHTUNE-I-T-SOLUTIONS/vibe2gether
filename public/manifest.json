@@ -57,9 +57,9 @@
       ]
     },
     {
-      "name": "My Matches",
-      "short_name": "Matches",
-      "description": "View your matches",
+      "name": "My connections",
+      "short_name": "connections",
+      "description": "View your connections",
       "url": "/dashboard/matches",
       "icons": [
         {

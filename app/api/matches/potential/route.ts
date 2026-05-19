@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log(`[GET /api/matches/potential] Fetching potential matches for user ${session.user.id}`)
+    console.log(`[GET /api/matches/potential] Fetching potential Connections for user ${session.user.id}`)
 
     const supabase = await createClient()
 
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
       .or(`user1_id.eq.${session.user.id},user2_id.eq.${session.user.id}`)
 
     if (matchError) {
-      console.error("[GET /api/matches/potential] Error fetching existing matches:", matchError)
+      console.error("[GET /api/matches/potential] Error fetching existing Connections:", matchError)
       throw matchError
     }
 
@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
     })
 
     console.log(
-      `[GET /api/matches/potential] Excluding ${excludedIds.size} user IDs from potential matches`
+      `[GET /api/matches/potential] Excluding ${excludedIds.size} user IDs from potential Connections`
     )
 
     // Get all active users except current user and already matched
@@ -141,7 +141,7 @@ export async function GET(request: NextRequest) {
     )
 
     console.log(
-      `[GET /api/matches/potential] Found ${sorted.length} potential matches`
+      `[GET /api/matches/potential] Found ${sorted.length} potential connections`
     )
 
     return NextResponse.json({

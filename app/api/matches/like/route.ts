@@ -31,8 +31,8 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (matchError || !match) {
-      console.error("[POST /api/matches/like] Match not found:", matchError)
-      return NextResponse.json({ error: "Match not found" }, { status: 404 })
+      console.error("[POST /api/matches/like] Connection not found:", matchError)
+      return NextResponse.json({ error: "Connection not found" }, { status: 404 })
     }
 
     // Determine the other user
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     // Check if match is already liked/active
     if (match.status === "active") {
-      console.log(`[POST /api/matches/like] Match already active`)
+      console.log(`[POST /api/matches/like] Connection already active`)
       return NextResponse.json({
         success: true,
         message: "Match already active",
@@ -66,19 +66,19 @@ export async function POST(request: NextRequest) {
     await supabase.from("notifications").insert({
       user_id: otherUserId,
       type: "match_accepted",
-      title: "Match Accepted!",
-      message: `${session.user.name} accepted your match`,
+      title: "Connection Accepted!",
+      message: `${session.user.name} accepted your connection request!`,
       actor_id: userId,
       reference_id: matchId,
       reference_type: "match",
       action_url: `/dashboard/matches`,
     })
 
-    console.log(`[POST /api/matches/like] Match ${matchId} accepted successfully`)
+    console.log(`[POST /api/matches/like] Connection ${matchId} accepted successfully`)
 
     return NextResponse.json({
       success: true,
-      message: "Match accepted",
+      message: "Connection accepted",
       status: "active",
       otherUserId,
     })

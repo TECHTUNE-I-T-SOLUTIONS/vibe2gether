@@ -303,7 +303,7 @@ export default function NotificationSettingsPage() {
             { key: "likes_notifications", label: "Likes", description: "When someone likes your post" },
             { key: "comments_notifications", label: "Comments", description: "When someone comments on your post" },
             { key: "messages_notifications", label: "Messages", description: "When you receive a new message" },
-            { key: "match_notifications", label: "Matches", description: "When you match with someone" },
+            { key: "match_notifications", label: "Connect", description: "When you connect with someone" },
             { key: "event_notifications", label: "Events", description: "Event updates and reminders" },
           ].map((item) => (
             <div key={item.key} className="flex items-center justify-between">

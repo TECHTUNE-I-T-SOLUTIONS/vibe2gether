@@ -1,16 +1,16 @@
 # Vibe2Gether
 
-A modern, feature-rich dating and social connection platform built with cutting-edge web technologies. Connect with people, find matches, and build meaningful relationships in a safe and inclusive community.
+A modern, feature-rich dating and social connection platform built with cutting-edge web technologies. Connect with people, find connections, and build meaningful relationships in a safe and inclusive community.
 
 ## 🚀 Features
 
 ### Core Features
 - **User Authentication** - Secure sign-up and login with NextAuth.js (Google OAuth & credentials)
 - **Profile Management** - Create and customize your profile with photos, bio, and interests
-- **Smart Matching Algorithm** - Find compatible matches based on interests and vibe score
-- **Real-time Messaging** - Chat with matches and connections instantly
+- **Smart Matching Algorithm** - Find compatible connections based on interests and vibe score
+- **Real-time Messaging** - Chat with connections and connections instantly
 - **Activity Feed** - See likes, follows, and interactions from other users
-- **Notifications** - Real-time alerts for messages, likes, matches, and more
+- **Notifications** - Real-time alerts for messages, likes, connections, and more
 
 ### Discovery Features
 - **Explore Page** - Discover new profiles with filtering and sorting options
@@ -28,7 +28,7 @@ A modern, feature-rich dating and social connection platform built with cutting-
 - **Coin System** - Earn and spend coins for premium features
 - **Premium Membership** - Unlock advanced features and unlimited messaging
 - **Saved Profiles** - Bookmark profiles to review later
-- **Match History** - Keep track of past matches and connections
+- **Match History** - Keep track of past connections and connections
 
 ## 🛠️ Tech Stack
 
@@ -69,7 +69,7 @@ vibe2gether/
 │   │   └── dashboard/            # Dashboard API
 │   ├── dashboard/                # Dashboard pages (protected)
 │   │   ├── feed/                 # User feed
-│   │   ├── matches/              # Match management
+│   │   ├── connections/              # Match management
 │   │   ├── messages/             # Messaging
 │   │   ├── notifications/        # Notifications
 │   │   ├── profile/              # User profile
@@ -197,7 +197,7 @@ The application uses PostgreSQL with Prisma ORM. Key tables include:
 
 - **users** - User profiles and authentication
 - **posts** - User posts and content
-- **matches** - Match pairings and compatibility scores
+- **connections** - Match pairings and compatibility scores
 - **messages** - Direct messages between users
 - **notifications** - User notifications for interactions
 - **coins_transactions** - Coin economy transactions
@@ -260,10 +260,10 @@ Language switching available in header and settings.
 - `POST /api/posts` - Create new post
 - `GET /api/posts/:id` - Get post details
 
-### Matches
-- `GET /api/matches` - Get user matches
-- `POST /api/matches` - Create match
-- `PATCH /api/matches/:id` - Update match status
+### connections
+- `GET /api/connections` - Get user connections
+- `POST /api/connections` - Create match
+- `PATCH /api/connections/:id` - Update match status
 
 ## 🚧 Development Status
 

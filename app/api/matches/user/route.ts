@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get("status") // "pending", "accepted", or null for all
 
-    console.log(`[GET /api/matches/user] Fetching matches for user ${session.user.id}, status: ${status}`)
+    console.log(`[GET /api/matches/user] Fetching connections for user ${session.user.id}, status: ${status}`)
 
     const supabase = await createClient()
 
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
     const { data: matches, error } = await query
 
     if (error) {
-      console.error("[GET /api/matches/user] Error fetching matches:", error)
+      console.error("[GET /api/matches/user] Error fetching connections:", error)
       throw error
     }
 
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    console.log(`[GET /api/matches/user] Found ${processedMatches.length} matches`)
+    console.log(`[GET /api/matches/user] Found ${processedMatches.length} connections`)
 
     return NextResponse.json({
       success: true,

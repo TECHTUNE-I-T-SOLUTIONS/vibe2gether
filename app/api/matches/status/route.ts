@@ -41,7 +41,7 @@ export async function PATCH(request: NextRequest) {
       .single()
 
     if (fetchError) {
-      console.error("[PATCH /api/matches/status] Error fetching match:", fetchError)
+      console.error("[PATCH /api/matches/status] Error fetching connection:", fetchError)
       return NextResponse.json({ error: "Match not found" }, { status: 404 })
     }
 
@@ -49,9 +49,9 @@ export async function PATCH(request: NextRequest) {
     const isUser2 = match.user2_id === session.user.id
 
     if (!isUser1 && !isUser2) {
-      console.error("[PATCH /api/matches/status] User not part of this match")
+      console.error("[PATCH /api/matches/status] User not part of this connection")
       return NextResponse.json(
-        { error: "Unauthorized: User not part of this match" },
+        { error: "Unauthorized: User not part of this connection" },
         { status: 403 }
       )
     }
@@ -68,16 +68,16 @@ export async function PATCH(request: NextRequest) {
       .single()
 
     if (updateError) {
-      console.error("[PATCH /api/matches/status] Error updating match:", updateError)
+      console.error("[PATCH /api/matches/status] Error updating connection:", updateError)
       throw updateError
     }
 
-    console.log(`[PATCH /api/matches/status] Match ${matchId} updated successfully to status: ${status}`)
+    console.log(`[PATCH /api/matches/status] Connection ${matchId} updated successfully to status: ${status}`)
 
     return NextResponse.json({
       success: true,
       match: updatedMatch,
-      message: `Match status updated to ${status}`
+      message: `Connection status updated to ${status}`
     })
   } catch (error) {
     console.error("[PATCH /api/matches/status] Unexpected error:", error)

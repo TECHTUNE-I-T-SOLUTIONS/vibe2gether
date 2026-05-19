@@ -124,7 +124,7 @@ export function HeroSection() {
             </div>
             <div className="p-4 rounded-2xl bg-card/50 backdrop-blur-sm border border-border">
               <div className="text-2xl md:text-3xl font-bold gradient-text">Up to 10K+</div>
-              <div className="text-sm text-foreground/70 dark:text-foreground/75">{t("matchesDaily")}</div>
+              <div className="text-sm text-foreground/70 dark:text-foreground/75">{t("connectionsDaily")}</div>
             </div>
             <div className="p-4 rounded-2xl bg-card/50 backdrop-blur-sm border border-border">
               <div className="text-2xl md:text-3xl font-bold gradient-text">4.9</div>

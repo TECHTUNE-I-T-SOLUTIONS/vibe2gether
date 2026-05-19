@@ -144,7 +144,7 @@ const baseTranslations = {
   watchHowItWorks: "Watch How It Works",
   activeUsers: "Active Users",
   countries: "Countries",
-  matchesDaily: "Matches Daily",
+  connectionsDaily: "connections Daily",
   appRating: "App Rating",
 
   // Features
@@ -199,7 +199,7 @@ const baseTranslations = {
   followers: "Followers",
   following: "Following",
   coinsEarned: "Coins Earned",
-  yourMatches: "Your Matches",
+  yourconnections: "Your connections",
   recentActivity: "Recent Activity",
 
   // Coins

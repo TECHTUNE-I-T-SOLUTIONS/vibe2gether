@@ -5,17 +5,20 @@ import { useState, useEffect } from "react"
 // Mix of videos and images for carousel
 const mediaItems = [
   { type: "video", src: "/videos/video1.mp4" },
-  { type: "image", src: "/romantic-couple-sunset-beach.jpg?height=800&width=600" },
-  { type: "video", src: "/videos/video2.mp4" },
-  { type: "image", src: "/romantic-couple-sunset.png?height=800&width=600" },
-  { type: "video", src: "/videos/video3.mp4" },
-  { type: "image", src: "/smiling-woman-portrait.png?height=800&width=600" },
-  { type: "video", src: "/videos/video4.mp4" },
-  // { type: "image", src: "/placeholder.svg?height=800&width=600" },
-  { type: "video", src: "/videos/video5.mp4" },
-  // { type: "image", src: "/placeholder.svg?height=800&width=600" },
-  { type: "video", src: "/videos/video6.mp4" },
-  // { type: "image", src: "/placeholder.svg?height=800&width=600" },
+  // { type: "video", src: "/videos/video (1).mp4" },
+  { type: "video", src: "/videos/video (2).mp4" },
+  { type: "video", src: "/videos/video (3).mp4" },
+  { type: "video", src: "/videos/video (4).mp4" },
+  { type: "video", src: "/videos/video (5).mp4" },
+  { type: "video", src: "/videos/video (6).mp4" },
+  { type: "video", src: "/videos/video (7).mp4" },
+  { type: "video", src: "/videos/video (8).mp4" },
+  { type: "video", src: "/videos/video (9).mp4" },
+  { type: "video", src: "/videos/video (11).mp4" },
+  { type: "video", src: "/videos/video (12).mp4" },
+  { type: "video", src: "/videos/video (13).mp4" },
+  { type: "video", src: "/videos/video (14).mp4" },
+  { type: "video", src: "/videos/video (15).mp4" }
 ]
 
 export function VideoBackground() {

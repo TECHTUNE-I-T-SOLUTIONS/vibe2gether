@@ -50,7 +50,7 @@ const faqs = [
   {
     question: "How does connection work?",
     answer:
-      "Our AI analyzes your profile, preferences, and behavior to find compatible matches. The more you use the app, the better our recommendations become. Swipe right on profiles you like and left on those you don't.",
+      "Our AI analyzes your profile, preferences, and behavior to find compatible Vibe. The more you use the app, the better our recommendations become. Swipe right on profiles you like and left on those you don't.",
   },
   {
     question: "How do I earn coins?",
@@ -70,7 +70,7 @@ const faqs = [
   {
     question: "Why can't I send messages?",
     answer:
-      "You can only message people you've matched with. Make sure you have a mutual match before trying to send a message. Also check that you haven't been blocked by the user.",
+      "You can only message people you've connected with. Make sure you have a mutual connect before trying to send a message. Also check that you haven't been blocked by the user.",
   },
 ]
 

@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Cannot create match with yourself" }, { status: 400 })
     }
 
-    console.log(`[POST /api/matches] Creating match between ${session.user.id} and ${userId}`)
+    console.log(`[POST /api/matches] Creating connection between ${session.user.id} and ${userId}`)
 
     const supabase = await createClient()
 
@@ -40,11 +40,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (existingMatch) {
-      console.log(`[POST /api/matches] Match already exists: ${existingMatch.id}`)
+      console.log(`[POST /api/matches] Connection already exists: ${existingMatch.id}`)
       return NextResponse.json({
         success: true,
         matchId: existingMatch.id,
-        message: "Match already exists"
+        message: "Connection already exists"
       })
     }
 
@@ -66,12 +66,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: createError?.message || "Error creating match" }, { status: 500 })
     }
 
-    console.log(`[POST /api/matches] Match created successfully: ${newMatch.id}`)
+    console.log(`[POST /api/matches] Connection created successfully: ${newMatch.id}`)
 
     return NextResponse.json({
       success: true,
       matchId: newMatch.id,
-      message: "Match created successfully"
+      message: "Connection created successfully"
     })
   } catch (error) {
     console.error("[POST /api/matches] Unexpected error:", error)
@@ -115,14 +115,14 @@ export async function GET(request: NextRequest) {
     }
 
     if (match) {
-      console.log(`[GET /api/matches] Match found: ${match.id}, status: ${match.status}`)
+      console.log(`[GET /api/matches] Connection found: ${match.id}, status: ${match.status}`)
       return NextResponse.json({
         exists: true,
         matchId: match.id,
         status: match.status
       })
     } else {
-      console.log(`[GET /api/matches] No match found between users`)
+      console.log(`[GET /api/matches] No Connection found between users`)
       return NextResponse.json({
         exists: false,
         matchId: null,

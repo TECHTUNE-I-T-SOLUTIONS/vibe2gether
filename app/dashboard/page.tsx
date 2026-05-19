@@ -442,7 +442,7 @@ export default function DashboardPage() {
             <Progress value={profileCompletion} className="h-2" />
             <p className="text-xs text-muted-foreground mt-2 mb-3">
               {profileCompletion < 100
-                ? "Complete your profile to get more matches!"
+                ? "Complete your profile to get more connections!"
                 : "Your profile is complete! 🎉"}
             </p>
             {profileCompletion < 100 && (
@@ -488,7 +488,7 @@ export default function DashboardPage() {
                   heart: Heart,
                   users: Users,
                   coins: Coins,
-                  matches: Heart,
+                  connections: Heart,
                 }
                 const Icon = iconMap[stat.icon] || Eye
                 return (
@@ -524,7 +524,7 @@ export default function DashboardPage() {
           {/* Matches */}
           <Card className="border-border/50">
             <CardHeader className="flex-row items-center justify-between">
-              <CardTitle>{t("yourMatches")}</CardTitle>
+              <CardTitle>{t("Your Connections")}</CardTitle>
               <Link href="/dashboard/matches">
                 <Button variant="ghost" size="sm" className="text-primary">
                   View All
@@ -553,7 +553,7 @@ export default function DashboardPage() {
                           <div className="absolute top-3 right-3 w-3 h-3 bg-green-500 rounded-full border-2 border-white" />
                         )}
                         <Badge className="absolute top-3 left-3 gradient-bg text-primary-foreground text-xs">
-                          {match.vibeScore}% Match
+                          {match.vibeScore}% Vibe
                         </Badge>
                         <div className="absolute bottom-0 left-0 right-0 p-4">
                           <h3 className="text-white font-semibold">
