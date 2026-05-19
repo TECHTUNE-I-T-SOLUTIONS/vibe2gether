@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Filter, MoreHorizontal, UserCheck, UserX, Shield, Eye, Ban, Verified, Loader, Trash2, AlertTriangle } from "lucide-react"
+import { Search, Filter, MoreHorizontal, UserCheck, UserX, Shield, Eye, Ban, Verified, Loader, Trash2, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -96,6 +96,9 @@ export default function AdminUsersPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("all")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [tabCounts, setTabCounts] = useState({ all: 0, verified: 0, unverified: 0, premium: 0 })
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [userToDelete, setUserToDelete] = useState<User | null>(null)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
@@ -116,8 +119,11 @@ export default function AdminUsersPage() {
   const [isUnsuspending, setIsUnsuspending] = useState(false)
 
   useEffect(() => {
-    fetchUsers()
-  }, [statusFilter, searchQuery, activeTab])
+    const timer = setTimeout(() => {
+      fetchUsers()
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [statusFilter, searchQuery, activeTab, currentPage])
 
   async function fetchUsers() {
     setLoading(true)
@@ -125,12 +131,18 @@ export default function AdminUsersPage() {
       const params = new URLSearchParams()
       if (statusFilter !== "all") params.append("status", statusFilter)
       if (searchQuery) params.append("search", searchQuery)
+      params.append("tab", activeTab)
+      params.append("page", currentPage.toString())
+      params.append("limit", "20")
 
       const response = await fetch(`/api/admin/users?${params}`)
       if (!response.ok) throw new Error("Failed to fetch users")
 
       const data = await response.json()
       setUsers(data.users || [])
+      if (data.pagination) setTotalPages(data.pagination.pages)
+      if (data.tabCounts) setTabCounts(data.tabCounts)
+
       setStats({
         totalUsers: data.stats.total,
         activeToday: data.stats.active,
@@ -353,30 +365,7 @@ export default function AdminUsersPage() {
     }
   }
 
-  const getFilteredUsers = (tab: string) => {
-    return users.filter((user: any) => {
-      const matchesSearch =
-        searchQuery === "" ||
-        user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.display_name?.toLowerCase().includes(searchQuery.toLowerCase())
-
-      const matchesStatus =
-        statusFilter === "all" ||
-        (statusFilter === "active" && user.is_active) ||
-        (statusFilter === "inactive" && !user.is_active) ||
-        (statusFilter === "pending" && user.verification_status === "pending")
-
-      // Tab filtering based on verification_status
-      if (tab === "verified") return matchesSearch && matchesStatus && user.is_verified === true
-      if (tab === "unverified") return matchesSearch && matchesStatus && user.verification_status === null
-      if (tab === "premium") return matchesSearch && matchesStatus && user.is_premium
-
-      return matchesSearch && matchesStatus
-    })
-  }
-
-  const filteredUsers = getFilteredUsers(activeTab)
+  const filteredUsers = users
 
   if (loading) {
     return (
@@ -427,11 +416,17 @@ export default function AdminUsersPage() {
                 placeholder="Search users by name or email..."
                 className="pl-10"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value)
+                  setCurrentPage(1)
+                }}
               />
             </div>
             <div className="flex gap-2">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select value={statusFilter} onValueChange={(val) => {
+                setStatusFilter(val)
+                setCurrentPage(1)
+              }}>
                 <SelectTrigger className="w-full md:w-[140px]">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
@@ -448,19 +443,19 @@ export default function AdminUsersPage() {
       </Card>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
+      <Tabs value={activeTab} onValueChange={(val) => { setActiveTab(val); setCurrentPage(1); }} className="mb-6">
         <TabsList className="bg-muted/50 p-1 rounded-full grid w-full grid-cols-4 md:w-auto inline-flex">
           <TabsTrigger value="all" className="rounded-full text-xs md:text-sm">
-            All ({users.length})
+            All ({tabCounts.all})
           </TabsTrigger>
           <TabsTrigger value="verified" className="rounded-full text-xs md:text-sm">
-            Verified ({users.filter((u: any) => u.is_verified === true).length})
+            Verified ({tabCounts.verified})
           </TabsTrigger>
           <TabsTrigger value="unverified" className="rounded-full text-xs md:text-sm">
-            Unverified ({users.filter((u: any) => u.verification_status === null).length})
+            Unverified ({tabCounts.unverified})
           </TabsTrigger>
           <TabsTrigger value="premium" className="rounded-full text-xs md:text-sm">
-            Premium ({users.filter((u: any) => u.is_premium).length})
+            Premium ({tabCounts.premium})
           </TabsTrigger>
         </TabsList>
       </Tabs>
@@ -614,6 +609,34 @@ export default function AdminUsersPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+            
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between p-4 border-t border-border">
+                <p className="text-sm text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1 || loading}
+                  >
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages || loading}
+                  >
+                    Next
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
@@ -881,6 +904,32 @@ export default function AdminUsersPage() {
               </CardContent>
             </Card>
           ))
+        )}
+        
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between p-4 bg-card rounded-xl border border-border">
+            <p className="text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1 || loading}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages || loading}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         )}
       </div>
 
