@@ -42,6 +42,9 @@ export default function EventsAdminPage() {
   const [statusDialogOpen, setStatusDialogOpen] = useState(false)
   const [statusEvent, setStatusEvent] = useState<any>(null)
   const [newStatus, setNewStatus] = useState("upcoming")
+  const [activationDialogOpen, setActivationDialogOpen] = useState(false)
+  const [activationEvent, setActivationEvent] = useState<any>(null)
+  const [activatingLoading, setActivatingLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [newEvent, setNewEvent] = useState({
@@ -80,7 +83,7 @@ export default function EventsAdminPage() {
         .from("events")
         .select("*")
         .eq("created_by", admin?.id)
-        .eq("status", "upcoming")
+        .neq("status", "rejected")
         .order("event_date", { ascending: true })
 
       const { data: pending } = await supabase
@@ -299,6 +302,36 @@ export default function EventsAdminPage() {
     }
   }
 
+  async function handleActivateEvent() {
+    if (!activationEvent) return
+    setActivatingLoading(true)
+
+    try {
+      await supabase
+        .from("events")
+        .update({ status: "upcoming" })
+        .eq("id", activationEvent.id)
+
+      toast({
+        title: "Success",
+        description: "Event activated successfully",
+      })
+
+      setActivationDialogOpen(false)
+      setActivationEvent(null)
+      await fetchAllData()
+    } catch (error: any) {
+      console.error("Error activating event:", error?.message || JSON.stringify(error))
+      toast({
+        title: "Error",
+        description: "Failed to activate event",
+        variant: "destructive",
+      })
+    } finally {
+      setActivatingLoading(false)
+    }
+  }
+
   async function handleStatusUpdate() {
     if (!statusEvent) return
 
@@ -377,7 +410,7 @@ export default function EventsAdminPage() {
       <Card className="overflow-hidden hover:shadow-lg transition-shadow">
         <div className="relative h-48 bg-muted">
           {thumbnailUrl ? (
-            <Image loading="eager" src={thumbnailUrl} alt={event.title} fill className="object-cover" loading="eager" />
+            <Image loading="eager" src={thumbnailUrl} alt={event.title} fill className="object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-muted-foreground">No thumbnail</div>
           )}
@@ -443,6 +476,20 @@ export default function EventsAdminPage() {
               <Trash2 className="w-4 h-4 mr-2" />
               Delete
             </Button>
+            {event.status === "inactive" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => {
+                  setActivationEvent(event)
+                  setActivationDialogOpen(true)
+                }}
+              >
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Activate
+              </Button>
+            )}
             {showStatusButton && (
               <Dialog open={statusDialogOpen && statusEvent?.id === event.id} onOpenChange={setStatusDialogOpen}>
                 <DialogTrigger asChild>
@@ -774,6 +821,44 @@ export default function EventsAdminPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Activation Confirmation Dialog */}
+      <Dialog open={activationDialogOpen} onOpenChange={setActivationDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Activate Event</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to activate this event? It will be marked as upcoming and visible to users.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setActivationDialogOpen(false)
+                setActivationEvent(null)
+              }}
+              disabled={activatingLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="gradient-bg"
+              onClick={handleActivateEvent}
+              disabled={activatingLoading}
+            >
+              {activatingLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Activating...
+                </>
+              ) : (
+                "Activate Event"
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

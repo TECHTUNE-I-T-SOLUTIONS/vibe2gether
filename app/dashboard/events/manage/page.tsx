@@ -16,7 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
-import { Loader2, Plus, Upload, Calendar, Clock, MapPin, Users, Trash2, LogOut, MessageCircle, Ticket, Eye, Search, Phone, Mail, Home, Download } from "lucide-react"
+import { Loader2, Plus, Upload, Calendar, Clock, MapPin, Users, Trash2, LogOut, MessageCircle, Ticket, Eye, Search, Phone, Mail, Home, Download, Share2 } from "lucide-react"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { createClient } from "@/lib/supabase/client"
 
@@ -390,6 +390,29 @@ export default function DashboardEventsManagePage() {
     }
   }
 
+  async function handleShareEvent(event: any) {
+    const shareUrl = `${window.location.origin}/events/${event.id}`
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: event.title,
+          text: event.description || "Check out this event!",
+          url: shareUrl,
+        })
+      } catch (err) {
+        console.error("Share failed:", err)
+      }
+    } else {
+      navigator.clipboard.writeText(shareUrl)
+      toast({
+        title: "Link Copied",
+        description: "Event link copied to clipboard!",
+      })
+    }
+  }
+
+
   async function handleUnregister(registrationId: string) {
     if (!confirm("There's no refund when you unregister, are you sure you want to unregister from this event?")) return
 
@@ -439,8 +462,8 @@ export default function DashboardEventsManagePage() {
       `"${ticket.barcode || ''}"`
     ])
 
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + headers.join(",") + "\n" 
+    const csvContent = "data:text/csv;charset=utf-8,"
+      + headers.join(",") + "\n"
       + rows.map(e => e.join(",")).join("\n")
 
     const encodedUri = encodeURI(csvContent)
@@ -674,15 +697,26 @@ export default function DashboardEventsManagePage() {
                             <Ticket className="w-3 h-3" />
                             View Tickets
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDeleteEvent(event.id)}
-                            className="w-full gap-1 text-xs text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                            Delete
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleShareEvent(event)}
+                              className="flex-1 gap-1 text-xs"
+                            >
+                              <Share2 className="w-3 h-3" />
+                              Share
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleDeleteEvent(event.id)}
+                              className="flex-1 gap-1 text-xs text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Delete
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -770,16 +804,27 @@ export default function DashboardEventsManagePage() {
                             </p>
                           </div>
 
-                          {/* Unregister Button */}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleUnregister(reg.id)}
-                            className="w-full gap-1 text-xs"
-                          >
-                            <LogOut className="w-3 h-3" />
-                            Unregister
-                          </Button>
+                          {/* Actions */}
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleShareEvent(reg.event)}
+                              className="flex-1 gap-1 text-xs"
+                            >
+                              <Share2 className="w-3 h-3" />
+                              Share
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleUnregister(reg.id)}
+                              className="flex-1 gap-1 text-xs"
+                            >
+                              <LogOut className="w-3 h-3" />
+                              Unregister
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -884,24 +929,23 @@ export default function DashboardEventsManagePage() {
 
                           {/* Actions */}
                           {isOwnEvent ? (
-                            <Button disabled className="w-full gap-1 text-xs mt-3 opacity-50">
-                              Your Event
-                            </Button>
-                          ) : (
                             <div className="flex gap-2 mt-3">
+                              <Button disabled className="flex-1 gap-1 text-xs opacity-50">
+                                Your Event
+                              </Button>
                               <Button
                                 variant="outline"
                                 className="flex-1 gap-1 text-xs"
-                                onClick={() => {
-                                  setSelectedEvent(event)
-                                  setShowDetailDialog(true)
-                                }}
+                                onClick={() => handleShareEvent(event)}
                               >
-                                <Eye className="w-3 h-3" />
-                                Details
+                                <Share2 className="w-3 h-3" />
+                                Share
                               </Button>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-2 mt-3">
                               <Button
-                                className="flex-1 gap-1 text-xs gradient-bg"
+                                className="w-full gap-1 text-xs gradient-bg"
                                 disabled={alreadyPurchased}
                                 onClick={() => {
                                   if (alreadyPurchased) return
@@ -917,6 +961,27 @@ export default function DashboardEventsManagePage() {
                                 <Ticket className="w-3 h-3" />
                                 {alreadyPurchased ? "Already Purchased" : "Get Ticket"}
                               </Button>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  className="flex-1 gap-1 text-xs dark:bg-black dark:hover:bg-gray-800 dark:text-white dark:hover:text-white"
+                                  onClick={() => {
+                                    setSelectedEvent(event)
+                                    setShowDetailDialog(true)
+                                  }}
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  Details
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  className="flex-1 gap-1 text-xs dark:bg-black dark:hover:bg-gray-800 dark:text-white dark:hover:text-white"
+                                  onClick={() => handleShareEvent(event)}
+                                >
+                                  <Share2 className="w-3 h-3" />
+                                  Share
+                                </Button>
+                              </div>
                             </div>
                           )}
                         </CardContent>
