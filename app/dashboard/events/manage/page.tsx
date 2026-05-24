@@ -391,7 +391,12 @@ export default function DashboardEventsManagePage() {
   }
 
   async function handleShareEvent(event: any) {
-    const shareUrl = `${window.location.origin}/events/${event.id}`
+    const slug = (event.title || "")
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+    const shareUrl = `${window.location.origin}/events/${slug || event.id}`
 
     if (navigator.share) {
       try {

@@ -67,6 +67,8 @@ export async function POST(request: NextRequest) {
     }
 
     // If free event, no payment needed
+    const amountInNGN = Math.round(Number(event.ticket_price || 0) * 1450)
+
     if (!event.ticket_price || event.ticket_price === 0) {
       // console.log(`[POST /api/events/register] Free event registered successfully`)
 
@@ -125,7 +127,7 @@ export async function POST(request: NextRequest) {
       .from("transactions")
       .insert({
         user_id: userId,
-        amount: Math.round(event.ticket_price * 100),
+        amount: amountInNGN * 100,
         type: "event_registration",
         status: "pending",
         payment_method: "paystack",
@@ -148,7 +150,7 @@ export async function POST(request: NextRequest) {
     // Initialize Paystack payment
     const paystackResponse = await initializePayment({
       email: user.email,
-      amount: Math.round(event.ticket_price * 100),
+          amount: amountInNGN * 100,
       reference,
       metadata: {
         eventId,

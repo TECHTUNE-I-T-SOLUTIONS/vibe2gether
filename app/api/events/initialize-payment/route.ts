@@ -93,6 +93,9 @@ export async function POST(request: NextRequest) {
     } else if (currency === "USD" && event.ticket_price) {
       amountInUSD = Number(event.ticket_price)
       amountInNGN = Math.round(amountInUSD * USD_TO_NGN_RATE)
+    } else if (event.ticket_price) {
+      amountInUSD = Number(event.ticket_price)
+      amountInNGN = Math.round(Number(event.ticket_price) * USD_TO_NGN_RATE)
     }
 
     // Convert to Kobo for Paystack
