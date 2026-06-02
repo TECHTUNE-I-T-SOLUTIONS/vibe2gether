@@ -202,6 +202,11 @@ async function handlePaymentVerification(reference: string) {
                 .single()
 
               if (event) {
+                await supabase
+                  .from("events")
+                  .update({ registered_count: (event.registered_count || 0) + 1 })
+                  .eq("id", event.id)
+
                 const pdfBuffer = await generateTicketPDF({
                   eventName: event.title,
                   eventDate: new Date(event.event_date).toLocaleDateString(),

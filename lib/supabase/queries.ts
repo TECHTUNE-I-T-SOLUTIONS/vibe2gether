@@ -319,9 +319,9 @@ export async function updateMatchStatus(matchId: string, status: string) {
 // EVENTS OPERATIONS
 // ============================================================
 
-export async function getEvents(limit = 20, offset = 0) {
+export async function getEvents(limit = 20, offset = 0, category?: string) {
   const supabase = createClient()
-  const { data, error } = await supabase
+  let query = supabase
     .from('events')
     .select(`
       id,
@@ -346,7 +346,12 @@ export async function getEvents(limit = 20, offset = 0) {
         profile_picture
       )
     `)
-    .eq('status', 'upcoming')
+
+  if (category && category !== "All") {
+    query = query.eq("category", category)
+  }
+
+  const { data, error } = await query
     .order('event_date', { ascending: true })
     .range(offset, offset + limit - 1)
 
@@ -732,6 +737,7 @@ export async function getMarketplaceProducts(limit = 20, offset = 0, category?: 
       price,
       currency,
       media,
+      is_available,
       is_featured,
       views_count,
       location_name,
@@ -746,7 +752,6 @@ export async function getMarketplaceProducts(limit = 20, offset = 0, category?: 
         profile_picture
       )
     `)
-    .eq('status', 'active')
 
   if (category) {
     query = query.eq('category', category)
@@ -771,6 +776,7 @@ export async function getMarketplaceProductById(productId: string) {
       price,
       currency,
       media,
+      is_available,
       is_featured,
       views_count,
       location_name,

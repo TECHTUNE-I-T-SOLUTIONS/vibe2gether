@@ -27,6 +27,7 @@ import {
   Star,
   Eye,
   Briefcase,
+  BadgeCheck,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -55,6 +56,7 @@ const secondaryItems: SidebarItem[] = [
   { icon: Eye, label: "Opportunities", href: "/dashboard/opportunities" },
   { icon: ShoppingBag, label: "Marketplace", href: "/dashboard/marketplace/manage" },
   { icon: Calendar, label: "Events & Webinars", href: "/dashboard/events/manage" },
+  { icon: BadgeCheck, label: "Subscriptions", href: "/dashboard/subscriptions" },
   { icon: Briefcase, label: "Learn & Grow", href: "/dashboard/learn" },
   { icon: Star, label: "Testimonies", href: "/dashboard/testimonies" },
   { icon: Bookmark, label: "Saved", href: "/dashboard/saved" },

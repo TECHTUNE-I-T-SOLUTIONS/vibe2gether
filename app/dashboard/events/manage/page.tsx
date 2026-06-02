@@ -215,7 +215,6 @@ export default function DashboardEventsManagePage() {
       const { data, error } = await supabase
         .from("events")
         .select("*, users:created_by(display_name, profile_picture, id)")
-        .eq("status", "upcoming")
         .order("event_date", { ascending: true })
 
       if (error) {
@@ -484,6 +483,11 @@ export default function DashboardEventsManagePage() {
     e.preventDefault()
     if (!selectedEvent) return
 
+    if (isEventUnavailable(selectedEvent)) {
+      toast({ title: "Tickets unavailable", description: getEventAvailabilityLabel(selectedEvent), variant: "destructive" })
+      return
+    }
+
     try {
       setPurchasing(true)
       if (selectedEvent.is_free || !selectedEvent.ticket_price) {
@@ -557,6 +561,22 @@ export default function DashboardEventsManagePage() {
   const totalSales = eventTickets.reduce((acc, t) => acc + Number(t.amount_paid || 0), 0)
   const totalFees = eventTickets.reduce((acc, t) => acc + Number(t.platform_fee || 0), 0)
   const totalPayout = eventTickets.reduce((acc, t) => acc + Number(t.payout_amount || 0), 0)
+
+  function isSoldOut(event: any) {
+    return Boolean(event?.capacity && (event.registered_count || 0) >= event.capacity)
+  }
+
+  function getEventAvailabilityLabel(event: any) {
+    if (!event) return "Unavailable"
+    if (event.status !== "upcoming") return event.status === "inactive" ? "Event has passed" : "Event unavailable"
+    if (event.event_date && new Date(event.event_date) < new Date()) return "Event has passed"
+    if (isSoldOut(event)) return "Sold out"
+    return ""
+  }
+
+  function isEventUnavailable(event: any) {
+    return Boolean(getEventAvailabilityLabel(event))
+  }
 
   return (
     <div className="min-h-screen w-full">
@@ -951,9 +971,9 @@ export default function DashboardEventsManagePage() {
                             <div className="flex flex-col gap-2 mt-3">
                               <Button
                                 className="w-full gap-1 text-xs gradient-bg"
-                                disabled={alreadyPurchased}
+                                disabled={alreadyPurchased || isEventUnavailable(event)}
                                 onClick={() => {
-                                  if (alreadyPurchased) return
+                                  if (alreadyPurchased || isEventUnavailable(event)) return
                                   setSelectedEvent(event)
                                   setTicketForm(prev => ({
                                     ...prev,
@@ -964,7 +984,7 @@ export default function DashboardEventsManagePage() {
                                 }}
                               >
                                 <Ticket className="w-3 h-3" />
-                                {alreadyPurchased ? "Already Purchased" : "Get Ticket"}
+                                {alreadyPurchased ? "Already Purchased" : getEventAvailabilityLabel(event) || "Get Ticket"}
                               </Button>
                               <div className="flex gap-2">
                                 <Button

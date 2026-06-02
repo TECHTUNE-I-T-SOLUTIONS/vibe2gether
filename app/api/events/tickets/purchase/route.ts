@@ -39,6 +39,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Paid events require payment confirmation" }, { status: 400 });
     }
 
+    if (event.status !== "upcoming" || (event.event_date && new Date(event.event_date) < new Date())) {
+      return NextResponse.json({ error: "Tickets are closed for this event" }, { status: 400 });
+    }
+
+    if (event.capacity && (event.registered_count || 0) >= event.capacity) {
+      return NextResponse.json({ error: "This event is sold out" }, { status: 400 });
+    }
+
+    if (session?.user?.id) {
+      const { data: existingRegistration } = await supabase
+        .from("event_registrations")
+        .select("id")
+        .eq("event_id", eventId)
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+
+      if (existingRegistration) {
+        return NextResponse.json({ error: "You already have a ticket for this event" }, { status: 409 });
+      }
+    }
+
     const amountPaid = 0;
     const platformFee = amountPaid * 0.03;
     const payoutAmount = amountPaid - platformFee;
@@ -90,6 +111,11 @@ export async function POST(req: NextRequest) {
         console.error("Error creating registration:", registrationError);
       }
     }
+
+    await supabase
+      .from("events")
+      .update({ registered_count: (event.registered_count || 0) + 1 })
+      .eq("id", eventId);
 
     const thumbnailUrl = event.thumbnail_url || event.thumbnail || "";
 

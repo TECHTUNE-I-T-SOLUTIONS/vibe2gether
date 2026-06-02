@@ -108,9 +108,10 @@ export default function EventsPage() {
   }, [])
 
   const filteredEvents = events.filter((event) => {
+    const location = event.location_name || event.location || ""
     const matchesSearch =
       event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      event.location_name.toLowerCase().includes(searchQuery.toLowerCase())
+      location.toLowerCase().includes(searchQuery.toLowerCase())
 
     // Normalize category comparison (case-insensitive)
     const eventCategory = event.category?.toLowerCase() || ""
@@ -165,6 +166,13 @@ export default function EventsPage() {
         </span>
       </div>
     )
+  }
+
+  const getEventStatus = (event: any) => {
+    if (event.status && event.status !== "upcoming") return event.status === "inactive" ? "Passed" : event.status
+    if (event.event_date && new Date(event.event_date) < new Date()) return "Passed"
+    if (event.capacity && event.registered_count >= event.capacity) return "Sold out"
+    return null
   }
 
   return (
@@ -249,7 +257,10 @@ export default function EventsPage() {
                           className="object-cover transition-transform duration-500 group-hover:scale-105"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-                        <Badge className="absolute top-4 left-4 gradient-bg text-primary-foreground">Featured</Badge>
+                        <div className="absolute top-4 left-4 flex gap-2">
+                          <Badge className="gradient-bg text-primary-foreground">Featured</Badge>
+                          {getEventStatus(event) && <Badge variant="secondary">{getEventStatus(event)}</Badge>}
+                        </div>
                         <div className="absolute bottom-0 left-0 right-0 p-6">
                           <h3 className="text-2xl font-bold text-white mb-2">{event.title}</h3>
                           <p className="text-white/80 mb-4 line-clamp-2">{event.description}</p>
@@ -321,9 +332,12 @@ export default function EventsPage() {
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                         <div className="absolute bottom-3 left-3 right-3">
-                          <Badge className="bg-white/20 backdrop-blur-sm text-white border-0 capitalize">
-                            {event.category}
-                          </Badge>
+                          <div className="flex gap-2">
+                            <Badge className="bg-white/20 backdrop-blur-sm text-white border-0 capitalize">
+                              {event.category}
+                            </Badge>
+                            {getEventStatus(event) && <Badge variant="secondary">{getEventStatus(event)}</Badge>}
+                          </div>
                         </div>
                       </div>
                       <CardContent className="p-4">

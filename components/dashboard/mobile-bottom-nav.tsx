@@ -7,7 +7,7 @@ import {
   ShoppingBag,
   MessageCircle,
   Rss,
-  Calendar,
+  BadgeCheck,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -56,9 +56,9 @@ export function DashboardMobileBottomNav() {
       href: "/dashboard/marketplace/manage",
     },
     {
-      icon: <Calendar className="w-4 h-4" />,
-      label: "Events",
-      href: "/dashboard/events/manage",
+      icon: <BadgeCheck className="w-4 h-4" />,
+      label: "Subs",
+      href: "/dashboard/subscriptions",
     },
     {
       icon: <MessageCircle className="w-4 h-4" />,

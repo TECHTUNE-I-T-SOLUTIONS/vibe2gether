@@ -171,7 +171,6 @@ export default function DashboardMarketplaceManagePage() {
       const { data, error } = await supabase
         .from("marketplace_products")
         .select("*, users(display_name, profile_picture, id)")
-        .eq("status", "active")
         .order("created_at", { ascending: false })
 
       if (error) {
@@ -549,8 +548,14 @@ export default function DashboardMarketplaceManagePage() {
                               </p>
                               <p className="text-xs text-muted-foreground">{product.condition}</p>
                             </div>
-                            <Badge variant={product.status === "active" ? "default" : "secondary"} className="text-xs">
-                              {product.status === "active" ? "Active" : "Pending"}
+                            <Badge variant={product.status === "active" && product.is_available !== false ? "default" : "secondary"} className="text-xs">
+                              {product.is_available === false
+                                ? "Unavailable"
+                                : product.status === "active"
+                                  ? "Active"
+                                  : product.status === "inactive"
+                                    ? "Inactive"
+                                    : product.status || "Unavailable"}
                             </Badge>
                           </div>
 
@@ -686,6 +691,10 @@ export default function DashboardMarketplaceManagePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {allProducts.map((product) => {
                     const isOwnProduct = product.user_id === session?.user?.id
+                    const unavailableReason =
+                      product.is_available === false || product.status !== "active"
+                        ? "Product isn't available"
+                        : ""
                     return (
                       <Card key={product.id} className="overflow-hidden hover:shadow-lg transition-shadow flex flex-col">
                         {/* Product Image */}
@@ -734,13 +743,15 @@ export default function DashboardMarketplaceManagePage() {
                           ) : (
                             <Button 
                               className="w-full gap-1 text-xs mt-3"
+                              disabled={Boolean(unavailableReason)}
                               onClick={() => {
+                                if (unavailableReason) return
                                 setSelectedProduct(product)
                                 setShowDetailDialog(true)
                               }}
                             >
                               <Eye className="w-3 h-3" />
-                              View Details
+                              {unavailableReason || "View Details"}
                             </Button>
                           )}
                         </CardContent>

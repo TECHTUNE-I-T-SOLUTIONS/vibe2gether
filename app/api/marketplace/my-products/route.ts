@@ -34,7 +34,6 @@ export async function GET() {
       .from("marketplace_products")
       .select("*")
       .eq("user_id", user.id)
-      .eq("is_available", true)
       .order("created_at", { ascending: false });
 
     if (error) {

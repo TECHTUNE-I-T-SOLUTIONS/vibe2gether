@@ -114,8 +114,10 @@ export function OpportunityCard({
             <Badge className="bg-background/80 backdrop-blur-md text-foreground border-none">
               {opportunity.category}
             </Badge>
-            {opportunity.status === 'pending' && (
-              <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20">Pending</Badge>
+            {opportunity.status !== 'approved' && (
+              <Badge variant="outline" className="bg-muted/80 text-muted-foreground border-border">
+                {opportunity.status === "rejected" ? "Unavailable" : "Pending"}
+              </Badge>
             )}
           </div>
           {!isOwner && (
@@ -182,7 +184,7 @@ export function OpportunityCard({
                 </div>
               </div>
               <Button size="sm" className="rounded-full gradient-bg h-9 px-5" onClick={handleViewDetails}>
-                View Details
+                {opportunity.status === "approved" ? "View Details" : "View Status"}
               </Button>
             </>
           ) : (

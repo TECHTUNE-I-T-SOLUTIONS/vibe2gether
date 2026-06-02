@@ -167,11 +167,12 @@ export async function POST(request: NextRequest) {
             .from("event_tickets")
             .update({ status: "paid" })
             .eq("payment_reference", reference)
+            .neq("status", "paid")
             .select()
             .single()
 
           if (ticketError || !ticket) {
-            console.error("[Paystack] Failed to update ticket status:", ticketError)
+            console.error("[Paystack] Failed to update ticket status or ticket already paid:", ticketError)
           } else {
             const { data: event } = await supabase
               .from("events")
@@ -180,6 +181,11 @@ export async function POST(request: NextRequest) {
               .single()
 
             if (event) {
+              await supabase
+                .from("events")
+                .update({ registered_count: (event.registered_count || 0) + 1 })
+                .eq("id", event.id)
+
               const thumbnailUrl = event.thumbnail_url || event.thumbnail || "";
 
               const pdfBuffer = await generateTicketPDF({

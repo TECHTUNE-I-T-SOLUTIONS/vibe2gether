@@ -29,12 +29,14 @@ export async function GET(request: NextRequest, { params }: { params: { productI
         description,
         category,
         price,
+        currency,
         condition,
         is_available,
-        image_urls,
+        media,
+        status,
+        location_name,
         created_at,
         updated_at,
-        delivery_instructions,
         users(id, display_name, email, profile_picture, followers_count)
       `
       )
@@ -49,7 +51,7 @@ export async function GET(request: NextRequest, { params }: { params: { productI
     // Get seller's other products
     const { data: sellerProducts, error: sellerError } = await supabase
       .from("marketplace_products")
-      .select("id, title, image_urls, price")
+      .select("id, title, media, price, currency, status, is_available")
       .eq("user_id", product.user_id)
       .neq("id", productId)
       .limit(5)

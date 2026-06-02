@@ -44,7 +44,6 @@ async function findEventBySlugOrId(slug: string) {
   const { data } = await supabase
     .from("events")
     .select("*, users:created_by(display_name, profile_picture, id)")
-    .eq("status", "upcoming")
 
   const events = data || []
   return events.find((event: any) => slugify(event.title) === slug || event.id === slug) || null
@@ -103,13 +102,15 @@ export default async function PublicEventPage({ params }: Props) {
         { name: "VIP Pass", price: `NGN ${Math.round(ticketPriceNgn * 1.5).toLocaleString()}`, note: "Priority experience and perks." },
         { name: "Premium Table", price: `NGN ${Math.round(ticketPriceNgn * 3).toLocaleString()}`, note: "Best for groups and premium seating." },
       ]
+  const eventPassed = event.event_date ? new Date(event.event_date) < new Date() : false
+  const soldOut = Boolean(event.capacity && event.registered_count >= event.capacity)
+  const eventStatusLabel = eventPassed ? "Passed" : soldOut ? "Sold out" : event.status !== "upcoming" ? "Unavailable" : null
 
   const related = await (async () => {
     const supabase = await createClient()
     const { data } = await supabase
       .from("events")
       .select("id, title, description, thumbnail, thumbnail_url, event_date, location_name, category")
-      .eq("status", "upcoming")
       .neq("id", event.id)
       .order("event_date", { ascending: true })
       .limit(6)
@@ -138,16 +139,25 @@ export default async function PublicEventPage({ params }: Props) {
 
           <div className="relative flex min-h-[760px] flex-col justify-end px-5 py-6 sm:px-8 sm:py-10 lg:min-h-[980px] lg:px-12 lg:py-12">
             <div className="max-w-5xl space-y-5 pb-6 sm:pb-10 lg:pb-16">
-              <Badge className="w-fit rounded-full border border-orange-400/30 bg-orange-500/15 px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-orange-200">
-                {event.category || "Event"}
-              </Badge>
+              <div className="flex flex-wrap gap-2">
+                <Badge className="w-fit rounded-full border border-orange-400/30 bg-orange-500/15 px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-orange-200">
+                  {event.category || "Event"}
+                </Badge>
+                {eventStatusLabel && <Badge variant="secondary" className="w-fit rounded-full px-3 py-1">{eventStatusLabel}</Badge>}
+              </div>
               <h1 className="max-w-5xl text-4xl font-black uppercase leading-[0.9] tracking-[-0.06em] text-yellow-300 drop-shadow-[0_12px_35px_rgba(0,0,0,0.8)] sm:text-6xl lg:text-8xl">
                 {event.title}
               </h1>
               <p className="max-w-2xl text-sm text-white/82 sm:text-base">
                 {event.description || "A beautifully curated event experience built for the community."}
               </p>
-              <TicketActions event={{ ...event, ticket_price_ngn: ticketPriceNgn }} />
+              {eventStatusLabel ? (
+                <p className="max-w-xl rounded-2xl bg-white/10 p-4 text-sm text-white">
+                  Ticket sales are closed because this event is {eventStatusLabel.toLowerCase()}.
+                </p>
+              ) : (
+                <TicketActions event={{ ...event, ticket_price_ngn: ticketPriceNgn }} />
+              )}
             </div>
           </div>
         </section>

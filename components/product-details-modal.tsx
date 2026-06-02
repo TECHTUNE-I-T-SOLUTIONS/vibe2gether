@@ -25,7 +25,8 @@ export function ProductDetailsModal({ isOpen, onClose, product, seller }: Produc
   const { data: session } = useSession()
   const router = useRouter()
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
-  const isOwnProduct = product?.seller_id === session?.user?.id
+  const isOwnProduct = product?.user_id === session?.user?.id
+  const unavailableReason = product && (!product.is_available || product.status !== "active") ? "This product is no longer available." : ""
 
   const handleMessageSeller = async () => {
     if (!session?.user?.id) {
@@ -148,6 +149,7 @@ export function ProductDetailsModal({ isOpen, onClose, product, seller }: Produc
                   {product.location_name}
                 </Badge>
               )}
+              {unavailableReason && <Badge variant="secondary">{unavailableReason}</Badge>}
             </div>
 
             {/* Price */}
@@ -206,6 +208,8 @@ export function ProductDetailsModal({ isOpen, onClose, product, seller }: Produc
                 <MessageSquare className="w-4 h-4" />
                 Login to Message Seller
               </Button>
+            ) : unavailableReason ? (
+              <div className="text-sm text-muted-foreground">{unavailableReason}</div>
             ) : isOwnProduct ? (
               <div className="text-sm text-muted-foreground">This is your product</div>
             ) : (

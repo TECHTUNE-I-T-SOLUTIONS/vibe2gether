@@ -104,7 +104,7 @@ export default function EventsPage() {
 
   const filteredEvents = events.filter((e) =>
     e.title.toLowerCase().includes(search.toLowerCase()) ||
-    e.location.toLowerCase().includes(search.toLowerCase())
+    (e.location || e.location_name || "").toLowerCase().includes(search.toLowerCase())
   )
 
   async function handleToggleRegistration() {
@@ -159,6 +159,13 @@ export default function EventsPage() {
 
   function isUpcoming(eventDate: string) {
     return new Date(eventDate) > new Date()
+  }
+
+  function eventStatusLabel(event: any) {
+    if (!isUpcoming(event.event_date)) return "Event Ended"
+    if (event.capacity && (event.registration_count || event.registered_count || 0) >= event.capacity) return "Sold Out"
+    if (event.status && event.status !== "upcoming") return "Unavailable"
+    return null
   }
 
   return (
@@ -217,9 +224,9 @@ export default function EventsPage() {
                     fill
                     className="object-cover group-hover:scale-110 transition"
                   />
-                  {!isUpcoming(event.event_date) && (
+                  {eventStatusLabel(event) && (
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                      <span className="text-white font-semibold">Event Ended</span>
+                      <span className="text-white font-semibold">{eventStatusLabel(event)}</span>
                     </div>
                   )}
                 </div>
@@ -242,23 +249,21 @@ export default function EventsPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Users className="w-4 h-4" />
-                      <span>{event.registration_count || 0} / {event.capacity} registered</span>
+                      <span>{event.registered_count || 0} / {event.capacity || "Unlimited"} registered</span>
                     </div>
                   </div>
 
-                  {isUpcoming(event.event_date) && (
-                    <Button
-                      className="w-full"
-                      size="sm"
-                      variant="default"
-                      onClick={() => {
-                        setSelectedEvent(event)
-                        setShowDetailDialog(true)
-                      }}
-                    >
-                      View Details
-                    </Button>
-                  )}
+                  <Button
+                    className="w-full"
+                    size="sm"
+                    variant={eventStatusLabel(event) ? "secondary" : "default"}
+                    onClick={() => {
+                      setSelectedEvent(event)
+                      setShowDetailDialog(true)
+                    }}
+                  >
+                    View Details
+                  </Button>
                 </CardContent>
               </Card>
             )
@@ -313,7 +318,7 @@ export default function EventsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Users className="w-4 h-4" />
-                    <span>{selectedEvent.registration_count || 0} / {selectedEvent.capacity || "Unlimited"} registered</span>
+                    <span>{selectedEvent.registered_count || 0} / {selectedEvent.capacity || "Unlimited"} registered</span>
                   </div>
                 </div>
               </div>

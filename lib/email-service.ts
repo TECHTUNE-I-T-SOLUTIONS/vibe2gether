@@ -5,8 +5,8 @@ const host = process.env.EMAIL_HOST || 'smtp.vibe2gether.com'
 const port = Number(process.env.EMAIL_PORT || 587)
 const secure = process.env.EMAIL_SECURE === 'true'
 const user = process.env.EMAIL_USER || 'events@vibe2gether.com'
-const pass = process.env.EMAIL_PASS || ''
-const passFallback = process.env.EMAIL_PASS_II || ''
+const primaryPass = process.env.EMAIL_PASS_II || process.env.EMAIL_PASS || ''
+const fallbackPass = process.env.EMAIL_PASS || ''
 
 const createTransporter = (authPass?: string) =>
   nodemailer.createTransport({
@@ -19,7 +19,21 @@ const createTransporter = (authPass?: string) =>
     },
   })
 
-const transporter = createTransporter(pass)
+const transporter = createTransporter(primaryPass)
+
+async function sendMailWithFallback(message: Mail.Options) {
+  try {
+    return await transporter.sendMail(message)
+  } catch (error) {
+    const errorCode = (error as { code?: string })?.code
+    if (errorCode === "EAUTH" && fallbackPass && fallbackPass !== primaryPass) {
+      const fallbackTransporter = createTransporter(fallbackPass)
+      return fallbackTransporter.sendMail(message)
+    }
+
+    throw error
+  }
+}
 
 export async function sendEmail(opts: {
   to: string
@@ -29,16 +43,16 @@ export async function sendEmail(opts: {
   attachments?: Mail.Attachment[]
 }) {
   const from = process.env.EMAIL_FROM || user
-  const info = await transporter.sendMail({
+  const message = {
     from,
     to: opts.to,
     subject: opts.subject,
     text: opts.text,
     html: opts.html,
     attachments: opts.attachments,
-  })
+  }
 
-  return info
+  return sendMailWithFallback(message)
 }
 
 export default transporter
@@ -51,7 +65,7 @@ export async function sendTicketEmail(params: {
 }) {
   const from = process.env.EMAIL_FROM || `"Vibe2Gether Events" <${user}>`
   try {
-    const info = await transporter.sendMail({
+    const info = await sendMailWithFallback({
       from,
       to: params.to,
       subject: params.subject,
@@ -61,27 +75,7 @@ export async function sendTicketEmail(params: {
     console.log("Ticket email sent: %s", info.messageId)
     return { success: true, messageId: info.messageId }
   } catch (error) {
-      const errorCode = (error as { code?: string })?.code
-      if (errorCode === "EAUTH" && passFallback) {
-      try {
-        const fallbackTransporter = createTransporter(passFallback)
-        const info = await fallbackTransporter.sendMail({
-          from,
-          to: params.to,
-          subject: params.subject,
-          html: params.html,
-          attachments: params.attachments,
-        })
-        console.log("Ticket email sent with fallback auth: %s", info.messageId)
-        return { success: true, messageId: info.messageId }
-      } catch (fallbackError) {
-        console.error("Error sending ticket email with fallback auth:", fallbackError)
-        return { success: false, error: fallbackError }
-      }
-    }
-
     console.error("Error sending ticket email:", error)
     return { success: false, error }
   }
 }
-

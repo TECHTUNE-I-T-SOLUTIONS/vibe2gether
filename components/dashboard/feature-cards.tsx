@@ -13,6 +13,13 @@ const iconMap = {
   Lightbulb: Lightbulb,
 }
 
+const routeMap: Record<string, string> = {
+  opps: "/dashboard/opportunities",
+  jobs: "/dashboard/opportunities?category=Job%20Posting",
+  funding: "/dashboard/opportunities?category=Funding%2FGrants",
+  tips: "/dashboard/learn",
+}
+
 export function FeatureCards() {
   const [stats, setStats] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -54,12 +61,7 @@ export function FeatureCards() {
             key={stat.id} 
             className="min-w-[90px] sm:min-w-[100px] border-none shadow-sm cursor-pointer hover:shadow-md transition-all active:scale-95 bg-card/50 backdrop-blur-sm"
             onClick={() => {
-              // Stats cards navigate without opening modal
-              if (stat.id === 'tips') {
-                router.push('/dashboard/learn')
-              } else {
-                router.push('/dashboard/opportunities')
-              }
+              router.push(routeMap[stat.id] || "/dashboard/opportunities")
             }}
           >
             <CardContent className="p-3 sm:p-4 flex flex-col items-center text-center space-y-1.5">

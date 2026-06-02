@@ -8,10 +8,7 @@ import {
   FileText,
   Flag,
   ShoppingBag,
-  BarChart3,
   Bell,
-  Settings,
-  CreditCard,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -27,6 +24,7 @@ interface NavItem {
 
 interface AdminMobileBottomNavProps {
   reportsBadge?: number
+  featuredBadge?: number
   notificationsBadge?: number
 }
 
@@ -69,27 +67,12 @@ export function AdminMobileBottomNav({
     //   label: "announcements",
     //   href: "/admin/announcements",
     // },
-    {
-      icon: Bell,
-      label: "notifications",
-      href: "/admin/notifications",
-      badge: notificationsBadge,
-    },
-    {
-      icon: BarChart3,
-      label: "analytics",
-      href: "/admin/analytics",
-    },
-    {
-      icon: CreditCard,
-      label: "withdrawals",
-      href: "/admin/withdrawals",
-    },
-    {
-      icon: Settings,
-      label: "settings",
-      href: "/admin/settings",
-    },
+    // {
+    //   icon: Bell,
+    //   label: "notifications",
+    //   href: "/admin/notifications",
+    //   badge: notificationsBadge,
+    // },
   ]
 
   return (

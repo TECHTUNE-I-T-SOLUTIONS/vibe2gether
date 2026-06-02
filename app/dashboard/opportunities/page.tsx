@@ -35,6 +35,12 @@ function OpportunitiesContent() {
   const [editingOpportunity, setEditingOpportunity] = useState<any>(null)
 
   useEffect(() => {
+    const category = searchParams.get("category")
+    if (category) {
+      setSearchQuery(category)
+      setActiveTab("all")
+    }
+
     if (searchParams.get("showCreateModal") === "true") {
       setShowCreateModal(true)
       // Clean up URL to avoid re-opening on refresh if needed, 

@@ -64,6 +64,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (event.status !== "upcoming" || (event.event_date && new Date(event.event_date) < new Date())) {
+      return NextResponse.json({ error: "Tickets are closed for this event" }, { status: 400 })
+    }
+
+    if (event.capacity && (event.registered_count || 0) >= event.capacity) {
+      return NextResponse.json({ error: "This event is sold out" }, { status: 400 })
+    }
+
+    if (userId) {
+      const { data: existingRegistration } = await supabase
+        .from("event_registrations")
+        .select("id")
+        .eq("event_id", eventId)
+        .eq("user_id", userId)
+        .maybeSingle()
+
+      if (existingRegistration) {
+        return NextResponse.json({ error: "You already have a ticket for this event" }, { status: 409 })
+      }
+    }
+
     // Determine the amount in NGN (Paystack requires NGN)
     let amountInNGN = 0
     let amountInUSD = 0

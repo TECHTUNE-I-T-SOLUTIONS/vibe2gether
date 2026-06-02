@@ -25,6 +25,7 @@ import {
   LogOut,
   Star,
   Mail,
+  BadgeCheck,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -97,6 +98,7 @@ export function AdminMobileSidebar({ onLogoutClick }: AdminMobileSidebarProps) {
     { icon: ShoppingBag, label: "marketplace", href: "/admin/marketplace" },
     { icon: Calendar, label: "events", href: "/admin/events" },
     { icon: Briefcase, label: "opportunities", href: "/admin/opportunities" },
+    { icon: BadgeCheck, label: "subscriptions", href: "/admin/subscriptions" },
     { icon: GraduationCap, label: "learn", href: "/admin/learn" },
     { icon: BookOpen, label: "blog", href: "/admin/blog" },
     { icon: Mail, label: "contacts", href: "/admin/contacts" },

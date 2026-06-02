@@ -81,7 +81,7 @@ export default function MarketplacePage() {
   const filteredProducts = products.filter((product) => {
     const matchesSearch =
       product.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.description.toLowerCase().includes(searchQuery.toLowerCase())
+      (product.description || "").toLowerCase().includes(searchQuery.toLowerCase())
     
     // Normalize category comparison (case-insensitive)
     const productCategory = product.category?.toLowerCase() || ""
@@ -105,7 +105,7 @@ export default function MarketplacePage() {
       const { data } = await supabase
         .from("users")
         .select("*")
-        .eq("id", product.seller_id)
+        .eq("id", product.user_id)
         .single()
       
       if (data) {
@@ -124,6 +124,11 @@ export default function MarketplacePage() {
       return `₦${price.toLocaleString()}`
     }
     return `$${price}`
+  }
+
+  const getProductStatus = (product: any) => {
+    if (!product.is_available || product.status !== "active") return "No longer available"
+    return null
   }
 
   return (
@@ -207,7 +212,10 @@ export default function MarketplacePage() {
                             fill
                             className="object-cover transition-transform duration-500 group-hover:scale-105"
                           />
-                          <Badge className="absolute top-4 left-4 gradient-bg text-primary-foreground">Featured</Badge>
+                          <div className="absolute top-4 left-4 flex gap-2">
+                            <Badge className="gradient-bg text-primary-foreground">Featured</Badge>
+                            {getProductStatus(product) && <Badge variant="secondary">{getProductStatus(product)}</Badge>}
+                          </div>
                         </div>
                         <CardContent className="flex-1 p-6 flex flex-col justify-between">
                           <div>
@@ -224,9 +232,10 @@ export default function MarketplacePage() {
                             </div>
                             <Button 
                               className="rounded-full gradient-bg"
+                              disabled={Boolean(getProductStatus(product))}
                               onClick={() => handleViewDetails(product)}
                             >
-                              View Details
+                              {getProductStatus(product) || "View Details"}
                               <ArrowRight className="w-4 h-4 ml-2" />
                             </Button>
                           </div>
@@ -264,6 +273,11 @@ export default function MarketplacePage() {
                         <Badge variant="outline" className="mb-2 text-xs capitalize">
                           {product.category}
                         </Badge>
+                        {getProductStatus(product) && (
+                          <Badge variant="secondary" className="mb-2 ml-2 text-xs">
+                            {getProductStatus(product)}
+                          </Badge>
+                        )}
                         <h3 className="font-semibold mb-1 line-clamp-1">{product.title}</h3>
                         <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{product.description}</p>
                         <div className="flex items-center justify-between">
@@ -273,9 +287,10 @@ export default function MarketplacePage() {
                           <Button 
                             size="sm" 
                             className="rounded-full gradient-bg"
+                            disabled={Boolean(getProductStatus(product))}
                             onClick={() => handleViewDetails(product)}
                           >
-                            Details
+                            {getProductStatus(product) || "Details"}
                           </Button>
                         </div>
                       </CardContent>

@@ -39,15 +39,17 @@ export async function GET(request: NextRequest) {
         description,
         category,
         price,
+        currency,
         condition,
         is_available,
-        image_urls,
+        media,
+        status,
+        location_name,
         created_at,
         users(id, display_name, profile_picture)
       `,
         { count: "exact" }
       )
-      .eq("is_available", true)
 
     // Add filters
     if (category) query = query.eq("category", category)

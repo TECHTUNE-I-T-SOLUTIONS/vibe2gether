@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 })
     }
 
-    if (!product.is_available) {
+    if (!product.is_available || product.status !== "active") {
       console.error("[POST /api/marketplace/purchase] Product not available")
       return NextResponse.json({ error: "Product not available" }, { status: 400 })
     }

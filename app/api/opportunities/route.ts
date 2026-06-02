@@ -22,9 +22,10 @@ export async function GET(request: NextRequest) {
         user:users(id, display_name, full_name, profile_picture, is_verified),
         admin:admins!opportunities_admin_id_fkey(id, full_name, profile_picture)
       `)
-      .eq("status", "approved")
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1)
+
+    query = query.in("status", ["approved", "rejected"])
 
     if (category && category !== "All") {
       query = query.eq("category", category)

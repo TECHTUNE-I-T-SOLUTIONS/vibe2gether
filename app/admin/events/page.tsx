@@ -162,7 +162,7 @@ export default function EventsAdminPage() {
           category: newEvent.category,
           event_date: newEvent.eventDate,
           event_end_date: newEvent.eventEndDate,
-          location: newEvent.location,
+          location_name: newEvent.location,
           capacity: newEvent.capacity ? parseInt(newEvent.capacity) : null,
           is_free: newEvent.is_free,
           ticket_price: !newEvent.is_free ? parseFloat((parseFloat(newEvent.ticketPrice) / 1450).toFixed(2)) : null,
@@ -181,7 +181,7 @@ export default function EventsAdminPage() {
         const thumbnailUrl = await uploadThumbnail(event.id, newEvent.thumbnail)
         await supabase
           .from("events")
-          .update({ thumbnail_url: thumbnailUrl })
+          .update({ thumbnail: thumbnailUrl })
           .eq("id", event.id)
       }
 
@@ -223,7 +223,7 @@ export default function EventsAdminPage() {
   async function handleEditEvent(edited?: any) {
     const target = edited ?? editingEvent
 
-    if (!target?.title || !target?.event_date || !target?.location) {
+    if (!target?.title || !target?.event_date || !(target?.location || target?.location_name)) {
       toast({
         title: "Validation Error",
         description: "Please fill in title, date, and location",
@@ -235,7 +235,7 @@ export default function EventsAdminPage() {
     setEditingEventLoading(true)
 
     try {
-      let thumbnailUrl = target.thumbnail_url
+      let thumbnailUrl = target.thumbnail || target.thumbnail_url
       if (target.newThumbnail) {
         thumbnailUrl = await uploadThumbnail(target.id, target.newThumbnail)
       }
@@ -248,14 +248,14 @@ export default function EventsAdminPage() {
           category: target.category,
           event_date: target.event_date,
           event_end_date: target.event_end_date,
-          location_name: target.location,
+          location_name: target.location || target.location_name,
           capacity: target.capacity ? parseInt(target.capacity) : null,
           is_free: target.is_free,
           ticket_price: !target.is_free ? parseFloat((parseFloat(target.ticket_price) / 1450).toFixed(2)) : null,
           organizer_name: target.organizer_name,
           organizer_contact: target.organizer_contact,
           tags: Array.isArray(target?.tags) ? target.tags : (typeof target.tags === "string" ? target.tags.split(",").map((t: string) => t.trim()) : []),
-          thumbnail_url: thumbnailUrl,
+          thumbnail: thumbnailUrl,
         })
         .eq("id", target.id)
 
@@ -405,6 +405,7 @@ export default function EventsAdminPage() {
   const EventCard = ({ event, showStatusButton = false }: { event: any; showStatusButton?: boolean }) => {
     // Use thumbnail field from database (direct URL)
     const thumbnailUrl = event.thumbnail || event.thumbnail_url
+    const soldOut = Boolean(event.capacity && (event.registered_count || 0) >= event.capacity)
 
     return (
       <Card className="overflow-hidden hover:shadow-lg transition-shadow">
@@ -423,6 +424,9 @@ export default function EventsAdminPage() {
             <Calendar className="w-4 h-4" />
             {formatDate(event.event_date)}
           </div>
+          <p className="text-sm text-muted-foreground mb-3">
+            Capacity: {event.registered_count || 0}{event.capacity ? `/${event.capacity}` : " / Unlimited"}
+          </p>
           <p className="text-sm text-muted-foreground mb-3">📍 {event.location_name || event.location}</p>
           <div className="flex items-center justify-between mb-4">
             <div className="flex flex-col">
@@ -454,7 +458,7 @@ export default function EventsAdminPage() {
                     : "bg-red-500/20 text-red-600"
               }
             >
-              {event.status}
+              {soldOut ? "sold out" : event.status}
             </Badge>
           </div>
           <div className="flex gap-2">

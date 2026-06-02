@@ -75,7 +75,6 @@ export default function MarketplaceAdminPage() {
         .from("marketplace_products")
         .select("*")
         .eq("admin_id", admin?.id)
-        .eq("status", "active")
         .order("created_at", { ascending: false })
 
       const { data: pending } = await supabase

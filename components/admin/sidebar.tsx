@@ -27,6 +27,7 @@ import {
   BookOpen,
   Bell,
   Mail,
+  BadgeCheck,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -49,6 +50,7 @@ const mainItems: SidebarItem[] = [
 const secondaryItems: SidebarItem[] = [
   { icon: ShoppingBag, label: "marketplace", href: "/admin/marketplace" },
   { icon: Calendar, label: "events", href: "/admin/events" },
+  { icon: BadgeCheck, label: "subscriptions", href: "/admin/subscriptions" },
   { icon: Briefcase, label: "opportunities", href: "/admin/opportunities" },
   { icon: GraduationCap, label: "learn", href: "/admin/learn" },
   { icon: BookOpen, label: "blog", href: "/admin/blog" },
