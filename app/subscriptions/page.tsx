@@ -19,6 +19,14 @@ function formatDuration(service: any) {
   return `${value} ${unit}${value === 1 ? "" : "s"}`
 }
 
+const USD_TO_NGN = 1450
+const USD_TO_XAF = 605
+const NGN_TO_XAF = USD_TO_XAF / USD_TO_NGN
+
+function formatXafEquivalent(amountNgn: number) {
+  return Math.round(Number(amountNgn || 0) * NGN_TO_XAF).toLocaleString()
+}
+
 export default async function PublicSubscriptionsPage() {
   const supabase = createServiceRoleClient()
   const { data: services } = await supabase
@@ -45,7 +53,7 @@ export default async function PublicSubscriptionsPage() {
                 Community <span className="gradient-text">Subscriptions</span>
               </h1>
               <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
-                Browse available services from Vibe2Gether partners. Log in to subscribe, pay securely, and keep receipts in your dashboard.
+                Browse available services from Vibe2Gether partners. Subscribe, pay securely, and keep receipts in your dashboard.
               </p>
               <PublicSubscriptionHeroActions />
             </div>
@@ -111,7 +119,11 @@ export default async function PublicSubscriptionsPage() {
                           <p className="text-2xl font-bold">
                             {service.currency} {Number(service.price).toLocaleString()}
                           </p>
-                          <p className="text-xs text-muted-foreground">Secure checkout after login</p>
+                          <p className="text-xs text-muted-foreground">
+                            XAF equivalent: Fr{formatXafEquivalent(service.price)}
+                            <br />
+                            Billed every {formatDuration(service)}.
+                          </p>
                         </div>
                         <PublicSubscriptionPrimaryAction />
                       </div>

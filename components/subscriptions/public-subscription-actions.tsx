@@ -31,9 +31,9 @@ export function PublicSubscriptionHeroActions() {
       <Button asChild size="lg" className="rounded-full gradient-bg">
         <Link href={primaryHref}>{status === "authenticated" ? "View in Dashboard" : "Log in to Subscribe"}</Link>
       </Button>
-      <Button asChild size="lg" variant="outline" className="rounded-full">
+      {/* <Button asChild size="lg" variant="outline" className="rounded-full">
         <Link href={dashboardHref}>View Dashboard</Link>
-      </Button>
+      </Button> */}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 import axios from "axios"
 
 const FLUTTERWAVE_BASE_URL = "https://api.flutterwave.com/v3"
-const FLUTTERWAVE_SECRET = process.env.FLUTTERWAVE_CLIENT_SECRET || process.env.FLUTTERWAVE_SECRET_KEY
+const FLUTTERWAVE_SECRET = process.env.FLUTTERWAVE_SECRET_KEY || process.env.FLUTTERWAVE_CLIENT_SECRET
 
 type InitializeFlutterwavePaymentParams = {
   email: string
