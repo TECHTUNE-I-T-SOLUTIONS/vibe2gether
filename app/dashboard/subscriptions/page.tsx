@@ -2,7 +2,9 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react"
 import Image from "next/image"
-import { useSearchParams } from "next/navigation"
+import Link from "next/link"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useSession } from "next-auth/react"
 import {
   BadgeCheck,
   Calendar,
@@ -49,6 +51,8 @@ function formatDuration(service: any) {
 
 function UserSubscriptionsContent() {
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const { status } = useSession()
   const { toast } = useToast()
   const [services, setServices] = useState<any[]>([])
   const [purchases, setPurchases] = useState<any[]>([])
@@ -61,6 +65,8 @@ function UserSubscriptionsContent() {
   const [category, setCategory] = useState("all")
   const [verificationReference, setVerificationReference] = useState("")
   const [resendingReceiptId, setResendingReceiptId] = useState<string | null>(null)
+  const [paymentMethod, setPaymentMethod] = useState<"paystack" | "flutterwave">("paystack")
+  const isLoggedIn = status === "authenticated"
 
   async function loadSubscriptions() {
     try {
@@ -82,7 +88,7 @@ function UserSubscriptionsContent() {
   }, [])
 
   useEffect(() => {
-    const reference = searchParams.get("reference")
+    const reference = searchParams.get("reference") || searchParams.get("tx_ref")
     if (!reference || verificationReference === reference) return
 
     setVerificationReference(reference)
@@ -111,15 +117,24 @@ function UserSubscriptionsContent() {
     verify()
   }, [searchParams, toast, verificationReference])
 
-  async function checkout(serviceId: string) {
+  async function checkout(serviceId: string, method = paymentMethod) {
+    if (!isLoggedIn) {
+      router.push(`/login?callbackUrl=${encodeURIComponent("/dashboard/subscriptions")}`)
+      return
+    }
+
     setPayingId(serviceId)
     try {
       const res = await fetch("/api/subscriptions/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serviceId }),
+        body: JSON.stringify({ serviceId, paymentMethod: method }),
       })
       const data = await res.json()
+      if (res.status === 401) {
+        router.push(`/login?callbackUrl=${encodeURIComponent("/dashboard/subscriptions")}`)
+        return
+      }
       if (!res.ok) throw new Error(data.error || "Payment failed")
       window.location.href = data.authorizationUrl
     } catch (error: any) {
@@ -130,7 +145,12 @@ function UserSubscriptionsContent() {
   }
 
   function requestCheckout(service: any) {
+    if (!isLoggedIn) {
+      router.push(`/login?callbackUrl=${encodeURIComponent("/dashboard/subscriptions")}`)
+      return
+    }
     if (!service.is_active || activePurchaseByService.has(service.id)) return
+    setPaymentMethod((service.currency || "NGN").toUpperCase() === "NGN" ? "paystack" : "flutterwave")
     setConfirmService(service)
   }
 
@@ -174,7 +194,7 @@ function UserSubscriptionsContent() {
         <div>
           <Badge variant="outline" className="mb-3 gap-2">
             <ShieldCheck className="h-4 w-4" />
-            Secure Paystack checkout
+            Vibe2gether Verified
           </Badge>
           <h1 className="text-3xl font-bold tracking-tight">Subscriptions</h1>
           <p className="mt-2 max-w-2xl text-muted-foreground">
@@ -202,6 +222,22 @@ function UserSubscriptionsContent() {
           </Card>
         </div>
       </div>
+
+      {!isLoggedIn && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="font-semibold">Log in to manage subscriptions</h2>
+              <p className="text-sm text-muted-foreground">
+                You can browse services here, but you need to log in before subscribing or viewing receipts.
+              </p>
+            </div>
+            <Button asChild className="shrink-0 gradient-bg">
+              <Link href={`/login?callbackUrl=${encodeURIComponent("/dashboard/subscriptions")}`}>Log in to Subscribe</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs value={viewTab} onValueChange={setViewTab} className="w-full">
         <TabsList className="grid h-auto w-full grid-cols-2 md:w-[420px]">
@@ -454,7 +490,7 @@ function UserSubscriptionsContent() {
               <DialogHeader>
                 <DialogTitle>Confirm subscription</DialogTitle>
                 <DialogDescription>
-                  You are about to subscribe to {confirmService.name}. You will be redirected to Paystack to complete payment.
+                  You are about to subscribe to {confirmService.name}. Choose a payment method to continue securely.
                 </DialogDescription>
               </DialogHeader>
               <div className="rounded-lg border p-4">
@@ -464,13 +500,40 @@ function UserSubscriptionsContent() {
                   {confirmService.currency} {Number(confirmService.price).toLocaleString()}
                 </p>
               </div>
+              <div className="grid gap-2">
+                <button
+                  type="button"
+                  disabled={(confirmService.currency || "NGN").toUpperCase() !== "NGN"}
+                  onClick={() => setPaymentMethod("paystack")}
+                  className={cn(
+                    "rounded-lg border p-3 text-left transition",
+                    paymentMethod === "paystack" ? "border-primary bg-primary/10" : "hover:bg-muted",
+                    (confirmService.currency || "NGN").toUpperCase() !== "NGN" && "cursor-not-allowed opacity-50"
+                  )}
+                >
+                  <p className="font-semibold">Payment method I</p>
+                  <p className="text-xs text-muted-foreground">Best for NGN subscriptions.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("flutterwave")}
+                  className={cn(
+                    "rounded-lg border p-3 text-left transition",
+                    paymentMethod === "flutterwave" ? "border-primary bg-primary/10" : "hover:bg-muted"
+                  )}
+                >
+                  <p className="font-semibold">Payment method II</p>
+                  <p className="text-xs text-muted-foreground">Supports more currency options.</p>
+                </button>
+              </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setConfirmService(null)}>Cancel</Button>
                 <Button
                   onClick={() => {
                     const serviceId = confirmService.id
+                    const method = paymentMethod
                     setConfirmService(null)
-                    checkout(serviceId)
+                    checkout(serviceId, method)
                   }}
                   disabled={payingId === confirmService.id}
                 >

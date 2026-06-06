@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react"
 import Image from "next/image"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { MobileNav } from "@/components/mobile-nav"
@@ -24,19 +26,23 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getEvents } from "@/lib/supabase/queries"
-import { EventDetailsModal } from "@/components/event-details-modal"
-import { createClient } from "@/lib/supabase/client"
+
+function slugify(value: string) {
+  return (value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+}
 
 export default function EventsPage() {
+  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
   const [activeCategory, setActiveCategory] = useState("all")
   const [events, setEvents] = useState<any[]>([])
   const [eventCategories, setEventCategories] = useState<any[]>([{ id: "all", label: "All Events", icon: Sparkles }])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedEvent, setSelectedEvent] = useState<any>(null)
-  const [detailsModalOpen, setDetailsModalOpen] = useState(false)
-  const [creatorInfo, setCreatorInfo] = useState<any>(null)
 
   useEffect(() => {
     async function fetchEvents() {
@@ -68,33 +74,15 @@ export default function EventsPage() {
             ...dynamicCategories,
           ])
           
-          // Check for event_id in URL and open modal
+          // Old shared links used event_id on this page. Send them to the SEO event page.
           const urlParams = new URLSearchParams(window.location.search);
           const eventId = urlParams.get('event_id');
           if (eventId && data) {
             const sharedEvent = data.find((e: any) => e.id === eventId);
             if (sharedEvent) {
-              setSelectedEvent(sharedEvent);
-              setDetailsModalOpen(true);
-              
-              // Fetch creator info
-              try {
-                const creatorId = sharedEvent.created_by || sharedEvent.creator_id;
-                if (creatorId) {
-                  const supabase = await createClient();
-                  const { data: creatorData } = await supabase
-                    .from("users")
-                    .select("*")
-                    .eq("id", creatorId)
-                    .single();
-          
-                  if (creatorData) {
-                    setCreatorInfo(creatorData);
-                  }
-                }
-              } catch (error) {
-                console.error("Failed to fetch creator info:", error);
-              }
+              router.replace(`/events/${slugify(sharedEvent.title)}`);
+            } else {
+              router.replace(`/events/${eventId}`);
             }
           }
         }
@@ -105,7 +93,7 @@ export default function EventsPage() {
       }
     }
     fetchEvents()
-  }, [])
+  }, [router])
 
   const filteredEvents = events.filter((event) => {
     const location = event.location_name || event.location || ""
@@ -125,31 +113,6 @@ export default function EventsPage() {
 
     return matchesSearch && matchesCategory
   })
-
-  const handleViewDetails = async (event: any) => {
-    setSelectedEvent(event)
-
-    // Fetch creator info using created_by field
-    try {
-      const creatorId = event.created_by || event.creator_id
-      if (creatorId) {
-        const supabase = await createClient()
-        const { data } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", creatorId)
-          .single()
-
-        if (data) {
-          setCreatorInfo(data)
-        }
-      }
-    } catch (error) {
-      console.error("Failed to fetch creator info:", error)
-    }
-
-    setDetailsModalOpen(true)
-  }
 
   const formatPrice = (event: any) => {
     if (!event?.ticket_price || event?.is_free) return "Free"
@@ -294,11 +257,13 @@ export default function EventsPage() {
                             )}
                           </div>
                           <Button 
+                            asChild
                             className="rounded-full gradient-bg"
-                            onClick={() => handleViewDetails(event)}
                           >
-                            View Details
-                            <ArrowRight className="w-4 h-4 ml-2" />
+                            <Link href={`/events/${slugify(event.title)}`}>
+                              View Details
+                              <ArrowRight className="w-4 h-4 ml-2" />
+                            </Link>
                           </Button>
                         </div>
                       </CardContent>
@@ -365,11 +330,11 @@ export default function EventsPage() {
                               <Badge variant="secondary">Free</Badge>
                             )}
                             <Button 
+                              asChild
                               size="sm" 
                               className="rounded-full gradient-bg"
-                              onClick={() => handleViewDetails(event)}
                             >
-                              Details
+                              <Link href={`/events/${slugify(event.title)}`}>Details</Link>
                             </Button>
                           </div>
                         </div>
@@ -384,18 +349,6 @@ export default function EventsPage() {
       </main>
       <Footer />
       <MobileNav />
-
-      {/* Event Details Modal */}
-      <EventDetailsModal
-        isOpen={detailsModalOpen}
-        onClose={() => {
-          setDetailsModalOpen(false)
-          setSelectedEvent(null)
-          setCreatorInfo(null)
-        }}
-        event={selectedEvent}
-        creator={creatorInfo}
-      />
     </div>
   )
 }

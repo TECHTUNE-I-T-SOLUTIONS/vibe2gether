@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Users, ShoppingBag, Calendar, User } from "lucide-react"
+import { Home, Users, ShoppingBag, Calendar, BadgeCheck } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const navItems = [
@@ -10,7 +10,7 @@ const navItems = [
   { href: "/explore", icon: Users, label: "Explore" },
   { href: "/marketplace", icon: ShoppingBag, label: "Shop" },
   { href: "/events", icon: Calendar, label: "Events" },
-  { href: "/dashboard/feed", icon: User, label: "Feed" },
+  { href: "/subscriptions", icon: BadgeCheck, label: "Subs" },
 ]
 
 export function MobileNav() {

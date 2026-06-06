@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { sendEmail } from "@/lib/email-service"
 import { verifyPayment } from "@/lib/paystack"
+import { verifyFlutterwavePayment } from "@/lib/flutterwave"
 import {
   buildAdminSubscriptionPurchaseEmail,
   buildSubscriptionReceiptEmail,
@@ -43,8 +44,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, purchase, receiptEmailSent: false })
     }
 
-    const verification = await verifyPayment(reference)
-    if (!verification.status || verification.data?.status !== "success") {
+    const provider = purchase.metadata?.payment_provider === "flutterwave" ? "flutterwave" : "paystack"
+    const verification =
+      provider === "flutterwave"
+        ? await verifyFlutterwavePayment(reference)
+        : await verifyPayment(reference)
+    const verified =
+      provider === "flutterwave"
+        ? verification.status === "success" && verification.data?.status === "successful"
+        : verification.status && verification.data?.status === "success"
+
+    if (!verified) {
       return NextResponse.json({ error: "Payment not confirmed" }, { status: 400 })
     }
 
@@ -60,8 +70,16 @@ export async function POST(request: NextRequest) {
         starts_at: startsAt.toISOString(),
         expires_at: expiresAt.toISOString(),
         receipt_number: receiptNumber,
-        paid_at: verification.data.paid_at || startsAt.toISOString(),
-        paystack_transaction_id: verification.data.id,
+        paid_at:
+          provider === "flutterwave"
+            ? verification.data?.created_at || startsAt.toISOString()
+            : verification.data?.paid_at || startsAt.toISOString(),
+        paystack_transaction_id: verification.data?.id,
+        metadata: {
+          ...(purchase.metadata || {}),
+          payment_provider: provider,
+          payment_verified_at: startsAt.toISOString(),
+        },
       })
       .eq("id", purchase.id)
       .select("*, service:subscription_services(*)")
