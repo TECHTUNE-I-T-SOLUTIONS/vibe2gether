@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
+import { reconcileExpiredPremiumSubscriptions } from "@/lib/premium-expiry"
 
 /**
  * Check if user has an active premium subscription
@@ -26,6 +27,7 @@ export async function GET(request: NextRequest) {
 
     const userId = session.user.id
     const supabase = await createClient()
+    await reconcileExpiredPremiumSubscriptions()
 
     // Query the premium_subscriptions table for active subscriptions
     const { data: subscriptions, error } = await supabase
@@ -63,7 +65,38 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Also check for pending subscriptions that haven't expired (for newly created subscriptions)
+    const { data: coinSubscriptions, error: coinError } = await supabase
+      .from("coin_premium_subscriptions")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .order("expires_at", { ascending: false })
+
+    if (!coinError) {
+      const activeCoinSubscription = coinSubscriptions?.find((sub) => {
+        const expiresAt = new Date(sub.expires_at)
+        return expiresAt > now
+      })
+
+      if (activeCoinSubscription) {
+        return NextResponse.json(
+          {
+            isPremium: true,
+            subscription: {
+              plan: activeCoinSubscription.plan,
+              expiresAt: activeCoinSubscription.expires_at,
+              paymentMethod: "coins",
+              daysRemaining: Math.ceil(
+                (new Date(activeCoinSubscription.expires_at).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+              ),
+            },
+          },
+          { status: 200 }
+        )
+      }
+    }
+
+    // Also check for pending paid subscriptions that haven't expired (payment in progress only)
     const { data: pendingSubscriptions, error: pendingError } = await supabase
       .from("premium_subscriptions")
       .select("*")

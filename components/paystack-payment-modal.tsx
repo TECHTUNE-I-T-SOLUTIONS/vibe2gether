@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { PaymentMethodOptions } from "@/components/payment-method-options"
 
 interface PaystackPaymentModalProps {
   isOpen: boolean
@@ -319,6 +320,10 @@ export function PaystackPaymentModal({
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{errorMessage}</AlertDescription>
             </Alert>
+          )}
+
+          {(paymentStatus === "idle" || paymentStatus === "processing" || paymentStatus === "error") && (
+            <PaymentMethodOptions />
           )}
 
           {/* Form */}

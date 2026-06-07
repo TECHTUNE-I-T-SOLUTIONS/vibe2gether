@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { createClient } from "@/lib/supabase/server"
+import { reconcileExpiredPremiumSubscriptions } from "@/lib/premium-expiry"
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,6 +14,7 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createClient()
+    await reconcileExpiredPremiumSubscriptions()
 
     console.log(`[GET /api/user/premium-status] Checking premium status for user ${session.user.id}`)
 
@@ -35,8 +37,45 @@ export async function GET(request: NextRequest) {
     }
 
     if (!subscription) {
-      console.log(`[GET /api/user/premium-status] No active premium subscription for user ${session.user.id}`)
-      return NextResponse.json({ hasPremium: false, subscription: null }, { status: 200 })
+      const { data: coinSubscription, error: coinError } = await supabase
+        .from("coin_premium_subscriptions")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .eq("status", "active")
+        .gte("expires_at", now)
+        .order("expires_at", { ascending: false })
+        .limit(1)
+        .single()
+
+      if (coinError && coinError.code !== "PGRST116") {
+        console.error("[GET /api/user/premium-status] Error fetching coin subscription:", coinError)
+        throw coinError
+      }
+
+      if (!coinSubscription) {
+        console.log(`[GET /api/user/premium-status] No active premium subscription for user ${session.user.id}`)
+        return NextResponse.json({ hasPremium: false, subscription: null }, { status: 200 })
+      }
+
+      const coinDaysUntilExpiry = Math.ceil(
+        (new Date(coinSubscription.expires_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+      )
+
+      return NextResponse.json({
+        hasPremium: true,
+        subscription: {
+          id: coinSubscription.id,
+          plan: coinSubscription.plan,
+          status: coinSubscription.status,
+          amount: coinSubscription.coins_spent,
+          startedAt: coinSubscription.activated_at,
+          expiresAt: coinSubscription.expires_at,
+          daysUntilExpiry: coinDaysUntilExpiry,
+          autoRenew: coinSubscription.auto_renew,
+          paymentMethod: "coins",
+          tier: null,
+        },
+      })
     }
 
     console.log(`[GET /api/user/premium-status] User has active premium: ${subscription.plan}`)

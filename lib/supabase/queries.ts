@@ -1226,7 +1226,9 @@ export async function getUserPremiumSubscription(userId: string) {
     .from('premium_subscriptions')
     .select('*')
     .eq('user_id', userId)
-    .order('created_at', { ascending: false })
+    .eq('status', 'active')
+    .gt('expires_at', new Date().toISOString())
+    .order('expires_at', { ascending: false })
     .limit(1)
     .single()
 

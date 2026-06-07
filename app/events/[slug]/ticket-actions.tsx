@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { useSession } from "next-auth/react"
+import { PaymentMethodOptions } from "@/components/payment-method-options"
 
 export function TicketActions({ event }: { event: any }) {
   const [open, setOpen] = useState(false)
@@ -96,6 +97,7 @@ export function TicketActions({ event }: { event: any }) {
             </div>
 
             <form onSubmit={handlePurchaseTicket} className="space-y-4">
+              {!event.is_free && <PaymentMethodOptions />}
               <div className="space-y-2">
                 <Label htmlFor="attendeeName">Full Name *</Label>
                 <div className="relative">

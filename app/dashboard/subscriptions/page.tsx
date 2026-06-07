@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { PaymentMethodOptions } from "@/components/payment-method-options"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 
@@ -65,7 +66,6 @@ function UserSubscriptionsContent() {
   const [category, setCategory] = useState("all")
   const [verificationReference, setVerificationReference] = useState("")
   const [resendingReceiptId, setResendingReceiptId] = useState<string | null>(null)
-  const [paymentMethod, setPaymentMethod] = useState<"paystack" | "flutterwave">("paystack")
   const isLoggedIn = status === "authenticated"
 
   async function loadSubscriptions() {
@@ -117,7 +117,7 @@ function UserSubscriptionsContent() {
     verify()
   }, [searchParams, toast, verificationReference])
 
-  async function checkout(serviceId: string, method = paymentMethod) {
+  async function checkout(serviceId: string) {
     if (!isLoggedIn) {
       router.push(`/login?callbackUrl=${encodeURIComponent("/dashboard/subscriptions")}`)
       return
@@ -128,7 +128,7 @@ function UserSubscriptionsContent() {
       const res = await fetch("/api/subscriptions/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serviceId, paymentMethod: method }),
+        body: JSON.stringify({ serviceId, paymentMethod: "paystack" }),
       })
       const data = await res.json()
       if (res.status === 401) {
@@ -150,7 +150,6 @@ function UserSubscriptionsContent() {
       return
     }
     if (!service.is_active || activePurchaseByService.has(service.id)) return
-    setPaymentMethod((service.currency || "NGN").toUpperCase() === "NGN" ? "paystack" : "flutterwave")
     setConfirmService(service)
   }
 
@@ -500,40 +499,14 @@ function UserSubscriptionsContent() {
                   {confirmService.currency} {Number(confirmService.price).toLocaleString()}
                 </p>
               </div>
-              <div className="grid gap-2">
-                <button
-                  type="button"
-                  disabled={(confirmService.currency || "NGN").toUpperCase() !== "NGN"}
-                  onClick={() => setPaymentMethod("paystack")}
-                  className={cn(
-                    "rounded-lg border p-3 text-left transition",
-                    paymentMethod === "paystack" ? "border-primary bg-primary/10" : "hover:bg-muted",
-                    (confirmService.currency || "NGN").toUpperCase() !== "NGN" && "cursor-not-allowed opacity-50"
-                  )}
-                >
-                  <p className="font-semibold">Payment method I</p>
-                  <p className="text-xs text-muted-foreground">Best for NGN subscriptions.</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod("flutterwave")}
-                  className={cn(
-                    "rounded-lg border p-3 text-left transition",
-                    paymentMethod === "flutterwave" ? "border-primary bg-primary/10" : "hover:bg-muted"
-                  )}
-                >
-                  <p className="font-semibold">Payment method II</p>
-                  <p className="text-xs text-muted-foreground">Supports more currency options.</p>
-                </button>
-              </div>
+              <PaymentMethodOptions />
               <DialogFooter>
                 <Button variant="outline" onClick={() => setConfirmService(null)}>Cancel</Button>
                 <Button
                   onClick={() => {
                     const serviceId = confirmService.id
-                    const method = paymentMethod
                     setConfirmService(null)
-                    checkout(serviceId, method)
+                    checkout(serviceId)
                   }}
                   disabled={payingId === confirmService.id}
                 >

@@ -18,6 +18,7 @@ import Image from "next/image"
 import { Loader2, Plus, Upload, Trash2, Eye, Package, X, Edit2, MessageCircle } from "lucide-react"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { createClient } from "@/lib/supabase/client"
+import { PaymentMethodOptions } from "@/components/payment-method-options"
 
 const CATEGORIES = [
   "Electronics",
@@ -1267,6 +1268,10 @@ export default function DashboardMarketplaceManagePage() {
                 <label className="text-sm font-medium text-muted-foreground">Seller</label>
                 <p className="mt-2">{selectedProduct.users?.display_name || selectedProduct.seller_name || "Unknown"}</p>
               </div>
+
+              {selectedProduct.user_id !== session?.user?.id && (
+                <PaymentMethodOptions />
+              )}
               
               <DialogFooter className="pt-4 gap-2">
                 <Button variant="outline" onClick={() => setShowDetailDialog(false)}>

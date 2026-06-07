@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
+import { reconcileExpiredPremiumSubscriptions } from "@/lib/premium-expiry"
 
 /**
  * Sync premium status between premium_subscriptions and users table
@@ -26,6 +27,7 @@ export async function POST(request: NextRequest) {
 
     const userId = session.user.id
     const supabase = await createClient()
+    await reconcileExpiredPremiumSubscriptions()
 
     // Step 1: Check for ACTIVE premium subscriptions (status = 'active' ONLY)
     const { data: activeSubscriptions, error: subError } = await supabase
@@ -43,12 +45,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const { data: activeCoinSubscriptions, error: coinSubError } = await supabase
+      .from("coin_premium_subscriptions")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .order("expires_at", { ascending: false })
+
+    if (coinSubError) {
+      console.error("Error fetching coin premium subscriptions:", coinSubError)
+    }
+
     // Step 2: Determine if user should be premium based on active subscriptions
     const now = new Date()
-    const hasActiveSubscription = activeSubscriptions?.some((sub) => {
-      const expiresAt = new Date(sub.expires_at)
-      return expiresAt > now
-    }) ?? false
+    const hasActiveSubscription = Boolean(
+      activeSubscriptions?.some((sub) => new Date(sub.expires_at) > now) ||
+      activeCoinSubscriptions?.some((sub) => new Date(sub.expires_at) > now)
+    )
 
     // Step 3: Get current user premium status from users table
     const { data: userRecord, error: userError } = await supabase
@@ -155,6 +168,7 @@ export async function GET(request: NextRequest) {
 
     const userId = session.user.id
     const supabase = await createClient()
+    await reconcileExpiredPremiumSubscriptions()
 
     // Check for ACTIVE premium subscriptions
     const { data: activeSubscriptions, error: subError } = await supabase
@@ -172,6 +186,13 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    const { data: activeCoinSubscriptions } = await supabase
+      .from("coin_premium_subscriptions")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .order("expires_at", { ascending: false })
+
     // Check user current status
     const { data: userRecord, error: userError } = await supabase
       .from("users")
@@ -188,10 +209,10 @@ export async function GET(request: NextRequest) {
     }
 
     const now = new Date()
-    const hasActiveSubscription = activeSubscriptions?.some((sub) => {
-      const expiresAt = new Date(sub.expires_at)
-      return expiresAt > now
-    }) ?? false
+    const hasActiveSubscription = Boolean(
+      activeSubscriptions?.some((sub) => new Date(sub.expires_at) > now) ||
+      activeCoinSubscriptions?.some((sub) => new Date(sub.expires_at) > now)
+    )
 
     const currentlyPremium = userRecord?.is_premium ?? false
     const needsSync = currentlyPremium !== hasActiveSubscription

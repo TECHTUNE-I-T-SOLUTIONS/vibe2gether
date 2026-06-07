@@ -21,6 +21,7 @@ export async function syncUserPremiumStatus(userId: string): Promise<boolean> {
       .select("*")
       .eq("user_id", userId)
       .eq("status", "active") // ONLY active, not pending
+      .gt("expires_at", new Date().toISOString())
       .order("expires_at", { ascending: false })
 
     if (subError) {
@@ -28,12 +29,15 @@ export async function syncUserPremiumStatus(userId: string): Promise<boolean> {
       return false
     }
 
-    // Determine if user should be premium based on active subscriptions
     const now = new Date()
-    const hasActiveSubscription = activeSubscriptions?.some((sub) => {
-      const expiresAt = new Date(sub.expires_at)
-      return expiresAt > now
-    }) ?? false
+    const { data: activeCoinSubscriptions } = await supabase
+      .from("coin_premium_subscriptions")
+      .select("expires_at")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .gt("expires_at", now.toISOString())
+
+    const hasActiveSubscription = Boolean(activeSubscriptions?.length || activeCoinSubscriptions?.length)
 
     // Get current user premium status
     const { data: userRecord, error: userError } = await supabase
@@ -89,21 +93,22 @@ export async function hasActivePremiumSubscription(userId: string): Promise<bool
       .select("expires_at")
       .eq("user_id", userId)
       .eq("status", "active")
+      .gt("expires_at", now.toISOString())
       .limit(1)
 
-    if (activeSubscriptions?.some((sub) => new Date(sub.expires_at) > now)) {
+    if (activeSubscriptions?.length) {
       return true
     }
 
-    // Fallback: check for PENDING subscriptions (for newly created ones)
-    const { data: pendingSubscriptions } = await supabase
-      .from("premium_subscriptions")
+    const { data: activeCoinSubscriptions } = await supabase
+      .from("coin_premium_subscriptions")
       .select("expires_at")
       .eq("user_id", userId)
-      .eq("status", "pending")
+      .eq("status", "active")
+      .gt("expires_at", now.toISOString())
       .limit(1)
 
-    if (pendingSubscriptions?.some((sub) => new Date(sub.expires_at) > now)) {
+    if (activeCoinSubscriptions?.length) {
       return true
     }
 
@@ -127,6 +132,7 @@ export async function getUserSubscriptionDetails(userId: string) {
       .select("*")
       .eq("user_id", userId)
       .eq("status", "active")
+      .gt("expires_at", new Date().toISOString())
       .order("expires_at", { ascending: true })
       .limit(1)
 

@@ -31,11 +31,25 @@ export async function GET(request: NextRequest) {
     const page = parseInt(url.searchParams.get("page") || "1")
     const limit = parseInt(url.searchParams.get("limit") || "20")
 
-    // Fetch premium subscriptions
+    const now = new Date().toISOString()
+
+    // Fetch active, unexpired premium subscriptions
     const { data: premiumSubs } = await supabase
       .from("premium_subscriptions")
       .select("user_id")
-    const premiumUserIds = new Set(premiumSubs?.map((s: any) => s.user_id) ?? [])
+      .eq("status", "active")
+      .gt("expires_at", now)
+
+    const { data: coinPremiumSubs } = await supabase
+      .from("coin_premium_subscriptions")
+      .select("user_id")
+      .eq("status", "active")
+      .gt("expires_at", now)
+
+    const premiumUserIds = new Set([
+      ...(premiumSubs?.map((s: any) => s.user_id) ?? []),
+      ...(coinPremiumSubs?.map((s: any) => s.user_id) ?? []),
+    ])
 
     // Fetch user verifications
     const { data: verifications } = await supabase

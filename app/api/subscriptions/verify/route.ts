@@ -49,10 +49,11 @@ export async function POST(request: NextRequest) {
       provider === "flutterwave"
         ? await verifyFlutterwavePayment(reference)
         : await verifyPayment(reference)
+    const verificationData = verification.data as any
     const verified =
       provider === "flutterwave"
-        ? verification.status === "success" && verification.data?.status === "successful"
-        : verification.status && verification.data?.status === "success"
+        ? verification.status === "success" && verificationData?.status === "successful"
+        : verification.status && verificationData?.status === "success"
 
     if (!verified) {
       return NextResponse.json({ error: "Payment not confirmed" }, { status: 400 })
@@ -72,9 +73,9 @@ export async function POST(request: NextRequest) {
         receipt_number: receiptNumber,
         paid_at:
           provider === "flutterwave"
-            ? verification.data?.created_at || startsAt.toISOString()
-            : verification.data?.paid_at || startsAt.toISOString(),
-        paystack_transaction_id: verification.data?.id,
+            ? verificationData?.created_at || startsAt.toISOString()
+            : verificationData?.paid_at || startsAt.toISOString(),
+        paystack_transaction_id: verificationData?.id,
         metadata: {
           ...(purchase.metadata || {}),
           payment_provider: provider,

@@ -11,6 +11,7 @@ import { useUserProfile } from "@/hooks/use-user-profile"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter, useSearchParams } from "next/navigation"
+import { PaymentMethodOptions } from "@/components/payment-method-options"
 
 const PREMIUM_FEATURES = [
   { name: "Unlimited Swipes", description: "Unlimited swipes on profiles", premium: false },
@@ -150,6 +151,9 @@ function PremiumUpgradePageContent() {
         .select("*")
         .eq("user_id", user?.id)
         .eq("status", "active")
+        .gt("expires_at", new Date().toISOString())
+        .order("expires_at", { ascending: false })
+        .limit(1)
         .single()
 
       if (err && err.code !== "PGRST116") {
@@ -438,7 +442,8 @@ function PremiumUpgradePageContent() {
         <CardHeader>
           <CardTitle className="text-lg">Secure Payment</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
+        <CardContent className="space-y-4 text-sm text-muted-foreground">
+          <PaymentMethodOptions />
           <p>✓ Payments are processed securely through Paystack</p>
           <p>✓ Your subscription will renew automatically</p>
           <p>✓ You can cancel anytime from your account settings</p>

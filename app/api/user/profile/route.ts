@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 import { createClient } from "@/lib/supabase/server"
+import { reconcileExpiredPremiumSubscriptions } from "@/lib/premium-expiry"
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,6 +13,7 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createClient()
+    await reconcileExpiredPremiumSubscriptions()
 
     // Fetch user profile data
     const { data: user, error } = await supabase
