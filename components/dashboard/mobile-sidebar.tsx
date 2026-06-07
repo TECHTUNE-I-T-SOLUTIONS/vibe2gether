@@ -9,11 +9,10 @@ import { useI18n } from "@/lib/i18n/context"
 import {
   LayoutDashboard,
   Users,
-  Wallet,
   MessageCircle,
   Bell,
   Settings,
-  Heart,
+  Repeat,
   ShoppingBag,
   Calendar,
   Bookmark,
@@ -52,6 +51,7 @@ const mainItems: SidebarItem[] = [
 const secondaryItems: SidebarItem[] = [
   { icon: Eye, label: "Opportunities", href: "/dashboard/opportunities" },
   { icon: ShoppingBag, label: "Marketplace", href: "/dashboard/marketplace/manage" },
+  { icon: Repeat, label: "Subscriptions", href: "/dashboard/subscriptions" },
   { icon: Calendar, label: "Events & Webinars", href: "/dashboard/events/manage" },
   { icon: Briefcase, label: "Learn & Grow", href: "/dashboard/learn" },
   { icon: Star, label: "Testimonies", href: "/dashboard/testimonies" },
