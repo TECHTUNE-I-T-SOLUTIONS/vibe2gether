@@ -392,7 +392,7 @@ export function ThreadPost({
                   <Badge key={i} variant="secondary">#{t}</Badge>
                 ))}
               </div>
-            )
+            )}
           </div>
 
           {/* More Options Menu */}
@@ -464,12 +464,14 @@ export function ThreadPost({
                       }
                     : { duration: 0 }
                 }
+                // eslint-disable-next-line no-inline-styles
                 style={{ width: `${media.length * 100}%` }}
               >
                 {media.map((item, index) => (
                   <div
                     key={index}
                     className="relative flex-shrink-0 h-full"
+                    // eslint-disable-next-line no-inline-styles
                     style={{ width: `${100 / media.length}%` }}
                   >
                     {item.type === "image" ? (

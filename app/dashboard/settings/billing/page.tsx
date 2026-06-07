@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { PaystackPaymentModal } from "@/components/paystack-payment-modal"
 import { useToast } from "@/hooks/use-toast"
+import { PaymentMethodOptions } from "@/components/payment-method-options"
 
 const COIN_PACKAGES = [
   { coins: 100, price: 9.99, label: "100 Coins", savings: 0 },
@@ -276,6 +277,8 @@ export default function BillingSettingsPage() {
             <DialogTitle>Add Coins to Your Wallet</DialogTitle>
             <DialogDescription>Choose a package to purchase</DialogDescription>
           </DialogHeader>
+
+          <PaymentMethodOptions />
 
           <div className="grid grid-cols-2 gap-3">
             {COIN_PACKAGES.map((pkg) => (
