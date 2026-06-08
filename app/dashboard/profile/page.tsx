@@ -25,6 +25,7 @@ import {
   MoreVertical,
   MessageCircle,
   Bookmark,
+  Crown,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -379,6 +380,14 @@ export default function ProfilePage() {
             <>
               {/* Desktop View */}
               <div className="hidden sm:flex gap-2 flex-wrap justify-end w-full sm:w-auto">
+                {!user.is_premium && (
+                  <Button size="sm" className="rounded-full gradient-bg" asChild>
+                    <Link href="/dashboard/premium">
+                      <Crown className="w-4 h-4 mr-1" />
+                      Go Premium
+                    </Link>
+                  </Button>
+                )}
                 <Button size="sm" className="rounded-full gradient-bg" onClick={() => setIsEditing(true)}>
                   <Edit className="w-4 h-4 mr-1" />
                   Edit
@@ -426,6 +435,14 @@ export default function ProfilePage() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
+                    {!user.is_premium && (
+                      <DropdownMenuItem asChild>
+                        <Link href="/dashboard/premium">
+                          <Crown className="w-4 h-4 mr-2" />
+                          Go Premium
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem onClick={() => setIsEditing(true)}>
                       <Edit className="w-4 h-4 mr-2" />
                       Edit Profile

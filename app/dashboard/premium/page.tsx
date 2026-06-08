@@ -6,8 +6,10 @@ import { Loader2, Crown, Check, Zap, Sparkles, AlertCircle, CheckCircle2, ArrowR
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { useUserProfile } from "@/hooks/use-user-profile"
-// import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -92,6 +94,40 @@ const PLANS = [
   },
 ]
 
+const MOBILE_MONEY_COUNTRIES = [
+  {
+    code: "CM",
+    label: "Cameroon",
+    dialCode: "237",
+    currency: "XAF",
+    placeholder: "6XXXXXXXX",
+    networks: [
+      { value: "MTN", label: "MTN Mobile Money" },
+      { value: "ORANGE", label: "Orange Money" },
+    ],
+  },
+  {
+    code: "NG",
+    label: "Nigeria",
+    dialCode: "234",
+    currency: "NGN",
+    placeholder: "8XXXXXXXXX",
+    networks: [
+      { value: "MTN", label: "MTN MoMo" },
+    ],
+  },
+  {
+    code: "US",
+    label: "United States",
+    dialCode: "1",
+    currency: "USD",
+    placeholder: "5550100000",
+    networks: [
+      { value: "MOBILE_MONEY", label: "Mobile Money" },
+    ],
+  },
+]
+
 // Helper function to format price
 function formatPrice(priceUSD: number, currencySymbol: string = "$"): string {
   return `${currencySymbol}${priceUSD.toFixed(2)}`
@@ -113,6 +149,14 @@ function PremiumUpgradePageContent() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [userCountry, setUserCountry] = useState<string>("US")
+  const [paymentMethod, setPaymentMethod] = useState<"paystack" | "flutterwave">("paystack")
+  const [mobileMoney, setMobileMoney] = useState({
+    country: "CM",
+    countryCode: "237",
+    currency: "XAF",
+    network: "MTN",
+    phoneNumber: "",
+  })
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -154,7 +198,7 @@ function PremiumUpgradePageContent() {
         .gt("expires_at", new Date().toISOString())
         .order("expires_at", { ascending: false })
         .limit(1)
-        .single()
+        .maybeSingle()
 
       if (err && err.code !== "PGRST116") {
         console.error("Error fetching subscription:", err)
@@ -229,10 +273,21 @@ function PremiumUpgradePageContent() {
     }
   }
 
-  async function handleUpgrade(plan: any) {
+  function openPaymentDialog(plan: any) {
+    setSelectedPlan(plan)
+    setPaymentMethod("paystack")
+    setShowPaymentDialog(true)
+  }
+
+  async function handleUpgrade(plan: any, method: "paystack" | "flutterwave") {
     try {
       if (!user?.id) {
         setError("You must be logged in to upgrade")
+        return
+      }
+
+      if (method === "flutterwave" && (!mobileMoney.countryCode || !mobileMoney.network || mobileMoney.phoneNumber.length < 8)) {
+        setError("Enter a valid mobile money wallet before continuing.")
         return
       }
 
@@ -253,6 +308,8 @@ function PremiumUpgradePageContent() {
           priceUSD: plan.priceUSD,
           amountNGNInKobo: amountNGNInKobo,
           currency: userCountry,
+          paymentMethod: method,
+          mobileMoney: method === "flutterwave" ? mobileMoney : undefined,
         }),
       })
 
@@ -263,12 +320,21 @@ function PremiumUpgradePageContent() {
         return
       }
 
+      if (method === "flutterwave" && result.instruction) {
+        toast.info("Approve on your phone", {
+          description: result.instruction,
+          duration: 7000,
+        })
+        setShowPaymentDialog(false)
+        return
+      }
+
       if (!result.authorization_url) {
         setError("Failed to get payment authorization URL")
         return
       }
 
-      console.log("[Premium] Payment initialized, redirecting to Paystack")
+      console.log("[Premium] Payment initialized, redirecting to provider")
 
       // Redirect to Paystack payment page
       window.location.href = result.authorization_url
@@ -294,6 +360,11 @@ function PremiumUpgradePageContent() {
   }
 
   const isPremium = subscription?.status === "active"
+  const selectedMobileMoneyCountry =
+    MOBILE_MONEY_COUNTRIES.find((country) => country.code === mobileMoney.country) || MOBILE_MONEY_COUNTRIES[0]
+  const methodTwoAmount = selectedPlan
+    ? Math.round(selectedPlan.priceUSD * (selectedMobileMoneyCountry.currency === "NGN" ? USD_TO_NGN : selectedMobileMoneyCountry.currency === "USD" ? 1 : 585.48))
+    : 0
 
   return (
     <div className="space-y-8 pb-8 p-4">
@@ -415,7 +486,7 @@ function PremiumUpgradePageContent() {
                   <Button
                     className="w-full"
                     size="lg"
-                    onClick={() => handleUpgrade(plan)}
+                    onClick={() => openPaymentDialog(plan)}
                     disabled={processing}
                   >
                     {processing ? (
@@ -437,19 +508,138 @@ function PremiumUpgradePageContent() {
         </div>
       </div>
 
-      {/* Info Section */}
-      <Card className="border-border/50 bg-muted/30">
-        <CardHeader>
-          <CardTitle className="text-lg">Secure Payment</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 text-sm text-muted-foreground">
-          <PaymentMethodOptions />
-          <p>✓ Payments are processed securely through Paystack</p>
-          <p>✓ Your subscription will renew automatically</p>
-          <p>✓ You can cancel anytime from your account settings</p>
-          <p>✓ No hidden fees or surprise charges</p>
-        </CardContent>
-      </Card>
+      <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+        <DialogContent className="flex max-h-[92dvh] flex-col overflow-hidden p-0 sm:max-w-lg">
+          {selectedPlan && (
+            <>
+              <DialogHeader className="shrink-0 border-b px-5 pb-4 pt-5 text-left">
+                <DialogTitle>Choose payment method</DialogTitle>
+                <DialogDescription>
+                  Confirm your {selectedPlan.name} premium plan and choose the currency option that works best for you.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+                <div className="rounded-lg border p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold">{selectedPlan.name}</p>
+                      <p className="text-sm text-muted-foreground">{selectedPlan.period}</p>
+                    </div>
+                    <p className="text-right text-xs text-muted-foreground">
+                      Base price<br />
+                      <span className="font-semibold text-foreground">USD {selectedPlan.priceUSD.toFixed(2)}</span>
+                    </p>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+                    <p className="text-2xl font-bold">{formatPrice(selectedPlan.priceUSD, currencySymbol)}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Approx. NGN {(selectedPlan.priceUSD * USD_TO_NGN).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+                <PaymentMethodOptions value={paymentMethod} onChange={setPaymentMethod} />
+                {paymentMethod === "flutterwave" && (
+                  <div className="space-y-3 rounded-lg border p-4">
+                    <div>
+                      <p className="font-semibold">Mobile money wallet</p>
+                      <p className="text-sm text-muted-foreground">Choose the country/currency and wallet that will approve this premium payment.</p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <Label className="mb-1 block text-sm font-medium">Country</Label>
+                        <select
+                          value={mobileMoney.country}
+                          onChange={(event) =>
+                            setMobileMoney((current) => {
+                              const country = MOBILE_MONEY_COUNTRIES.find((item) => item.code === event.target.value) || MOBILE_MONEY_COUNTRIES[0]
+                              return {
+                                ...current,
+                                country: country.code,
+                                countryCode: country.dialCode,
+                                currency: country.currency,
+                                network: country.networks[0]?.value || "",
+                              }
+                            })
+                          }
+                          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                          {MOBILE_MONEY_COUNTRIES.map((country) => (
+                            <option key={country.code} value={country.code}>
+                              {country.label} ({country.currency})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <Label className="mb-1 block text-sm font-medium">Network</Label>
+                        <select
+                          value={mobileMoney.network}
+                          onChange={(event) =>
+                            setMobileMoney((current) => ({
+                              ...current,
+                              network: event.target.value,
+                            }))
+                          }
+                          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                          {selectedMobileMoneyCountry.networks.map((network) => (
+                            <option key={network.value} value={network.value}>
+                              {network.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-[110px_1fr]">
+                      <div>
+                        <Label className="mb-1 block text-sm font-medium">Code</Label>
+                        <Input value={mobileMoney.countryCode} readOnly />
+                      </div>
+                      <div className="rounded-md border bg-muted/40 px-3 py-2">
+                        <p className="text-xs text-muted-foreground">Amount sent to Method II</p>
+                        <p className="font-semibold">{selectedMobileMoneyCountry.currency} {methodTwoAmount.toLocaleString()}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="mb-1 block text-sm font-medium">Wallet phone number</Label>
+                      <Input
+                        value={mobileMoney.phoneNumber}
+                        onChange={(event) =>
+                          setMobileMoney((current) => ({
+                            ...current,
+                            phoneNumber: event.target.value.replace(/\D/g, ""),
+                          }))
+                        }
+                        placeholder={selectedMobileMoneyCountry.placeholder}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter className="shrink-0 border-t bg-background px-5 py-4 sm:justify-between">
+                <Button variant="outline" onClick={() => setShowPaymentDialog(false)} disabled={processing}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => handleUpgrade(selectedPlan, paymentMethod)}
+                  disabled={
+                    processing ||
+                    (paymentMethod === "flutterwave" &&
+                      (!mobileMoney.countryCode || !mobileMoney.network || mobileMoney.phoneNumber.length < 8))
+                  }
+                  className="gradient-bg"
+                >
+                  {processing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
+                  Continue
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { createClient } from "@/lib/supabase/server"
 import { initializePayment, generatePaystackReference } from "@/lib/paystack"
+import { generateFlutterwaveReference, initializeFlutterwavePayment } from "@/lib/flutterwave"
 
 // Plan configurations with USD pricing
 const PLAN_CONFIG: Record<string, { priceUSD: number; durationMonths: number }> = {
@@ -14,6 +15,21 @@ const PLAN_CONFIG: Record<string, { priceUSD: number; durationMonths: number }> 
 // Conversion rate: 1 USD = 1450 NGN
 const USD_TO_NGN = 1450
 
+function getFlutterwaveRedirectUrl(reference: string) {
+  const baseUrl =
+    process.env.FLUTTERWAVE_REDIRECT_BASE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_BASE_URL ||
+    process.env.NEXTAUTH_URL ||
+    ""
+
+  if (!baseUrl || baseUrl.includes("localhost") || baseUrl.startsWith("http://")) {
+    throw new Error("Flutterwave Method II requires a public HTTPS redirect URL. Set FLUTTERWAVE_REDIRECT_BASE_URL to your ngrok HTTPS URL or production URL.")
+  }
+
+  return `${baseUrl.replace(/\/$/, "")}/dashboard/premium?reference=${reference}`
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -23,7 +39,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { tierName, amountNGNInKobo, currency } = await request.json()
+    const { tierName, amountNGNInKobo, currency, paymentMethod = "paystack", mobileMoney } = await request.json()
+    const provider = paymentMethod === "flutterwave" ? "flutterwave" : "paystack"
 
     if (!tierName) {
       console.error("[POST /api/premium/subscribe] Tier name required")
@@ -40,7 +57,7 @@ export async function POST(request: NextRequest) {
     const userId = session.user.id
 
     console.log(
-      `[POST /api/premium/subscribe] User ${userId} subscribing to ${tierName}, Amount: ${amountNGNInKobo} kobo`
+      `[POST /api/premium/subscribe] User ${userId} subscribing to ${tierName}, provider: ${provider}, Amount: ${amountNGNInKobo} kobo`
     )
 
     // Check if already has active subscription
@@ -49,7 +66,7 @@ export async function POST(request: NextRequest) {
       .select("id")
       .eq("user_id", userId)
       .eq("status", "active")
-      .single()
+      .maybeSingle()
 
     if (activeSubscription) {
       console.log("[POST /api/premium/subscribe] User already has active subscription, allowing switch")
@@ -86,7 +103,7 @@ export async function POST(request: NextRequest) {
           amount: amountNumeric,
           status: "pending",
           expires_at: expiresAt.toISOString(),
-          payment_method: "paystack",
+          payment_method: provider,
           updated_at: new Date().toISOString(),
         })
         .eq("id", activeSubscription.id)
@@ -108,7 +125,7 @@ export async function POST(request: NextRequest) {
           amount: amountNumeric,
           status: "pending",
           expires_at: expiresAt.toISOString(),
-          payment_method: "paystack",
+          payment_method: provider,
         })
         .select()
         .single()
@@ -120,22 +137,26 @@ export async function POST(request: NextRequest) {
       subscription = created
     }
 
-    // Initialize Paystack payment
-    const reference = generatePaystackReference()
+    if (provider === "flutterwave" && (!mobileMoney?.countryCode || !mobileMoney?.network || !mobileMoney?.phoneNumber)) {
+      return NextResponse.json({ error: "Mobile money wallet details are required" }, { status: 400 })
+    }
+
+    const reference = provider === "flutterwave" ? generateFlutterwaveReference() : generatePaystackReference()
 
     const transactionData = {
       user_id: userId,
       amount: amountNGNInKobo,
-      currency: currency || "US",
+      currency: provider === "flutterwave" ? (mobileMoney?.currency || "XAF").toUpperCase() : currency || "US",
       type: "premium_subscription",
       status: "pending",
-      payment_method: "paystack",
+      payment_method: provider,
       payment_reference: reference, // Explicitly save reference
       metadata: {
         planName: tierName,
         priceUSD: planConfig.priceUSD,
-        currency: currency || "US",
+        currency: provider === "flutterwave" ? (mobileMoney?.currency || "XAF").toUpperCase() : currency || "US",
         subscriptionId: subscription.id,
+        payment_provider: provider,
         reference, // Also in metadata for redundancy
       },
     }
@@ -154,6 +175,59 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("[POST /api/premium/subscribe] Transaction created:", transaction.id, "with payment_reference:", transaction.payment_reference)
+
+    if (provider === "flutterwave") {
+      const flutterwaveCurrency = (mobileMoney?.currency || "XAF").toUpperCase()
+      const currencyRates: Record<string, number> = {
+        XAF: 585.48,
+        NGN: USD_TO_NGN,
+        USD: 1,
+      }
+      const flutterwaveAmount = Math.round(planConfig.priceUSD * (currencyRates[flutterwaveCurrency] || currencyRates.XAF))
+      const payment = await initializeFlutterwavePayment({
+        email: user.email,
+        amount: flutterwaveAmount,
+        currency: flutterwaveCurrency,
+        reference,
+        redirect_url: getFlutterwaveRedirectUrl(reference),
+        customerName: user.display_name || session.user.name || user.email,
+        mobileMoney,
+        metadata: {
+          userId,
+          planName: tierName,
+          priceUSD: planConfig.priceUSD,
+          currency: flutterwaveCurrency,
+          subscriptionId: subscription.id,
+          transactionId: transaction.id,
+          type: "premium_subscription",
+          payment_provider: provider,
+        },
+      })
+
+      if (payment.status !== "success" || !payment.data?.link) {
+        throw new Error("Failed to initialize Flutterwave payment")
+      }
+
+      await supabase
+        .from("transactions")
+        .update({
+          metadata: {
+            ...(transaction.metadata || {}),
+            flutterwave_charge_id: payment.data.id,
+          },
+        })
+        .eq("id", transaction.id)
+
+      return NextResponse.json({
+        success: true,
+        authorization_url: payment.data.link,
+        reference,
+        subscriptionId: subscription.id,
+        transactionId: transaction.id,
+        provider,
+        instruction: payment.data.instruction,
+      })
+    }
 
     const paystackResponse = await initializePayment({
       email: user.email,

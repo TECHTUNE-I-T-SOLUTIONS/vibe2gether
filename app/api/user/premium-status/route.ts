@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       .gte("expires_at", now)
       .order("expires_at", { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
 
     if (error && error.code !== "PGRST116") {
       // PGRST116 = no rows found (not an error)
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
         .gte("expires_at", now)
         .order("expires_at", { ascending: false })
         .limit(1)
-        .single()
+        .maybeSingle()
 
       if (coinError && coinError.code !== "PGRST116") {
         console.error("[GET /api/user/premium-status] Error fetching coin subscription:", coinError)

@@ -1,30 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { verifyPayment } from "@/lib/paystack"
+import { verifyFlutterwavePayment } from "@/lib/flutterwave"
 import { generateTicketPDF } from "@/lib/ticket-generator"
 import { sendTicketEmail } from "@/lib/email-service"
 
 async function handlePaymentVerification(reference: string) {
   try {
     console.log(`[Verify Payment] Processing verification for reference: ${reference}`)
-
-    // Verify payment with Paystack
-    const paystackResponse = await verifyPayment(reference)
-
-    if (!paystackResponse.status) {
-      console.error("[Verify Payment] Payment verification failed from Paystack")
-      return {
-        success: false,
-        status: "failed",
-        error: "Payment verification failed",
-        code: "PAYSTACK_FAILED",
-      }
-    }
-
-    const paymentData = paystackResponse.data
-    if (!paymentData) {
-      throw new Error("No payment data returned from Paystack")
-    }
 
     const supabase = await createClient()
 
@@ -67,8 +50,31 @@ async function handlePaymentVerification(reference: string) {
       }
     }
 
+    const provider = transaction.payment_method === "flutterwave" || transaction.metadata?.payment_provider === "flutterwave"
+      ? "flutterwave"
+      : "paystack"
+
+    const verification = provider === "flutterwave"
+      ? await verifyFlutterwavePayment(reference, transaction.metadata?.flutterwave_charge_id)
+      : await verifyPayment(reference)
+
+    const paymentData = verification.data as any
+    const paymentSucceeded = provider === "flutterwave"
+      ? verification.status === "success" && ["successful", "succeeded"].includes(paymentData?.status)
+      : verification.status && paymentData?.status === "success"
+
+    if (!paymentSucceeded || !paymentData) {
+      console.error("[Verify Payment] Payment verification failed from provider:", provider)
+      return {
+        success: false,
+        status: "failed",
+        error: "Payment verification failed",
+        code: "PAYMENT_FAILED",
+      }
+    }
+
     // Update transaction status based on payment status
-    const transactionStatus = paymentData.status === "success" ? "completed" : "failed"
+    const transactionStatus = "completed"
 
     const { error: updateError } = await supabase
       .from("transactions")
@@ -76,8 +82,10 @@ async function handlePaymentVerification(reference: string) {
         status: transactionStatus,
         metadata: {
           ...transaction.metadata,
-          paystack_payment_id: paymentData.id,
-          paid_at: paymentData.paid_at,
+          provider_payment_id: paymentData.id,
+          paystack_payment_id: provider === "paystack" ? paymentData.id : transaction.metadata?.paystack_payment_id,
+          flutterwave_charge_id: provider === "flutterwave" ? paymentData.id : transaction.metadata?.flutterwave_charge_id,
+          paid_at: paymentData.paid_at || paymentData.created_at || paymentData.created_datetime || new Date().toISOString(),
         },
       })
       .eq("id", transaction.id)
@@ -118,6 +126,47 @@ async function handlePaymentVerification(reference: string) {
             action_url: `/marketplace/products/${metadata.productId}`,
           },
         ])
+      } else if (metadata.type === "coin_purchase" || transaction.type === "coin_purchase" || metadata.coinsAmount) {
+        if (!metadata.coins_added) {
+          const coinsAmount = metadata.coinsAmount || Math.round((transaction.amount / 1450) * 500)
+          const { data: user } = await supabase
+            .from("users")
+            .select("coins_balance")
+            .eq("id", transaction.user_id)
+            .single()
+
+          const newBalance = (user?.coins_balance || 0) + coinsAmount
+
+          await supabase
+            .from("users")
+            .update({
+              coins_balance: newBalance,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", transaction.user_id)
+
+          await supabase
+            .from("transactions")
+            .update({
+              metadata: {
+                ...metadata,
+                coins_added: true,
+                coins_added_at: new Date().toISOString(),
+              },
+            })
+            .eq("id", transaction.id)
+
+          await supabase.from("coin_transactions").insert({
+            user_id: transaction.user_id,
+            amount: coinsAmount,
+            transaction_type: "purchase",
+            description: `Purchased ${coinsAmount} coins via ${provider === "flutterwave" ? "Method II" : "Method I"}`,
+            reference_id: transaction.id,
+            reference_type: "payment_transaction",
+            balance_after: newBalance,
+            created_at: new Date().toISOString(),
+          })
+        }
       } else if (metadata.type === "event_registration" || transaction.type === "event_registration") {
         if (metadata.registration_id) {
           await supabase

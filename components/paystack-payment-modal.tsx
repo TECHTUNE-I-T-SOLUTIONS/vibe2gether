@@ -11,6 +11,36 @@ import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { PaymentMethodOptions } from "@/components/payment-method-options"
 
+const MOBILE_MONEY_COUNTRIES = [
+  {
+    code: "CM",
+    label: "Cameroon",
+    dialCode: "237",
+    currency: "XAF",
+    placeholder: "6XXXXXXXX",
+    networks: [
+      { value: "MTN", label: "MTN Mobile Money" },
+      { value: "ORANGE", label: "Orange Money" },
+    ],
+  },
+  {
+    code: "NG",
+    label: "Nigeria",
+    dialCode: "234",
+    currency: "NGN",
+    placeholder: "8XXXXXXXXX",
+    networks: [{ value: "MTN", label: "MTN MoMo" }],
+  },
+  {
+    code: "US",
+    label: "United States",
+    dialCode: "1",
+    currency: "USD",
+    placeholder: "5550100000",
+    networks: [{ value: "MOBILE_MONEY", label: "Mobile Money" }],
+  },
+]
+
 interface PaystackPaymentModalProps {
   isOpen: boolean
   onClose: () => void
@@ -23,6 +53,7 @@ interface PaystackPaymentModalProps {
   }
   purpose?: string
   onPaymentSuccess?: (reference: string) => void
+  initialPaymentMethod?: "paystack" | "flutterwave"
 }
 
 export function PaystackPaymentModal({
@@ -34,6 +65,7 @@ export function PaystackPaymentModal({
   itemData,
   purpose,
   onPaymentSuccess,
+  initialPaymentMethod = "paystack",
 }: PaystackPaymentModalProps) {
   const { toast } = useToast()
   const { data: session } = useSession()
@@ -45,6 +77,16 @@ export function PaystackPaymentModal({
   const [errorMessage, setErrorMessage] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [paymentReference, setPaymentReference] = useState<string | null>(null)
+  const [paymentMethod, setPaymentMethod] = useState<"paystack" | "flutterwave">(initialPaymentMethod)
+  const [mobileMoney, setMobileMoney] = useState({
+    country: "CM",
+    countryCode: "237",
+    currency: "XAF",
+    network: "MTN",
+    phoneNumber: "",
+  })
+  const selectedMobileMoneyCountry =
+    MOBILE_MONEY_COUNTRIES.find((country) => country.code === mobileMoney.country) || MOBILE_MONEY_COUNTRIES[0]
 
   // USD equivalent = NGN / 1450 (1 USD = 1450 NGN)
   const usdEquivalent = paymentAmount !== "" ? paymentAmount / 1450 : 0
@@ -54,6 +96,12 @@ export function PaystackPaymentModal({
 
   // XAF equivalent = USD * 585.48 (1 USD = 585.48 XAF)
   const xafEquivalent = Math.round(usdEquivalent * 585.48)
+  const methodTwoAmount =
+    selectedMobileMoneyCountry.currency === "NGN"
+      ? Math.round(usdEquivalent * 1450)
+      : selectedMobileMoneyCountry.currency === "USD"
+        ? Number(usdEquivalent.toFixed(2))
+        : xafEquivalent
 
   // Check for payment reference in URL params (Paystack redirect)
   useEffect(() => {
@@ -61,7 +109,7 @@ export function PaystackPaymentModal({
     const urlReference = params.get("reference")
     
     // Check URL first, then localStorage
-    const reference = urlReference || (typeof window !== 'undefined' ? localStorage.getItem("paystack_reference") : null)
+    const reference = urlReference || (typeof window !== 'undefined' ? localStorage.getItem("paystack_reference") || localStorage.getItem("flutterwave_reference") : null)
     
     if (reference) {
       console.log("[PAYSTACK] Payment reference found:", reference)
@@ -91,6 +139,7 @@ export function PaystackPaymentModal({
   useEffect(() => {
     const fetchUserDetails = async () => {
       if (!isOpen) return
+      setPaymentMethod(initialPaymentMethod)
       
       // Get user details from NextAuth session
       if (session?.user) {
@@ -131,13 +180,22 @@ export function PaystackPaymentModal({
       return
     }
 
+    if (paymentMethod === "flutterwave" && (!mobileMoney.countryCode || !mobileMoney.network || mobileMoney.phoneNumber.length < 8)) {
+      toast({
+        title: "Wallet details required",
+        description: "Enter a valid mobile money wallet before continuing.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsProcessing(true)
     setPaymentStatus("processing")
     setErrorMessage("")
 
     try {
-      // Initialize payment with Paystack
-      const response = await fetch("/api/paystack/initialize", {
+      const endpoint = paymentMethod === "flutterwave" ? "/api/flutterwave/initialize" : "/api/paystack/initialize"
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -149,6 +207,7 @@ export function PaystackPaymentModal({
           currency,
           itemType,
           itemData,
+          mobileMoney: paymentMethod === "flutterwave" ? mobileMoney : undefined,
           metadata: {
             itemType: itemType || "coins",
             itemId: itemData?.id,
@@ -167,8 +226,15 @@ export function PaystackPaymentModal({
 
       // Store reference in localStorage for polling if redirect fails
       if (reference) {
-        localStorage.setItem("paystack_reference", reference)
+        localStorage.setItem(paymentMethod === "flutterwave" ? "flutterwave_reference" : "paystack_reference", reference)
         setPaymentReference(reference)
+      }
+
+      if (paymentMethod === "flutterwave" && data.instruction) {
+        toast({
+          title: "Approve on your phone",
+          description: data.instruction,
+        })
       }
 
       // Redirect to Paystack payment page
@@ -209,7 +275,14 @@ export function PaystackPaymentModal({
   const verifyPayment = async (reference: string) => {
     try {
       console.log("[PAYSTACK] Verifying payment with reference:", reference)
-      const response = await fetch(`/api/paystack/verify?reference=${reference}`)
+      const isFlutterwaveReference = reference.startsWith("flw-")
+      const response = isFlutterwaveReference
+        ? await fetch("/api/payments/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reference }),
+          })
+        : await fetch(`/api/paystack/verify?reference=${reference}`)
       const result = await response.json()
 
       console.log("[PAYSTACK] Verification response:", result)
@@ -219,6 +292,7 @@ export function PaystackPaymentModal({
         // Clear stored reference
         if (typeof window !== 'undefined') {
           localStorage.removeItem("paystack_reference")
+          localStorage.removeItem("flutterwave_reference")
         }
         toast({
           title: "Success!",
@@ -264,15 +338,15 @@ export function PaystackPaymentModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[92dvh] flex-col overflow-hidden p-0 sm:max-w-md">
+        <DialogHeader className="shrink-0 border-b px-5 pb-4 pt-5 text-left">
           <DialogTitle>Complete Payment</DialogTitle>
           <DialogDescription>
-            Secure payment powered by Paystack
+            Choose how you want to pay, then continue securely.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
           {/* Payment Summary */}
           <div className="bg-muted p-4 rounded-lg">
             <p className="text-sm text-muted-foreground mb-3">Item: {itemData?.title || purpose || "Purchase"}</p>
@@ -323,7 +397,78 @@ export function PaystackPaymentModal({
           )}
 
           {(paymentStatus === "idle" || paymentStatus === "processing" || paymentStatus === "error") && (
-            <PaymentMethodOptions />
+            <div className="space-y-2">
+              <Label>Payment method</Label>
+              <PaymentMethodOptions value={paymentMethod} onChange={setPaymentMethod} layout="stack" />
+              {paymentMethod === "flutterwave" && (
+                <div className="space-y-3 rounded-lg border p-3">
+                  <div>
+                    <p className="font-semibold">Mobile money wallet</p>
+                    <p className="text-xs text-muted-foreground">Choose the country/currency and wallet that will approve this payment.</p>
+                  </div>
+                  <div className="grid gap-3">
+                    <div>
+                      <Label className="mb-1 block text-sm font-medium">Country</Label>
+                      <select
+                        value={mobileMoney.country}
+                        onChange={(event) =>
+                          setMobileMoney((current) => {
+                            const country = MOBILE_MONEY_COUNTRIES.find((item) => item.code === event.target.value) || MOBILE_MONEY_COUNTRIES[0]
+                            return {
+                              ...current,
+                              country: country.code,
+                              countryCode: country.dialCode,
+                              currency: country.currency,
+                              network: country.networks[0]?.value || "",
+                            }
+                          })
+                        }
+                        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      >
+                        {MOBILE_MONEY_COUNTRIES.map((country) => (
+                          <option key={country.code} value={country.code}>
+                            {country.label} ({country.currency})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <Label className="mb-1 block text-sm font-medium">Network</Label>
+                      <select
+                        value={mobileMoney.network}
+                        onChange={(event) => setMobileMoney((current) => ({ ...current, network: event.target.value }))}
+                        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      >
+                        {selectedMobileMoneyCountry.networks.map((network) => (
+                          <option key={network.value} value={network.value}>
+                            {network.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-[90px_1fr] gap-2">
+                      <div>
+                        <Label className="mb-1 block text-sm font-medium">Code</Label>
+                        <Input value={mobileMoney.countryCode} readOnly />
+                      </div>
+                      <div>
+                        <Label className="mb-1 block text-sm font-medium">Wallet phone</Label>
+                        <Input
+                          value={mobileMoney.phoneNumber}
+                          onChange={(event) =>
+                            setMobileMoney((current) => ({
+                              ...current,
+                              phoneNumber: event.target.value.replace(/\D/g, ""),
+                            }))
+                          }
+                          placeholder={selectedMobileMoneyCountry.placeholder}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Form */}
@@ -378,7 +523,7 @@ export function PaystackPaymentModal({
           )}
         </div>
 
-        <DialogFooter className="flex gap-2 w-full justify-end">
+        <DialogFooter className="shrink-0 gap-2 border-t bg-background px-5 py-4">
           {paymentStatus === "success" ? (
             <>
               {itemType === "product" && (
@@ -423,7 +568,15 @@ export function PaystackPaymentModal({
               {(paymentStatus === "idle" || paymentStatus === "processing" || paymentStatus === "error") && !paymentReference && (
                 <Button
                   onClick={handlePayment}
-                  disabled={isProcessing || !email || !fullName || isLoading || Number(paymentAmount) < 1500}
+                  disabled={
+                    isProcessing ||
+                    !email ||
+                    !fullName ||
+                    isLoading ||
+                    Number(paymentAmount) < 1500 ||
+                    (paymentMethod === "flutterwave" &&
+                      (!mobileMoney.countryCode || !mobileMoney.network || mobileMoney.phoneNumber.length < 8))
+                  }
                   className="gap-2"
                 >
                   {isProcessing && <Loader2 className="w-4 h-4 animate-spin" />}

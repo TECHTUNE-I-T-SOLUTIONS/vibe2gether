@@ -13,16 +13,16 @@ import { useUserProfile } from "@/hooks/use-user-profile"
 import { createAccountTopup, getCoinsBalance } from "@/lib/supabase/queries"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { PaystackPaymentModal } from "@/components/paystack-payment-modal"
 import { useToast } from "@/hooks/use-toast"
 import { PaymentMethodOptions } from "@/components/payment-method-options"
 
 const COIN_PACKAGES = [
-  { coins: 100, price: 9.99, label: "100 Coins", savings: 0 },
+  // { coins: 100, price: 9.99, label: "100 Coins", savings: 0 },
   { coins: 500, price: 39.99, label: "500 Coins", savings: 25 },
   { coins: 1000, price: 69.99, label: "1000 Coins", savings: 30 },
   { coins: 5000, price: 299.99, label: "5000 Coins", savings: 50 },
+  { coins: 10000, price: 499.99, label: "10000 Coins", savings: 60 }
 ]
 
 export default function BillingSettingsPage() {
@@ -36,6 +36,7 @@ export default function BillingSettingsPage() {
   const [showTopupDialog, setShowTopupDialog] = useState(false)
   const [showPaystackModal, setShowPaystackModal] = useState(false)
   const [selectedPackage, setSelectedPackage] = useState<any>(null)
+  const [paymentMethod, setPaymentMethod] = useState<"paystack" | "flutterwave">("paystack")
 
   // Auth check
   useEffect(() => {
@@ -272,38 +273,40 @@ export default function BillingSettingsPage() {
 
       {/* Topup Dialog - Package Selection */}
       <Dialog open={showTopupDialog} onOpenChange={setShowTopupDialog}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[92dvh] flex-col overflow-hidden p-0 sm:max-w-2xl">
+          <DialogHeader className="shrink-0 border-b px-5 pb-4 pt-5 text-left">
             <DialogTitle>Add Coins to Your Wallet</DialogTitle>
-            <DialogDescription>Choose a package to purchase</DialogDescription>
+            <DialogDescription>Choose a payment method and coin package.</DialogDescription>
           </DialogHeader>
 
-          <PaymentMethodOptions />
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+            <PaymentMethodOptions value={paymentMethod} onChange={setPaymentMethod} layout="stack" />
 
-          <div className="grid grid-cols-2 gap-3">
-            {COIN_PACKAGES.map((pkg) => (
-              <button
-                key={pkg.coins}
-                onClick={() => {
-                  setSelectedPackage(pkg)
-                  setShowTopupDialog(false)
-                  setShowPaystackModal(true)
-                }}
-                className={`p-4 border-2 rounded-lg transition text-center hover:border-primary/50 ${
-                  selectedPackage?.coins === pkg.coins
-                    ? "border-primary bg-primary/5"
-                    : "border-border/50"
-                }`}
-              >
-                <Coins className="w-6 h-6 text-primary mx-auto mb-2" />
-                <div className="font-bold text-lg text-primary">{pkg.coins}</div>
-                <div className="text-sm font-semibold">${formatCurrency(pkg.coins).usd}</div>
-                {pkg.savings > 0 && <div className="text-xs text-green-600">Save {pkg.savings}%</div>}
-              </button>
-            ))}
+            <div className="grid grid-cols-2 gap-3">
+              {COIN_PACKAGES.map((pkg) => (
+                <button
+                  key={pkg.coins}
+                  onClick={() => {
+                    setSelectedPackage(pkg)
+                    setShowTopupDialog(false)
+                    setShowPaystackModal(true)
+                  }}
+                  className={`p-4 border-2 rounded-lg transition text-center hover:border-primary/50 ${
+                    selectedPackage?.coins === pkg.coins
+                      ? "border-primary bg-primary/5"
+                      : "border-border/50"
+                  }`}
+                >
+                  <Coins className="w-6 h-6 text-primary mx-auto mb-2" />
+                  <div className="font-bold text-lg text-primary">{pkg.coins}</div>
+                  <div className="text-sm font-semibold">${formatCurrency(pkg.coins).usd}</div>
+                  {pkg.savings > 0 && <div className="text-xs text-green-600">Save {pkg.savings}%</div>}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0 border-t bg-background px-5 py-4">
             <Button
               variant="outline"
               onClick={() => setShowTopupDialog(false)}
@@ -329,6 +332,7 @@ export default function BillingSettingsPage() {
             id: `coins-${selectedPackage.coins}`,
             title: `Buy ${selectedPackage.coins} Coins`,
           }}
+          initialPaymentMethod={paymentMethod}
           onPaymentSuccess={handlePaymentSuccess}
         />
       )}

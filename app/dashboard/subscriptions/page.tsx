@@ -50,6 +50,36 @@ function formatDuration(service: any) {
   return `${value} ${unit}${value === 1 ? "" : "s"}`
 }
 
+const MOBILE_MONEY_COUNTRIES = [
+  {
+    code: "CM",
+    label: "Cameroon",
+    dialCode: "237",
+    currency: "XAF",
+    placeholder: "6XXXXXXXX",
+    networks: [
+      { value: "MTN", label: "MTN Mobile Money" },
+      { value: "ORANGE", label: "Orange Money" },
+    ],
+  },
+  {
+    code: "NG",
+    label: "Nigeria",
+    dialCode: "234",
+    currency: "NGN",
+    placeholder: "8XXXXXXXXX",
+    networks: [{ value: "MTN", label: "MTN MoMo" }],
+  },
+  {
+    code: "US",
+    label: "United States",
+    dialCode: "1",
+    currency: "USD",
+    placeholder: "5550100000",
+    networks: [{ value: "MOBILE_MONEY", label: "Mobile Money" }],
+  },
+]
+
 function UserSubscriptionsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -66,6 +96,14 @@ function UserSubscriptionsContent() {
   const [category, setCategory] = useState("all")
   const [verificationReference, setVerificationReference] = useState("")
   const [resendingReceiptId, setResendingReceiptId] = useState<string | null>(null)
+  const [paymentMethod, setPaymentMethod] = useState<"paystack" | "flutterwave">("paystack")
+  const [mobileMoney, setMobileMoney] = useState({
+    country: "CM",
+    countryCode: "237",
+    currency: "XAF",
+    network: "MTN",
+    phoneNumber: "",
+  })
   const isLoggedIn = status === "authenticated"
 
   async function loadSubscriptions() {
@@ -117,7 +155,7 @@ function UserSubscriptionsContent() {
     verify()
   }, [searchParams, toast, verificationReference])
 
-  async function checkout(serviceId: string) {
+  async function checkout(serviceId: string, method: "paystack" | "flutterwave") {
     if (!isLoggedIn) {
       router.push(`/login?callbackUrl=${encodeURIComponent("/dashboard/subscriptions")}`)
       return
@@ -128,7 +166,11 @@ function UserSubscriptionsContent() {
       const res = await fetch("/api/subscriptions/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serviceId, paymentMethod: "paystack" }),
+        body: JSON.stringify({
+          serviceId,
+          paymentMethod: method,
+          mobileMoney: method === "flutterwave" ? mobileMoney : undefined,
+        }),
       })
       const data = await res.json()
       if (res.status === 401) {
@@ -136,6 +178,15 @@ function UserSubscriptionsContent() {
         return
       }
       if (!res.ok) throw new Error(data.error || "Payment failed")
+      if (method === "flutterwave" && data.instruction) {
+        toast({
+          title: "Approve on your phone",
+          description: data.instruction,
+        })
+        setViewTab("mine")
+        loadSubscriptions()
+        return
+      }
       window.location.href = data.authorizationUrl
     } catch (error: any) {
       toast({ title: "Checkout failed", description: error.message, variant: "destructive" })
@@ -174,6 +225,8 @@ function UserSubscriptionsContent() {
   const activePurchases = purchases.filter((purchase) => purchase.status === "active")
   const activePurchaseByService = new Map(activePurchases.map((purchase) => [purchase.service_id, purchase]))
   const categories = useMemo(() => ["all", ...Array.from(new Set(services.map((service) => service.category).filter(Boolean)))], [services])
+  const selectedMobileMoneyCountry =
+    MOBILE_MONEY_COUNTRIES.find((country) => country.code === mobileMoney.country) || MOBILE_MONEY_COUNTRIES[0]
 
   const filteredServices = services.filter((service) => {
     const matchesSearch = [service.name, service.company, service.description, service.location_name]
@@ -483,35 +536,115 @@ function UserSubscriptionsContent() {
       </Dialog>
 
       <Dialog open={!!confirmService} onOpenChange={(open) => !open && setConfirmService(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="flex max-h-[92dvh] flex-col overflow-hidden p-0 sm:max-w-md">
           {confirmService && (
             <>
-              <DialogHeader>
+              <DialogHeader className="shrink-0 border-b px-5 pb-4 pt-5 text-left">
                 <DialogTitle>Confirm subscription</DialogTitle>
                 <DialogDescription>
                   You are about to subscribe to {confirmService.name}. Choose a payment method to continue securely.
                 </DialogDescription>
               </DialogHeader>
-              <div className="rounded-lg border p-4">
-                <p className="font-semibold">{confirmService.name}</p>
-                <p className="text-sm text-muted-foreground">{formatDuration(confirmService)} access</p>
-                <p className="mt-2 text-2xl font-bold">
-                  {confirmService.currency} {Number(confirmService.price).toLocaleString()}
-                </p>
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+                <div className="rounded-lg border p-4">
+                  <p className="font-semibold">{confirmService.name}</p>
+                  <p className="text-sm text-muted-foreground">{formatDuration(confirmService)} access</p>
+                  <p className="mt-2 text-2xl font-bold">
+                    {confirmService.currency} {Number(confirmService.price).toLocaleString()}
+                  </p>
+                </div>
+                <PaymentMethodOptions value={paymentMethod} onChange={setPaymentMethod} layout="stack" />
+                {paymentMethod === "flutterwave" && (
+                  <div className="space-y-3 rounded-lg border p-4">
+                    <div>
+                      <p className="font-semibold">Mobile money wallet</p>
+                      <p className="text-sm text-muted-foreground">Choose the country/currency and wallet that will approve this payment.</p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-sm font-medium">Country</label>
+                        <select
+                          value={mobileMoney.country}
+                          onChange={(event) =>
+                            setMobileMoney((current) => {
+                              const country = MOBILE_MONEY_COUNTRIES.find((item) => item.code === event.target.value) || MOBILE_MONEY_COUNTRIES[0]
+                              return {
+                                ...current,
+                                country: country.code,
+                                countryCode: country.dialCode,
+                                currency: country.currency,
+                                network: country.networks[0]?.value || "",
+                              }
+                            })
+                          }
+                          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                          {MOBILE_MONEY_COUNTRIES.map((country) => (
+                            <option key={country.code} value={country.code}>
+                              {country.label} ({country.currency})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium">Network</label>
+                        <select
+                          value={mobileMoney.network}
+                          onChange={(event) =>
+                            setMobileMoney((current) => ({
+                              ...current,
+                              network: event.target.value,
+                            }))
+                          }
+                          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                          {selectedMobileMoneyCountry.networks.map((network) => (
+                            <option key={network.value} value={network.value}>
+                              {network.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-[110px_1fr]">
+                      <div>
+                        <label className="mb-1 block text-sm font-medium">Code</label>
+                        <Input value={mobileMoney.countryCode} readOnly />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium">Wallet phone number</label>
+                        <Input
+                          value={mobileMoney.phoneNumber}
+                          onChange={(event) =>
+                            setMobileMoney((current) => ({
+                              ...current,
+                              phoneNumber: event.target.value.replace(/\D/g, ""),
+                            }))
+                          }
+                          placeholder={selectedMobileMoneyCountry.placeholder}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-              <PaymentMethodOptions />
-              <DialogFooter>
+              <DialogFooter className="shrink-0 border-t bg-background px-5 py-4">
                 <Button variant="outline" onClick={() => setConfirmService(null)}>Cancel</Button>
                 <Button
                   onClick={() => {
                     const serviceId = confirmService.id
+                    const method = paymentMethod
                     setConfirmService(null)
-                    checkout(serviceId)
+                    checkout(serviceId, method)
                   }}
-                  disabled={payingId === confirmService.id}
+                  disabled={
+                    payingId === confirmService.id ||
+                    (paymentMethod === "flutterwave" &&
+                      (!mobileMoney.countryCode || !mobileMoney.network || mobileMoney.phoneNumber.length < 8))
+                  }
                 >
                   {payingId === confirmService.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BadgeCheck className="mr-2 h-4 w-4" />}
-                  Proceed to Paystack
+                  Proceed to Payment
                 </Button>
               </DialogFooter>
             </>

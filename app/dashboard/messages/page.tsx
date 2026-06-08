@@ -966,7 +966,7 @@ export default function MessagesPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <p className="font-semibold truncate">{conv.name}</p>
+                    <p className="font-semibold truncate break-words">{conv.name}</p>
                     <span className="text-xs text-muted-foreground">{conv.lastMessageTime}</span>
                   </div>
                   <p className="text-sm text-muted-foreground truncate">{conv.lastMessage}</p>
@@ -985,8 +985,8 @@ export default function MessagesPage() {
         {selectedChat ? (
           <>
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-border">
-              <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="flex items-center justify-between p-2 border-b border-border">
+              <div className="flex items-center gap-1 flex-1 min-w-0">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -995,12 +995,12 @@ export default function MessagesPage() {
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </Button>
-                <Avatar className="w-10 h-10 flex-shrink-0">
+                <Avatar className="w-8 h-8 flex-shrink-0">
                   <AvatarImage src={selectedChat.avatar || "/placeholder.svg"} />
                   <AvatarFallback>{selectedChat.name[0]}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold truncate">{selectedChat.name}</p>
+                  <p className="font-semibold truncate break-words text-xs">{selectedChat.name}</p>
                   {isUserTyping ? (
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <span>typing</span>

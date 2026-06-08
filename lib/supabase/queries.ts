@@ -1230,7 +1230,7 @@ export async function getUserPremiumSubscription(userId: string) {
     .gt('expires_at', new Date().toISOString())
     .order('expires_at', { ascending: false })
     .limit(1)
-    .single()
+    .maybeSingle()
 
   return { data, error }
 }

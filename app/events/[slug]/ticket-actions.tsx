@@ -18,6 +18,7 @@ export function TicketActions({ event }: { event: any }) {
   const [open, setOpen] = useState(false)
   const [authOpen, setAuthOpen] = useState(false)
   const [purchasing, setPurchasing] = useState(false)
+  const [paymentMethod, setPaymentMethod] = useState<"paystack" | "flutterwave">("paystack")
   const { toast } = useToast()
   const { data: session, status } = useSession()
   const pathname = usePathname()
@@ -42,6 +43,15 @@ export function TicketActions({ event }: { event: any }) {
         if (data.error) throw new Error(data.error)
         toast({ title: "Success", description: "Ticket reserved successfully!" })
         setOpen(false)
+        return
+      }
+
+      if (paymentMethod === "flutterwave") {
+        toast({
+          title: "Payment method II",
+          description: "Event tickets currently use Method I. Choose Method I to continue.",
+          variant: "destructive",
+        })
         return
       }
 
@@ -97,7 +107,7 @@ export function TicketActions({ event }: { event: any }) {
             </div>
 
             <form onSubmit={handlePurchaseTicket} className="space-y-4">
-              {!event.is_free && <PaymentMethodOptions />}
+              {!event.is_free && <PaymentMethodOptions value={paymentMethod} onChange={setPaymentMethod} />}
               <div className="space-y-2">
                 <Label htmlFor="attendeeName">Full Name *</Label>
                 <div className="relative">

@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { serviceId, paymentMethod = "paystack" } = await request.json()
+    const { serviceId, paymentMethod = "paystack", mobileMoney } = await request.json()
     if (!serviceId) {
       return NextResponse.json({ error: "Service is required" }, { status: 400 })
     }
@@ -49,6 +49,9 @@ export async function POST(request: NextRequest) {
     if (provider === "paystack" && (service.currency || "NGN").toUpperCase() !== "NGN") {
       return NextResponse.json({ error: "Payment method I only supports NGN subscriptions" }, { status: 400 })
     }
+    if (provider === "flutterwave" && (!mobileMoney?.countryCode || !mobileMoney?.network || !mobileMoney?.phoneNumber)) {
+      return NextResponse.json({ error: "Mobile money wallet details are required" }, { status: 400 })
+    }
 
     const reference = provider === "flutterwave" ? generateFlutterwaveReference() : `sub-${generatePaystackReference()}`
     const { error: purchaseError } = await supabase.from("user_subscription_purchases").insert({
@@ -83,6 +86,7 @@ export async function POST(request: NextRequest) {
         reference,
         redirect_url: callbackUrl,
         customerName: session.user.name || session.user.email,
+        mobileMoney,
         metadata,
       })
 
@@ -90,7 +94,24 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Unable to initialize payment" }, { status: 502 })
       }
 
-      return NextResponse.json({ authorizationUrl: payment.data.link, reference, provider })
+      await supabase
+        .from("user_subscription_purchases")
+        .update({
+          paystack_transaction_id: payment.data.id,
+          metadata: {
+            ...metadata,
+            flutterwave_charge_id: payment.data.id,
+          },
+        })
+        .eq("paystack_reference", reference)
+        .eq("user_id", session.user.id)
+
+      return NextResponse.json({
+        authorizationUrl: payment.data.link,
+        reference,
+        provider,
+        instruction: payment.data.instruction,
+      })
     }
 
     const payment = await initializePayment({

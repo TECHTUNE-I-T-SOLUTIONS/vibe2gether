@@ -47,12 +47,12 @@ export async function POST(request: NextRequest) {
     const provider = purchase.metadata?.payment_provider === "flutterwave" ? "flutterwave" : "paystack"
     const verification =
       provider === "flutterwave"
-        ? await verifyFlutterwavePayment(reference)
+        ? await verifyFlutterwavePayment(reference, purchase.metadata?.flutterwave_charge_id || purchase.paystack_transaction_id)
         : await verifyPayment(reference)
     const verificationData = verification.data as any
     const verified =
       provider === "flutterwave"
-        ? verification.status === "success" && verificationData?.status === "successful"
+        ? verification.status === "success" && ["successful", "succeeded"].includes(verificationData?.status)
         : verification.status && verificationData?.status === "success"
 
     if (!verified) {
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
         receipt_number: receiptNumber,
         paid_at:
           provider === "flutterwave"
-            ? verificationData?.created_at || startsAt.toISOString()
+            ? verificationData?.created_at || verificationData?.created_datetime || startsAt.toISOString()
             : verificationData?.paid_at || startsAt.toISOString(),
         paystack_transaction_id: verificationData?.id,
         metadata: {

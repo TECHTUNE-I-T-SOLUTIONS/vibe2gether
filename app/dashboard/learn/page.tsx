@@ -11,7 +11,6 @@ import { ResourceCard } from "@/components/learn/resource-card"
 import { CreateResourceModal } from "@/components/learn/create-resource-modal"
 import { useToast } from "@/hooks/use-toast"
 import { useUserProfile } from "@/hooks/use-user-profile"
-import { PaymentMethodOptions } from "@/components/payment-method-options"
 
 export default function LearnDashboardPage() {
   return (
@@ -123,10 +122,6 @@ function LearnContent() {
           <Button variant="outline" size="lg" className="rounded-full h-14 px-10 text-lg font-bold" onClick={() => router.push("/dashboard/feed")}>
             Back to Feed
           </Button>
-        </div>
-
-        <div className="w-full max-w-md">
-          <PaymentMethodOptions />
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-8 pt-12 border-t border-border w-full max-w-2xl opacity-60">
