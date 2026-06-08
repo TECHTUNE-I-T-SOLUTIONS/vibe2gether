@@ -244,9 +244,16 @@ export async function verifyFlutterwavePayment(
     throw new Error("Flutterwave V4 charge id is required for verification")
   }
 
-  const response = await axios.get(`${flutterwaveBaseUrl()}/charges/${chargeId}`, {
-    headers: await flutterwaveHeaders(),
-  })
+  let response
+  try {
+    response = await axios.get(`${flutterwaveBaseUrl()}/charges/${chargeId}`, {
+      headers: await flutterwaveHeaders(),
+    })
+  } catch (error) {
+    const axiosError = error as AxiosError<any>
+    console.error("Flutterwave charge verification failed:", axiosError.response?.data || axiosError.message)
+    throw new Error(getFlutterwaveErrorMessage(error, "Flutterwave charge verification failed"))
+  }
 
   return {
     status: response.data?.status || "success",

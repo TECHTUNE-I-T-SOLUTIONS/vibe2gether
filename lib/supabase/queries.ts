@@ -352,7 +352,7 @@ export async function getEvents(limit = 20, offset = 0, category?: string) {
   }
 
   const { data, error } = await query
-    .order('event_date', { ascending: true })
+    .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)
 
   return { data, error }
@@ -398,7 +398,7 @@ export async function getUserEvents(userId: string, limit = 20, offset = 0) {
     .from('events')
     .select('*')
     .eq('created_by', userId)
-    .order('event_date', { ascending: true })
+    .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)
 
   return { data, error }

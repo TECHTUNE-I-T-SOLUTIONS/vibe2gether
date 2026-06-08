@@ -136,7 +136,7 @@ export default function PressPage() {
               <Card className="border-border/50">
                 <CardContent className="pt-6 text-center">
                   <div className="w-20 h-20 rounded-2xl gradient-bg flex items-center justify-center mx-auto mb-4">
-                    <Image src="/v2g-logo.png" alt="Logo" width={60} height={60} className="rounded-xl" />
+                    <Image src="/v2g-logo.png" alt="Logo" loading="eager" width={60} height={60} className="rounded-xl" />
                   </div>
                   <h3 className="font-semibold mb-2">Logo Pack</h3>
                   <p className="text-sm text-muted-foreground mb-4">PNG, SVG, and EPS formats</p>

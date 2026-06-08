@@ -218,7 +218,7 @@ export function PaystackPaymentModal({
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.message || "Failed to initialize payment")
+        throw new Error(error.error || error.message || "Failed to initialize payment")
       }
 
       const data = await response.json()
@@ -237,7 +237,7 @@ export function PaystackPaymentModal({
         })
       }
 
-      // Redirect to Paystack payment page
+      // Redirect to the selected payment provider.
       if (authorizationUrl) {
         window.location.href = authorizationUrl
       }

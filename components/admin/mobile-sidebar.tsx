@@ -157,7 +157,7 @@ export function AdminMobileSidebar({ onLogoutClick }: AdminMobileSidebarProps) {
         <div className="flex items-center justify-between">
           <Link href="/admin" className="flex items-center gap-2 flex-1">
             <div className="relative w-10 h-10 rounded-full overflow-hidden">
-              <Image src="/v2g-logo.png" alt="Vibe2Gether Admin" fill className="object-cover" />
+              <Image src="/v2g-logo.png" alt="Vibe2Gether Admin" loading="eager" fill className="object-cover" />
             </div>
             <div className="flex-1">
               <span className="text-sm font-bold gradient-text">Admin Panel</span>

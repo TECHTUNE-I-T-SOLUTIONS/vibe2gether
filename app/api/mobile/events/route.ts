@@ -13,8 +13,8 @@ export async function GET(request: Request) {
 
     let query = supabase
       .from("events")
-      .select("id, title, description, location, event_date, image, capacity, registration_count, created_by")
-      .order("event_date", { ascending: true })
+      .select("id, title, description, location, event_date, image, capacity, registration_count, created_by, created_at")
+      .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1)
 
     if (search) {

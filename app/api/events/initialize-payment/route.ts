@@ -75,12 +75,18 @@ export async function POST(request: NextRequest) {
     if (userId) {
       const { data: existingRegistration } = await supabase
         .from("event_registrations")
-        .select("id")
+        .select("id, status, payment_status")
         .eq("event_id", eventId)
         .eq("user_id", userId)
         .maybeSingle()
 
-      if (existingRegistration) {
+      if (
+        existingRegistration &&
+        (existingRegistration.status === "confirmed" ||
+          existingRegistration.status === "paid" ||
+          existingRegistration.payment_status === "completed" ||
+          existingRegistration.payment_status === "paid")
+      ) {
         return NextResponse.json({ error: "You already have a ticket for this event" }, { status: 409 })
       }
     }

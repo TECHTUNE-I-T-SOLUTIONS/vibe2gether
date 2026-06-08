@@ -168,6 +168,10 @@ async function handlePaymentVerification(reference: string) {
           })
         }
       } else if (metadata.type === "event_registration" || transaction.type === "event_registration") {
+        const eventAmountPaid = provider === "flutterwave" ? Number(paymentData.amount || transaction.amount || 0) : Number(paymentData.amount || 0) / 100
+        const eventCurrency = provider === "flutterwave" ? paymentData.currency || transaction.currency || "XAF" : "NGN"
+        let resolvedEventId = metadata.eventId
+
         if (metadata.registration_id) {
           await supabase
             .from("event_registrations")
@@ -177,9 +181,9 @@ async function handlePaymentVerification(reference: string) {
               payment_reference: reference,
               transaction_id: transaction.id,
               paid_at: new Date().toISOString(),
-              amount_paid: paymentData.amount / 100,
-              currency: "NGN",
-              payment_method: "paystack",
+              amount_paid: eventAmountPaid,
+              currency: eventCurrency,
+              payment_method: provider,
             })
             .eq("id", metadata.registration_id)
         } else if (transaction.user_id && metadata.eventId) {
@@ -194,9 +198,9 @@ async function handlePaymentVerification(reference: string) {
                 payment_reference: reference,
                 transaction_id: transaction.id,
                 paid_at: new Date().toISOString(),
-                amount_paid: paymentData.amount / 100,
-                currency: "NGN",
-                payment_method: "paystack",
+                amount_paid: eventAmountPaid,
+                currency: eventCurrency,
+                payment_method: provider,
               },
               { onConflict: "event_id,user_id" }
             )
@@ -208,6 +212,7 @@ async function handlePaymentVerification(reference: string) {
             .single()
 
           if (ticketByRef?.event_id) {
+            resolvedEventId = ticketByRef.event_id
             await supabase
               .from("event_registrations")
               .upsert(
@@ -219,9 +224,9 @@ async function handlePaymentVerification(reference: string) {
                   payment_reference: reference,
                   transaction_id: transaction.id,
                   paid_at: new Date().toISOString(),
-                  amount_paid: paymentData.amount / 100,
-                  currency: "NGN",
-                  payment_method: "paystack",
+                  amount_paid: eventAmountPaid,
+                  currency: eventCurrency,
+                  payment_method: provider,
                 },
                 { onConflict: "event_id,user_id" }
               )
@@ -236,6 +241,7 @@ async function handlePaymentVerification(reference: string) {
             .single()
 
           if (ticket && ticket.status !== "paid") {
+            resolvedEventId = ticket.event_id || resolvedEventId
             const { data: updatedTicket } = await supabase
               .from("event_tickets")
               .update({ status: "paid" })
@@ -256,48 +262,52 @@ async function handlePaymentVerification(reference: string) {
                   .update({ registered_count: (event.registered_count || 0) + 1 })
                   .eq("id", event.id)
 
-                const pdfBuffer = await generateTicketPDF({
-                  eventName: event.title,
-                  eventDate: new Date(event.event_date).toLocaleDateString(),
-                  eventTime: new Date(event.event_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                  venue: event.location_name || "Online / TBD",
-                  address: event.location_name || "Not specified",
-                  ticketType: event.is_free ? "Free Pass" : "General Access",
-                  attendeeName: updatedTicket.attendee_name,
-                  barcode: updatedTicket.barcode,
-                })
+                try {
+                  const pdfBuffer = await generateTicketPDF({
+                    eventName: event.title,
+                    eventDate: new Date(event.event_date).toLocaleDateString(),
+                    eventTime: new Date(event.event_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                    venue: event.location_name || "Online / TBD",
+                    address: event.location_name || "Not specified",
+                    ticketType: event.is_free ? "Free Pass" : "General Access",
+                    attendeeName: updatedTicket.attendee_name,
+                    barcode: updatedTicket.barcode,
+                  })
 
-                const emailHtml = `
-                  <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee;">
-                    <div style="text-align: center; margin-bottom: 16px;">
-                      <img src="https://vibe2gether.com/v2g-logo.png" alt="Vibe2Gether Logo" style="max-width: 100px; margin: 0 auto 12px; display: block;" />
-                      <h1 style="color: #FF5874; margin: 0;">Vibe2Gether Event Ticket</h1>
+                  const emailHtml = `
+                    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee;">
+                      <div style="text-align: center; margin-bottom: 16px;">
+                        <img src="https://vibe2gether.com/v2g-logo.png" alt="Vibe2Gether Logo" style="max-width: 100px; margin: 0 auto 12px; display: block;" />
+                        <h1 style="color: #FF5874; margin: 0;">Vibe2Gether Event Ticket</h1>
+                      </div>
+                      <p>Hi ${updatedTicket.attendee_name},</p>
+                      <p>Thank you for purchasing a ticket for <strong>${event.title}</strong>!</p>
+                      <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                        <p><strong>Event:</strong> ${event.title}</p>
+                        <p><strong>Date:</strong> ${new Date(event.event_date).toLocaleDateString()}</p>
+                        <p><strong>Time:</strong> ${new Date(event.event_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+                        <p><strong>Venue:</strong> ${event.location_name || "Not specified"}</p>
+                      </div>
+                      <p>Your official ticket PDF is attached to this email. Please present it at the venue for scanning.</p>
+                      <p>Best regards,<br/>The Vibe2Gether Team</p>
                     </div>
-                    <p>Hi ${updatedTicket.attendee_name},</p>
-                    <p>Thank you for purchasing a ticket for <strong>${event.title}</strong>!</p>
-                    <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                      <p><strong>Event:</strong> ${event.title}</p>
-                      <p><strong>Date:</strong> ${new Date(event.event_date).toLocaleDateString()}</p>
-                      <p><strong>Time:</strong> ${new Date(event.event_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
-                      <p><strong>Venue:</strong> ${event.location_name || "Not specified"}</p>
-                    </div>
-                    <p>Your official ticket PDF is attached to this email. Please present it at the venue for scanning.</p>
-                    <p>Best regards,<br/>The Vibe2Gether Team</p>
-                  </div>
-                `
+                  `
 
-                await sendTicketEmail({
-                  to: updatedTicket.attendee_email,
-                  subject: `Your Ticket for ${event.title} - Vibe2Gether`,
-                  html: emailHtml,
-                  attachments: [
-                    {
-                      filename: `ticket-${event.title.replace(/\s+/g, "-").toLowerCase()}.pdf`,
-                      content: pdfBuffer,
-                      contentType: "application/pdf",
-                    },
-                  ],
-                })
+                  await sendTicketEmail({
+                    to: updatedTicket.attendee_email,
+                    subject: `Your Ticket for ${event.title} - Vibe2Gether`,
+                    html: emailHtml,
+                    attachments: [
+                      {
+                        filename: `ticket-${event.title.replace(/\s+/g, "-").toLowerCase()}.pdf`,
+                        content: pdfBuffer,
+                        contentType: "application/pdf",
+                      },
+                    ],
+                  })
+                } catch (ticketEmailError) {
+                  console.error("[Verify Payment] Ticket email failed after payment confirmation:", ticketEmailError)
+                }
               }
             }
           }
@@ -310,9 +320,9 @@ async function handlePaymentVerification(reference: string) {
           title: "Registration Confirmed",
           message: `You have successfully registered for the event`,
           actor_id: metadata.eventCreatorId,
-          reference_id: metadata.eventId,
+          reference_id: resolvedEventId,
           reference_type: "event",
-          action_url: `/events/${metadata.eventId}`,
+          action_url: resolvedEventId ? `/events/${resolvedEventId}` : "/dashboard/events/manage",
         })
       } else if (
         metadata.type === "premium_subscription" ||

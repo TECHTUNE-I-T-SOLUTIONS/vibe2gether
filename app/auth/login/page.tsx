@@ -63,6 +63,7 @@ export default function AdminLogin() {
               <Image
                 src="/v2g-logo.png"
                 alt="Vibe2Gether"
+                loading="eager"                
                 width={64}
                 height={64}
                 className="object-contain"

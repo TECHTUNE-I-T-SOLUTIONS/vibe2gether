@@ -5,6 +5,51 @@ import { createServiceRoleClient } from "@/lib/supabase/server"
 import { generatePaystackReference, initializePayment } from "@/lib/paystack"
 import { generateFlutterwaveReference, initializeFlutterwavePayment } from "@/lib/flutterwave"
 
+const USD_TO_NGN = 1450
+const USD_TO_XAF = 585.48
+
+function normalizeCurrency(currency?: string) {
+  return (currency || "NGN").toUpperCase()
+}
+
+function toUsd(amount: number, currency: string) {
+  if (currency === "NGN") return amount / USD_TO_NGN
+  if (currency === "XAF") return amount / USD_TO_XAF
+  return amount
+}
+
+function fromUsd(amount: number, currency: string) {
+  if (currency === "NGN") return Math.round(amount * USD_TO_NGN)
+  if (currency === "XAF") return Math.round(amount * USD_TO_XAF)
+  return Number(amount.toFixed(2))
+}
+
+function getAppOrigin(request: NextRequest) {
+  return (
+    request.headers.get("origin") ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_BASE_URL ||
+    process.env.NEXTAUTH_URL ||
+    "http://localhost:3000"
+  ).replace(/\/$/, "")
+}
+
+function getFlutterwaveCallbackUrl(reference: string) {
+  const baseUrl = (
+    process.env.FLUTTERWAVE_REDIRECT_BASE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_BASE_URL ||
+    process.env.NEXTAUTH_URL ||
+    ""
+  ).replace(/\/$/, "")
+
+  if (!baseUrl || baseUrl.includes("localhost") || baseUrl.startsWith("http://")) {
+    throw new Error("Method II requires a public HTTPS redirect URL. Set FLUTTERWAVE_REDIRECT_BASE_URL to your ngrok HTTPS URL or production URL.")
+  }
+
+  return `${baseUrl}/dashboard/subscriptions?reference=${reference}`
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -46,7 +91,15 @@ export async function POST(request: NextRequest) {
     }
 
     const provider = paymentMethod === "flutterwave" ? "flutterwave" : "paystack"
-    if (provider === "paystack" && (service.currency || "NGN").toUpperCase() !== "NGN") {
+    const serviceCurrency = normalizeCurrency(service.currency)
+    const serviceAmount = Number(service.price)
+    const paymentCurrency = provider === "flutterwave" ? normalizeCurrency(mobileMoney?.currency || serviceCurrency) : serviceCurrency
+    const paymentAmount =
+      provider === "flutterwave" && paymentCurrency !== serviceCurrency
+        ? fromUsd(toUsd(serviceAmount, serviceCurrency), paymentCurrency)
+        : serviceAmount
+
+    if (provider === "paystack" && serviceCurrency !== "NGN") {
       return NextResponse.json({ error: "Payment method I only supports NGN subscriptions" }, { status: 400 })
     }
     if (provider === "flutterwave" && (!mobileMoney?.countryCode || !mobileMoney?.network || !mobileMoney?.phoneNumber)) {
@@ -57,32 +110,41 @@ export async function POST(request: NextRequest) {
     const { error: purchaseError } = await supabase.from("user_subscription_purchases").insert({
       user_id: session.user.id,
       service_id: service.id,
-      amount: service.price,
-      currency: service.currency || "NGN",
+      amount: paymentAmount,
+      currency: paymentCurrency,
       status: "pending",
       payment_status: "pending",
       paystack_reference: reference,
       metadata: {
         payment_provider: provider,
+        original_amount: serviceAmount,
+        original_currency: serviceCurrency,
+        selected_payment_currency: paymentCurrency,
       },
     })
 
     if (purchaseError) throw purchaseError
 
-    const origin = request.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-    const callbackUrl = `${origin}/dashboard/subscriptions?reference=${reference}`
+    const callbackUrl =
+      provider === "flutterwave"
+        ? getFlutterwaveCallbackUrl(reference)
+        : `${getAppOrigin(request)}/dashboard/subscriptions?reference=${reference}`
     const metadata = {
       type: "subscription_service",
       service_id: service.id,
       user_id: session.user.id,
       payment_provider: provider,
+      original_amount: serviceAmount,
+      original_currency: serviceCurrency,
+      payment_amount: paymentAmount,
+      payment_currency: paymentCurrency,
     }
 
     if (provider === "flutterwave") {
       const payment = await initializeFlutterwavePayment({
         email: session.user.email,
-        amount: Number(service.price),
-        currency: service.currency || "NGN",
+        amount: paymentAmount,
+        currency: paymentCurrency,
         reference,
         redirect_url: callbackUrl,
         customerName: session.user.name || session.user.email,

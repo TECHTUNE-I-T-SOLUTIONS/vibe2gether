@@ -66,7 +66,7 @@ export function Header() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <div className="relative w-10 h-10 md:w-12 md:h-12 rounded-full overflow-hidden">
-              <Image src="/v2g-logo.png" alt="Vibe2Gether" fill className="object-cover" />
+              <Image src="/v2g-logo.png" alt="Vibe2Gether" loading="eager" fill className="object-cover" />
             </div>
             <span className="text-xl md:text-2xl font-bold gradient-text hidden sm:inline">Vibe2Gether</span>
           </Link>

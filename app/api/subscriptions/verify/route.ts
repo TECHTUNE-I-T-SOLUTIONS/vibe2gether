@@ -45,9 +45,17 @@ export async function POST(request: NextRequest) {
     }
 
     const provider = purchase.metadata?.payment_provider === "flutterwave" ? "flutterwave" : "paystack"
+    const flutterwaveChargeId = purchase.metadata?.flutterwave_charge_id || purchase.paystack_transaction_id
+    if (provider === "flutterwave" && !flutterwaveChargeId) {
+      return NextResponse.json(
+        { error: "Flutterwave charge id is missing for this purchase. Please restart checkout." },
+        { status: 409 }
+      )
+    }
+
     const verification =
       provider === "flutterwave"
-        ? await verifyFlutterwavePayment(reference, purchase.metadata?.flutterwave_charge_id || purchase.paystack_transaction_id)
+        ? await verifyFlutterwavePayment(reference, flutterwaveChargeId)
         : await verifyPayment(reference)
     const verificationData = verification.data as any
     const verified =
@@ -56,7 +64,13 @@ export async function POST(request: NextRequest) {
         : verification.status && verificationData?.status === "success"
 
     if (!verified) {
-      return NextResponse.json({ error: "Payment not confirmed" }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: "Payment not confirmed",
+          status: verificationData?.status || verification.message,
+        },
+        { status: 400 }
+      )
     }
 
     const startsAt = new Date()
@@ -161,6 +175,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, purchase: updated, receiptEmailSent })
   } catch (error) {
     console.error("Verify subscription payment error:", error)
-    return NextResponse.json({ error: "Failed to verify payment" }, { status: 500 })
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to verify payment" },
+      { status: 500 }
+    )
   }
 }

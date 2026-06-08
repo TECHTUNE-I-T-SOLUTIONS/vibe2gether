@@ -158,7 +158,7 @@ function UserSubscriptionsContent() {
   async function checkout(serviceId: string, method: "paystack" | "flutterwave") {
     if (!isLoggedIn) {
       router.push(`/login?callbackUrl=${encodeURIComponent("/dashboard/subscriptions")}`)
-      return
+      return false
     }
 
     setPayingId(serviceId)
@@ -175,21 +175,25 @@ function UserSubscriptionsContent() {
       const data = await res.json()
       if (res.status === 401) {
         router.push(`/login?callbackUrl=${encodeURIComponent("/dashboard/subscriptions")}`)
-        return
+        return false
       }
       if (!res.ok) throw new Error(data.error || "Payment failed")
       if (method === "flutterwave" && data.instruction) {
+        setConfirmService(null)
         toast({
           title: "Approve on your phone",
           description: data.instruction,
         })
         setViewTab("mine")
         loadSubscriptions()
-        return
+        return true
       }
+      setConfirmService(null)
       window.location.href = data.authorizationUrl
+      return true
     } catch (error: any) {
       toast({ title: "Checkout failed", description: error.message, variant: "destructive" })
+      return false
     } finally {
       setPayingId(null)
     }
@@ -634,7 +638,6 @@ function UserSubscriptionsContent() {
                   onClick={() => {
                     const serviceId = confirmService.id
                     const method = paymentMethod
-                    setConfirmService(null)
                     checkout(serviceId, method)
                   }}
                   disabled={

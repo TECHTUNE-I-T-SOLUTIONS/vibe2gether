@@ -70,7 +70,7 @@ export function Footer() {
           <div className="col-span-2 md:col-span-3 lg:col-span-2">
             <Link href="/" className="flex items-center gap-2 mb-4">
               <div className="relative w-10 h-10 rounded-full overflow-hidden">
-                <Image src="/v2g-logo.png" alt="Vibe2Gether" fill className="object-cover" />
+                <Image src="/v2g-logo.png" alt="Vibe2Gether" loading="eager" fill className="object-cover" />
               </div>
               <span className="text-xl font-bold gradient-text">Vibe2Gether</span>
             </Link>

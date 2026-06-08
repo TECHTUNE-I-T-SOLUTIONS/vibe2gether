@@ -19,6 +19,7 @@ import Image from "next/image"
 import { Loader2, Plus, Upload, Calendar, Clock, MapPin, Users, Trash2, LogOut, MessageCircle, Ticket, Eye, Search, Phone, Mail, Home, Download, Share2 } from "lucide-react"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { createClient } from "@/lib/supabase/client"
+import { PaymentMethodOptions } from "@/components/payment-method-options"
 
 const CATEGORIES = [
   "Entertainment",
@@ -30,6 +31,36 @@ const CATEGORIES = [
   "Conference",
   "Art & Culture",
   "Other",
+]
+
+const MOBILE_MONEY_COUNTRIES = [
+  {
+    code: "CM",
+    label: "Cameroon",
+    dialCode: "237",
+    currency: "XAF",
+    placeholder: "6XXXXXXXX",
+    networks: [
+      { value: "MTN", label: "MTN Mobile Money" },
+      { value: "ORANGE", label: "Orange Money" },
+    ],
+  },
+  {
+    code: "NG",
+    label: "Nigeria",
+    dialCode: "234",
+    currency: "NGN",
+    placeholder: "8XXXXXXXXX",
+    networks: [{ value: "MTN", label: "MTN MoMo" }],
+  },
+  {
+    code: "US",
+    label: "United States",
+    dialCode: "1",
+    currency: "USD",
+    placeholder: "5550100000",
+    networks: [{ value: "MOBILE_MONEY", label: "Mobile Money" }],
+  },
 ]
 
 export default function DashboardEventsManagePage() {
@@ -51,6 +82,14 @@ export default function DashboardEventsManagePage() {
   const [loadingTickets, setLoadingTickets] = useState(false)
   const [purchasing, setPurchasing] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [paymentMethod, setPaymentMethod] = useState<"paystack" | "flutterwave">("paystack")
+  const [mobileMoney, setMobileMoney] = useState({
+    country: "CM",
+    countryCode: "237",
+    currency: "XAF",
+    network: "MTN",
+    phoneNumber: "",
+  })
   const verificationHandledRef = useRef(false)
 
   // Ticket Purchase Form
@@ -83,6 +122,29 @@ export default function DashboardEventsManagePage() {
   const USD_TO_XAF = 605
   const NGN_TO_USD = 1 / USD_TO_NGN
   const NGN_TO_XAF = USD_TO_XAF / USD_TO_NGN
+  const selectedMobileMoneyCountry =
+    MOBILE_MONEY_COUNTRIES.find((country) => country.code === mobileMoney.country) || MOBILE_MONEY_COUNTRIES[0]
+
+  function isCompletedRegistration(registration: any) {
+    return (
+      registration?.status === "confirmed" ||
+      registration?.status === "paid" ||
+      registration?.payment_status === "completed" ||
+      registration?.payment_status === "paid"
+    )
+  }
+
+  function getTicketAmountNgn(event: any) {
+    const explicitNgn = Number(event?.ticket_price_ngn || event?.ticket_price_ngn_amount || 0)
+    if (explicitNgn > 0) return Math.round(explicitNgn)
+
+    const usdAmount = Number(event?.ticket_price_usd || event?.ticket_price || 0)
+    if ((event?.currency || "USD").toUpperCase() === "NGN") {
+      return Math.round(usdAmount)
+    }
+
+    return Math.round(usdAmount * USD_TO_NGN)
+  }
 
   // Check authentication and redirect if not logged in
   useEffect(() => {
@@ -134,9 +196,21 @@ export default function DashboardEventsManagePage() {
         if (data?.success) {
           await fetchRegisteredEvents()
           await fetchAllEvents()
+          setActiveTab("registered")
+          window.setTimeout(() => {
+            fetchRegisteredEvents()
+            fetchAllEvents()
+          }, 1500)
+        } else {
+          toast({
+            title: "Payment not confirmed",
+            description: data?.error || "We could not confirm this payment yet. Please try refreshing in a moment.",
+            variant: "destructive",
+          })
         }
       } catch (error) {
         console.error("Payment verification error:", error)
+        toast({ title: "Payment verification failed", description: "Please refresh the page or contact support if you were debited.", variant: "destructive" })
       } finally {
         router.replace("/dashboard/events/manage")
       }
@@ -156,7 +230,7 @@ export default function DashboardEventsManagePage() {
         .from("events")
         .select("*")
         .eq("created_by", session.user.id)
-        .order("event_date", { ascending: true })
+        .order("created_at", { ascending: false })
 
       if (error) {
         console.error("Error fetching events:", error.message || error)
@@ -191,7 +265,7 @@ export default function DashboardEventsManagePage() {
         console.error("Error fetching registrations:", error.message || error)
         throw error
       }
-      const registrations = data || []
+      const registrations = (data || []).filter(isCompletedRegistration)
       const updatedEvents = await updatePastEvents(
         registrations.map((registration: any) => registration.event).filter(Boolean)
       )
@@ -215,7 +289,7 @@ export default function DashboardEventsManagePage() {
       const { data, error } = await supabase
         .from("events")
         .select("*, users:created_by(display_name, profile_picture, id)")
-        .order("event_date", { ascending: true })
+        .order("created_at", { ascending: false })
 
       if (error) {
         console.error("Error fetching all events:", error.message || error)
@@ -520,6 +594,46 @@ export default function DashboardEventsManagePage() {
         return
       }
 
+      const ticketAmountNgn = getTicketAmountNgn(selectedEvent)
+
+      if (paymentMethod === "flutterwave") {
+        if (!mobileMoney.countryCode || !mobileMoney.network || mobileMoney.phoneNumber.length < 8) {
+          toast({
+            title: "Wallet details required",
+            description: "Enter a valid mobile money wallet before continuing.",
+            variant: "destructive",
+          })
+          return
+        }
+
+        const res = await fetch("/api/flutterwave/initialize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: ticketAmountNgn,
+            itemType: "event",
+            itemData: {
+              id: selectedEvent.id,
+              title: selectedEvent.title,
+            },
+            mobileMoney,
+            metadata: {
+              type: "event_registration",
+              eventId: selectedEvent.id,
+              eventTitle: selectedEvent.title,
+              attendeeName: ticketForm.attendeeName,
+              attendeeEmail: ticketForm.attendeeEmail,
+              attendeePhone: ticketForm.attendeePhone,
+              attendeeAddress: ticketForm.attendeeAddress,
+            },
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok || data.error) throw new Error(data.error || "Failed to initialize Method II payment")
+        if (data.authorizationUrl) window.location.href = data.authorizationUrl
+        return
+      }
+
       const res = await fetch("/api/events/initialize-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -531,6 +645,7 @@ export default function DashboardEventsManagePage() {
           attendeeEmail: ticketForm.attendeeEmail,
           attendeePhone: ticketForm.attendeePhone,
           attendeeAddress: ticketForm.attendeeAddress,
+          ticketPriceNgn: ticketAmountNgn,
         }),
       })
 
@@ -879,7 +994,7 @@ export default function DashboardEventsManagePage() {
                   {allEvents.map((event) => {
                     const isOwnEvent = event.created_by === session?.user?.id
                     const alreadyPurchased = registrations.some(
-                      (reg) => (reg.event?.id || reg.event_id) === event.id
+                      (reg) => (reg.event?.id || reg.event_id) === event.id && isCompletedRegistration(reg)
                     )
                     return (
                       <Card key={event.id} className="overflow-hidden hover:shadow-lg transition-shadow flex flex-col">
@@ -889,6 +1004,7 @@ export default function DashboardEventsManagePage() {
                             <Image
                               src={event.thumbnail}
                               alt={event.title}
+                              loading="eager"
                               fill
                               className="object-cover"
                             />
@@ -1406,6 +1522,80 @@ export default function DashboardEventsManagePage() {
               </div>
 
               <form onSubmit={handlePurchaseTicket} className="space-y-4">
+                {!selectedEvent.is_free && (
+                  <div className="space-y-3">
+                    <Label>Payment method</Label>
+                    <PaymentMethodOptions value={paymentMethod} onChange={setPaymentMethod} layout="stack" />
+                  </div>
+                )}
+                {!selectedEvent.is_free && paymentMethod === "flutterwave" && (
+                  <div className="space-y-3 rounded-xl border p-4">
+                    <div>
+                      <p className="font-semibold">Mobile money wallet</p>
+                      <p className="text-sm text-muted-foreground">Choose the country/currency and wallet that will approve this payment.</p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <Label className="mb-1 block text-sm font-medium">Country</Label>
+                        <select
+                          value={mobileMoney.country}
+                          onChange={(event) =>
+                            setMobileMoney((current) => {
+                              const country = MOBILE_MONEY_COUNTRIES.find((item) => item.code === event.target.value) || MOBILE_MONEY_COUNTRIES[0]
+                              return {
+                                ...current,
+                                country: country.code,
+                                countryCode: country.dialCode,
+                                currency: country.currency,
+                                network: country.networks[0]?.value || "",
+                              }
+                            })
+                          }
+                          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                          {MOBILE_MONEY_COUNTRIES.map((country) => (
+                            <option key={country.code} value={country.code}>
+                              {country.label} ({country.currency})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <Label className="mb-1 block text-sm font-medium">Network</Label>
+                        <select
+                          value={mobileMoney.network}
+                          onChange={(event) => setMobileMoney((current) => ({ ...current, network: event.target.value }))}
+                          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                          {selectedMobileMoneyCountry.networks.map((network) => (
+                            <option key={network.value} value={network.value}>
+                              {network.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-[96px_1fr] gap-3">
+                      <div>
+                        <Label className="mb-1 block text-sm font-medium">Code</Label>
+                        <Input value={mobileMoney.countryCode} readOnly />
+                      </div>
+                      <div>
+                        <Label className="mb-1 block text-sm font-medium">Wallet phone</Label>
+                        <Input
+                          value={mobileMoney.phoneNumber}
+                          onChange={(event) =>
+                            setMobileMoney((current) => ({
+                              ...current,
+                              phoneNumber: event.target.value.replace(/\D/g, ""),
+                            }))
+                          }
+                          placeholder={selectedMobileMoneyCountry.placeholder}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="attendeeName">Full Name *</Label>

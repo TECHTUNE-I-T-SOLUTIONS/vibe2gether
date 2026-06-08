@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
 
     // Add pagination
     const { data: events, count, error } = await query
-      .order("event_date", { ascending: true })
+      .order("created_at", { ascending: false })
       .range((page - 1) * limit, page * limit - 1)
 
     if (error) {
