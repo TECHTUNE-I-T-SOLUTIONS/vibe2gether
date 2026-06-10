@@ -6,7 +6,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server"
 import crypto from "crypto"
 
 const USD_TO_NGN = 1450
-const USD_TO_XAF = 585.48
+const USD_TO_XAF = 605
 
 function getRedirectUrl(reference: string, itemType?: string) {
   const baseUrl =
@@ -36,7 +36,34 @@ function convertFromUsd(amountUsd: number, currency: string) {
   return Math.round(amountUsd * USD_TO_XAF)
 }
 
+function normalizeFlutterwaveAmount(amount: number, currency: string) {
+  if (["XAF", "XOF", "NGN"].includes(currency)) return Math.max(1, Math.round(amount))
+  return Math.max(0.01, Number(amount.toFixed(2)))
+}
+
+function getEventAmountNgn(event: any) {
+  const priceNgn = Number(event?.ticket_price_ngn || event?.ticket_price_ngn_amount || 0)
+  const priceUsd = Number(event?.ticket_price_usd || 0)
+  const ticketPrice = Number(event?.ticket_price || 0)
+  const currency = String(event?.currency || "USD").toUpperCase()
+
+  if (priceNgn > 0) return Math.round(priceNgn)
+  if (priceUsd > 0) return Math.round(priceUsd * USD_TO_NGN)
+  if (currency === "NGN") {
+    return ticketPrice >= 100 ? Math.round(ticketPrice) : Math.round(ticketPrice * USD_TO_NGN)
+  }
+  if (currency === "USD") return Math.round(ticketPrice * USD_TO_NGN)
+
+  return Math.round(ticketPrice * USD_TO_NGN)
+}
+
 export async function POST(request: NextRequest) {
+  let cleanupSupabase: ReturnType<typeof createServiceRoleClient> | null = null
+  let cleanupTransactionId: string | null = null
+  let cleanupRegistrationId: string | null = null
+  let cleanupReference: string | null = null
+  let cleanupIsTicketPurchase = false
+
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id || !session.user.email) {
@@ -51,11 +78,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Mobile money wallet details are required" }, { status: 400 })
     }
 
-    const amountNgn = Number(amount)
-    const amountUsd = amountNgn / USD_TO_NGN
+    let amountNgn = Number(amount)
     const currency = String(mobileMoney.currency || "XAF").toUpperCase()
-    const providerAmount = convertFromUsd(amountUsd, currency)
-    const coinsAmount = itemType === "coins" ? Math.round(amountUsd * 500) : undefined
+    let amountUsd = amountNgn / USD_TO_NGN
+    let providerAmount = normalizeFlutterwaveAmount(convertFromUsd(amountUsd, currency), currency)
     const transactionType =
       itemType === "event"
         ? "event_registration"
@@ -64,6 +90,8 @@ export async function POST(request: NextRequest) {
           : "coin_purchase"
     const reference = generateFlutterwaveReference()
     const supabase = createServiceRoleClient()
+    cleanupSupabase = supabase
+    cleanupReference = reference
     let registrationId: string | null = null
     let barcode: string | null = null
 
@@ -90,6 +118,18 @@ export async function POST(request: NextRequest) {
       if (event.capacity && (event.registered_count || 0) >= event.capacity) {
         return NextResponse.json({ error: "This event is sold out" }, { status: 400 })
       }
+
+      console.log("[FLUTTERWAVE] Event price fields", {
+        eventId,
+        currency: event.currency,
+        ticket_price: event.ticket_price,
+        ticket_price_ngn: event.ticket_price_ngn,
+        ticket_price_usd: event.ticket_price_usd,
+      })
+
+      amountNgn = getEventAmountNgn(event)
+      amountUsd = amountNgn / USD_TO_NGN
+      providerAmount = normalizeFlutterwaveAmount(convertFromUsd(amountUsd, currency), currency)
 
       const { data: existingRegistration } = await supabase
         .from("event_registrations")
@@ -130,6 +170,8 @@ export async function POST(request: NextRequest) {
 
       if (registrationError) throw registrationError
       registrationId = registration?.id || null
+      cleanupRegistrationId = registrationId
+      cleanupIsTicketPurchase = true
 
       const platformFee = providerAmount * 0.03
       const { error: ticketError } = await supabase.from("event_tickets").insert({
@@ -149,6 +191,8 @@ export async function POST(request: NextRequest) {
 
       if (ticketError) throw ticketError
     }
+
+    const coinsAmount = itemType === "coins" ? Math.round(amountUsd * 500) : undefined
 
     const { data: transaction, error: txError } = await supabase
       .from("transactions")
@@ -183,6 +227,18 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (txError) throw txError
+    cleanupTransactionId = transaction.id
+
+    console.log("[FLUTTERWAVE] Initializing Method II payment", {
+      reference,
+      itemType,
+      amountNgn,
+      amountUsd,
+      providerAmount,
+      currency,
+      countryCode: mobileMoney.countryCode,
+      network: mobileMoney.network,
+    })
 
     const payment = await initializeFlutterwavePayment({
       email: session.user.email,
@@ -197,11 +253,18 @@ export async function POST(request: NextRequest) {
         userId: session.user.id,
         transactionId: transaction.id,
         coinsAmount,
-        currency,
-      },
-    })
+          currency,
+          amountNgn,
+          amountUsd,
+          providerAmount,
+        },
+      })
 
-    if (!payment.data?.link) {
+    if (!payment.data?.link && !payment.data?.instruction && String(payment.data?.status || "").toLowerCase() === "failed") {
+      throw new Error("Flutterwave rejected this mobile money payment")
+    }
+
+    if (!payment.data?.link && !payment.data?.instruction) {
       throw new Error("Unable to initialize Method II payment")
     }
 
@@ -225,9 +288,33 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("[FLUTTERWAVE] Initialization error:", error)
+    const message = error instanceof Error ? error.message : "Failed to initialize Method II payment"
+    if (cleanupSupabase && cleanupTransactionId) {
+      await cleanupSupabase
+        .from("transactions")
+        .update({
+          status: "failed",
+        })
+        .eq("id", cleanupTransactionId)
+    }
+
+    if (cleanupSupabase && cleanupRegistrationId) {
+      await cleanupSupabase
+        .from("event_registrations")
+        .update({ payment_status: "failed", status: "cancelled" })
+        .eq("id", cleanupRegistrationId)
+    }
+
+    if (cleanupSupabase && cleanupIsTicketPurchase && cleanupReference) {
+      await cleanupSupabase
+        .from("event_tickets")
+        .update({ status: "cancelled" })
+        .eq("payment_reference", cleanupReference)
+    }
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to initialize Method II payment" },
-      { status: 500 }
+      { error: message },
+      { status: message.includes("Invalid") || message.includes("confirm") || message.includes("wallet") ? 400 : 500 }
     )
   }
 }

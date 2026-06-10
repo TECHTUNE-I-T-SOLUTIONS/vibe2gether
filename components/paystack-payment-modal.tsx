@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { PaymentMethodOptions } from "@/components/payment-method-options"
+import { normalizeMobileMoneyPhone } from "@/lib/mobile-money"
 
 const MOBILE_MONEY_COUNTRIES = [
   {
@@ -22,22 +23,6 @@ const MOBILE_MONEY_COUNTRIES = [
       { value: "MTN", label: "MTN Mobile Money" },
       { value: "ORANGE", label: "Orange Money" },
     ],
-  },
-  {
-    code: "NG",
-    label: "Nigeria",
-    dialCode: "234",
-    currency: "NGN",
-    placeholder: "8XXXXXXXXX",
-    networks: [{ value: "MTN", label: "MTN MoMo" }],
-  },
-  {
-    code: "US",
-    label: "United States",
-    dialCode: "1",
-    currency: "USD",
-    placeholder: "5550100000",
-    networks: [{ value: "MOBILE_MONEY", label: "Mobile Money" }],
   },
 ]
 
@@ -75,6 +60,7 @@ export function PaystackPaymentModal({
   const [isProcessing, setIsProcessing] = useState(false)
   const [paymentStatus, setPaymentStatus] = useState<"idle" | "processing" | "success" | "error">("idle")
   const [errorMessage, setErrorMessage] = useState("")
+  const [mobileMoneyInstruction, setMobileMoneyInstruction] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [paymentReference, setPaymentReference] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<"paystack" | "flutterwave">(initialPaymentMethod)
@@ -94,8 +80,8 @@ export function PaystackPaymentModal({
   // Coins equivalent = USD * 500 (500 coins = 1 USD)
   const coinsEquivalent = Math.round(usdEquivalent * 500)
 
-  // XAF equivalent = USD * 585.48 (1 USD = 585.48 XAF)
-  const xafEquivalent = Math.round(usdEquivalent * 585.48)
+  // XAF equivalent = USD * 605
+  const xafEquivalent = Math.round(usdEquivalent * 605)
   const methodTwoAmount =
     selectedMobileMoneyCountry.currency === "NGN"
       ? Math.round(usdEquivalent * 1450)
@@ -192,6 +178,7 @@ export function PaystackPaymentModal({
     setIsProcessing(true)
     setPaymentStatus("processing")
     setErrorMessage("")
+    setMobileMoneyInstruction("")
 
     try {
       const endpoint = paymentMethod === "flutterwave" ? "/api/flutterwave/initialize" : "/api/paystack/initialize"
@@ -231,10 +218,9 @@ export function PaystackPaymentModal({
       }
 
       if (paymentMethod === "flutterwave" && data.instruction) {
-        toast({
-          title: "Approve on your phone",
-          description: data.instruction,
-        })
+        setMobileMoneyInstruction(data.instruction)
+        setPaymentStatus("processing")
+        setIsProcessing(false)
       }
 
       // Redirect to the selected payment provider.
@@ -258,6 +244,7 @@ export function PaystackPaymentModal({
     if (!isProcessing) {
       setPaymentStatus("idle")
       setErrorMessage("")
+      setMobileMoneyInstruction("")
       setPaymentReference(null)
       onClose()
     }
@@ -322,7 +309,7 @@ export function PaystackPaymentModal({
           verifyPayment(reference)
         }, 3000)
       } else {
-        setErrorMessage("Payment verification failed. Please contact support.")
+        setErrorMessage(result.error || "Payment verification failed. Please contact support.")
         setPaymentStatus("error")
       }
     } catch (error) {
@@ -458,14 +445,26 @@ export function PaystackPaymentModal({
                           onChange={(event) =>
                             setMobileMoney((current) => ({
                               ...current,
-                              phoneNumber: event.target.value.replace(/\D/g, ""),
+                              phoneNumber: normalizeMobileMoneyPhone(event.target.value, current.countryCode),
                             }))
                           }
                           placeholder={selectedMobileMoneyCountry.placeholder}
                         />
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Enter the local wallet number only. The country code is added separately.
+                        </p>
                       </div>
                     </div>
                   </div>
+                </div>
+              )}
+              {mobileMoneyInstruction && (
+                <div className="rounded-lg border border-primary/40 bg-primary/5 p-3">
+                  <p className="font-semibold">Approve on your phone</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{mobileMoneyInstruction}</p>
+                  <p className="mt-3 rounded-md bg-background p-3 text-xs text-muted-foreground">
+                    After approving the prompt, use Verify Payment below. We also listen for Flutterwave's webhook and will complete the payment automatically once confirmed.
+                  </p>
                 </div>
               )}
             </div>

@@ -14,6 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter, useSearchParams } from "next/navigation"
 import { PaymentMethodOptions } from "@/components/payment-method-options"
+import { normalizeMobileMoneyPhone } from "@/lib/mobile-money"
 
 const PREMIUM_FEATURES = [
   { name: "Unlimited Swipes", description: "Unlimited swipes on profiles", premium: false },
@@ -106,26 +107,6 @@ const MOBILE_MONEY_COUNTRIES = [
       { value: "ORANGE", label: "Orange Money" },
     ],
   },
-  {
-    code: "NG",
-    label: "Nigeria",
-    dialCode: "234",
-    currency: "NGN",
-    placeholder: "8XXXXXXXXX",
-    networks: [
-      { value: "MTN", label: "MTN MoMo" },
-    ],
-  },
-  {
-    code: "US",
-    label: "United States",
-    dialCode: "1",
-    currency: "USD",
-    placeholder: "5550100000",
-    networks: [
-      { value: "MOBILE_MONEY", label: "Mobile Money" },
-    ],
-  },
 ]
 
 // Helper function to format price
@@ -148,6 +129,9 @@ function PremiumUpgradePageContent() {
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [mobileMoneyInstruction, setMobileMoneyInstruction] = useState("")
+  const [mobileMoneyReference, setMobileMoneyReference] = useState("")
+  const [checkingMobileMoney, setCheckingMobileMoney] = useState(false)
   const [userCountry, setUserCountry] = useState<string>("US")
   const [paymentMethod, setPaymentMethod] = useState<"paystack" | "flutterwave">("paystack")
   const [mobileMoney, setMobileMoney] = useState({
@@ -224,9 +208,19 @@ function PremiumUpgradePageContent() {
 
       const result = await response.json()
 
+      if (result.status === "pending") {
+        toast.dismiss(toastId)
+        toast.info("Awaiting mobile money approval", {
+          description: result.error || "Approve the payment on your phone. We'll check again shortly.",
+          duration: 5000,
+        })
+        setTimeout(() => verifyPaymentCallback(reference), 3000)
+        return
+      }
+
       if (!response.ok) {
         // Handle not found error gracefully
-        if (response.status === 400 || response.status === 404) {
+        if (response.status === 404) {
           console.log("[Premium] Payment not yet verified, will retry...")
           toast.dismiss(toastId)
           // Show informational toast instead of error
@@ -276,7 +270,54 @@ function PremiumUpgradePageContent() {
   function openPaymentDialog(plan: any) {
     setSelectedPlan(plan)
     setPaymentMethod("paystack")
+    setMobileMoneyInstruction("")
+    setMobileMoneyReference("")
     setShowPaymentDialog(true)
+  }
+
+  async function checkMobileMoneyPayment(reference = mobileMoneyReference) {
+    if (!reference) return
+    try {
+      setCheckingMobileMoney(true)
+      const response = await fetch("/api/payments/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reference }),
+      })
+      const result = await response.json()
+
+      if (result.success) {
+        toast.success("Premium Activated!", {
+          description: "Your premium subscription is now active.",
+          duration: 5000,
+        })
+        setMobileMoneyInstruction("")
+        setMobileMoneyReference("")
+        setShowPaymentDialog(false)
+        await fetchSubscription()
+        await refetchUser()
+        return
+      }
+
+      if (result.status === "pending") {
+        toast.info("Still awaiting approval", {
+          description: result.error || "Approve the payment on your phone, then check again.",
+        })
+        return
+      }
+
+      setError(result.error || "Payment was not confirmed.")
+      toast.error("Payment not confirmed", {
+        description: result.error || "Please try again with a valid wallet.",
+      })
+    } catch (err) {
+      console.error("Mobile money premium check failed:", err)
+      toast.error("Payment check failed", {
+        description: "Please try again in a moment.",
+      })
+    } finally {
+      setCheckingMobileMoney(false)
+    }
   }
 
   async function handleUpgrade(plan: any, method: "paystack" | "flutterwave") {
@@ -294,6 +335,8 @@ function PremiumUpgradePageContent() {
       console.log("[Premium] Initiating upgrade for plan:", plan.name)
       setError(null)
       setSuccess(null)
+      setMobileMoneyInstruction("")
+      setMobileMoneyReference("")
       setProcessing(true)
 
       // Convert USD to NGN for Paystack
@@ -321,11 +364,11 @@ function PremiumUpgradePageContent() {
       }
 
       if (method === "flutterwave" && result.instruction) {
-        toast.info("Approve on your phone", {
-          description: result.instruction,
-          duration: 7000,
-        })
-        setShowPaymentDialog(false)
+        setMobileMoneyInstruction(result.instruction)
+        setMobileMoneyReference(result.reference || "")
+        window.setTimeout(() => {
+          if (result.reference) checkMobileMoneyPayment(result.reference)
+        }, 5000)
         return
       }
 
@@ -363,7 +406,7 @@ function PremiumUpgradePageContent() {
   const selectedMobileMoneyCountry =
     MOBILE_MONEY_COUNTRIES.find((country) => country.code === mobileMoney.country) || MOBILE_MONEY_COUNTRIES[0]
   const methodTwoAmount = selectedPlan
-    ? Math.round(selectedPlan.priceUSD * (selectedMobileMoneyCountry.currency === "NGN" ? USD_TO_NGN : selectedMobileMoneyCountry.currency === "USD" ? 1 : 585.48))
+    ? Math.round(selectedPlan.priceUSD * (selectedMobileMoneyCountry.currency === "NGN" ? USD_TO_NGN : selectedMobileMoneyCountry.currency === "USD" ? 1 : 605))
     : 0
 
   return (
@@ -609,12 +652,34 @@ function PremiumUpgradePageContent() {
                         onChange={(event) =>
                           setMobileMoney((current) => ({
                             ...current,
-                            phoneNumber: event.target.value.replace(/\D/g, ""),
+                            phoneNumber: normalizeMobileMoneyPhone(event.target.value, current.countryCode),
                           }))
                         }
                         placeholder={selectedMobileMoneyCountry.placeholder}
                       />
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Enter the local wallet number only. The country code is added separately.
+                      </p>
                     </div>
+                  </div>
+                )}
+                {mobileMoneyInstruction && (
+                  <div className="rounded-lg border border-primary/40 bg-primary/5 p-4">
+                    <p className="font-semibold">Approve on your phone</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{mobileMoneyInstruction}</p>
+                    <p className="mt-3 rounded-md bg-background p-3 text-xs text-muted-foreground">
+                      After approving the prompt, use the button below. We also listen for Flutterwave's webhook and will activate premium automatically once payment is confirmed.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-3 w-full"
+                      onClick={() => checkMobileMoneyPayment()}
+                      disabled={checkingMobileMoney}
+                    >
+                      {checkingMobileMoney ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Check payment status
+                    </Button>
                   </div>
                 )}
               </div>
@@ -633,7 +698,7 @@ function PremiumUpgradePageContent() {
                   className="gradient-bg"
                 >
                   {processing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
-                  Continue
+                  {mobileMoneyInstruction ? "Restart Payment" : "Continue"}
                 </Button>
               </DialogFooter>
             </>

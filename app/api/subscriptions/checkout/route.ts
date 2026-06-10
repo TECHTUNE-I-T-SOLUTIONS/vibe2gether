@@ -6,7 +6,7 @@ import { generatePaystackReference, initializePayment } from "@/lib/paystack"
 import { generateFlutterwaveReference, initializeFlutterwavePayment } from "@/lib/flutterwave"
 
 const USD_TO_NGN = 1450
-const USD_TO_XAF = 585.48
+const USD_TO_XAF = 605
 
 function normalizeCurrency(currency?: string) {
   return (currency || "NGN").toUpperCase()
@@ -22,6 +22,11 @@ function fromUsd(amount: number, currency: string) {
   if (currency === "NGN") return Math.round(amount * USD_TO_NGN)
   if (currency === "XAF") return Math.round(amount * USD_TO_XAF)
   return Number(amount.toFixed(2))
+}
+
+function normalizeProviderAmount(amount: number, currency: string) {
+  if (["XAF", "XOF", "NGN"].includes(currency)) return Math.max(1, Math.round(amount))
+  return Math.max(0.01, Number(amount.toFixed(2)))
 }
 
 function getAppOrigin(request: NextRequest) {
@@ -95,8 +100,13 @@ export async function POST(request: NextRequest) {
     const serviceAmount = Number(service.price)
     const paymentCurrency = provider === "flutterwave" ? normalizeCurrency(mobileMoney?.currency || serviceCurrency) : serviceCurrency
     const paymentAmount =
-      provider === "flutterwave" && paymentCurrency !== serviceCurrency
-        ? fromUsd(toUsd(serviceAmount, serviceCurrency), paymentCurrency)
+      provider === "flutterwave"
+        ? normalizeProviderAmount(
+            paymentCurrency !== serviceCurrency
+              ? fromUsd(toUsd(serviceAmount, serviceCurrency), paymentCurrency)
+              : serviceAmount,
+            paymentCurrency
+          )
         : serviceAmount
 
     if (provider === "paystack" && serviceCurrency !== "NGN") {
@@ -152,8 +162,8 @@ export async function POST(request: NextRequest) {
         metadata,
       })
 
-      if (payment.status !== "success" || !payment.data?.link) {
-        return NextResponse.json({ error: "Unable to initialize payment" }, { status: 502 })
+      if (payment.status !== "success" || (!payment.data?.link && !payment.data?.instruction)) {
+        return NextResponse.json({ error: "Flutterwave did not return payment instructions" }, { status: 502 })
       }
 
       await supabase
@@ -191,6 +201,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ authorizationUrl: payment.data.authorization_url, reference, provider })
   } catch (error) {
     console.error("Subscription checkout error:", error)
-    return NextResponse.json({ error: "Failed to start checkout" }, { status: 500 })
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to start checkout" },
+      { status: 500 }
+    )
   }
 }

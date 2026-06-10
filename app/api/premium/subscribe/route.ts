@@ -15,6 +15,11 @@ const PLAN_CONFIG: Record<string, { priceUSD: number; durationMonths: number }> 
 // Conversion rate: 1 USD = 1450 NGN
 const USD_TO_NGN = 1450
 
+function normalizeProviderAmount(amount: number, currency: string) {
+  if (["XAF", "XOF", "NGN"].includes(currency)) return Math.max(1, Math.round(amount))
+  return Math.max(0.01, Number(amount.toFixed(2)))
+}
+
 function getFlutterwaveRedirectUrl(reference: string) {
   const baseUrl =
     process.env.FLUTTERWAVE_REDIRECT_BASE_URL ||
@@ -179,11 +184,14 @@ export async function POST(request: NextRequest) {
     if (provider === "flutterwave") {
       const flutterwaveCurrency = (mobileMoney?.currency || "XAF").toUpperCase()
       const currencyRates: Record<string, number> = {
-        XAF: 585.48,
+        XAF: 605,
         NGN: USD_TO_NGN,
         USD: 1,
       }
-      const flutterwaveAmount = Math.round(planConfig.priceUSD * (currencyRates[flutterwaveCurrency] || currencyRates.XAF))
+      const flutterwaveAmount = normalizeProviderAmount(
+        planConfig.priceUSD * (currencyRates[flutterwaveCurrency] || currencyRates.XAF),
+        flutterwaveCurrency
+      )
       const payment = await initializeFlutterwavePayment({
         email: user.email,
         amount: flutterwaveAmount,
@@ -204,7 +212,7 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      if (payment.status !== "success" || !payment.data?.link) {
+      if (payment.status !== "success" || (!payment.data?.link && !payment.data?.instruction)) {
         throw new Error("Failed to initialize Flutterwave payment")
       }
 

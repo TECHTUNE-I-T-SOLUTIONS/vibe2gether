@@ -11,6 +11,7 @@ import {
   type SubscriptionReceiptDetails,
 } from "@/lib/subscription-receipt"
 import { createServiceRoleClient } from "@/lib/supabase/server"
+import { getMobileMoneyFailureMessage } from "@/lib/mobile-money"
 
 function addDuration(start: Date, duration: number, unit: string) {
   const end = new Date(start)
@@ -64,12 +65,50 @@ export async function POST(request: NextRequest) {
         : verification.status && verificationData?.status === "success"
 
     if (!verified) {
+      const providerStatus = String(verificationData?.status || verification.message || "").toLowerCase()
+      const isPending =
+        provider === "flutterwave" &&
+        [
+          "pending",
+          "processing",
+          "requires_action",
+          "requires_confirmation",
+          "requires_payment_method",
+          "action_required",
+          "authorization_required",
+          "initiated",
+          "created",
+          "queued",
+        ].includes(providerStatus)
+
+      if (!isPending && provider === "flutterwave") {
+        await supabase
+          .from("user_subscription_purchases")
+          .update({
+            status: "cancelled",
+            payment_status: "failed",
+            metadata: {
+              ...(purchase.metadata || {}),
+              provider_status: providerStatus,
+              processor_response: verificationData?.processor_response || null,
+              failed_at: new Date().toISOString(),
+            },
+          })
+          .eq("id", purchase.id)
+      }
+
       return NextResponse.json(
         {
-          error: "Payment not confirmed",
-          status: verificationData?.status || verification.message,
+          error: isPending
+            ? "Payment is still awaiting mobile money approval"
+            : provider === "flutterwave"
+              ? getMobileMoneyFailureMessage(verificationData?.processor_response, "Payment not confirmed")
+              : "Payment not confirmed",
+          status: isPending ? "pending" : "failed",
+          providerStatus,
+          processorResponse: verificationData?.processor_response,
         },
-        { status: 400 }
+        { status: isPending ? 202 : 400 }
       )
     }
 

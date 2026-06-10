@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
+import crypto from "crypto"
 import { sendEmail } from "@/lib/email-service"
 import { verifyFlutterwavePayment } from "@/lib/flutterwave"
+import { handlePaymentVerification } from "@/app/api/payments/verify/route"
 import {
   buildAdminSubscriptionPurchaseEmail,
   buildSubscriptionReceiptEmail,
@@ -22,12 +24,23 @@ export async function POST(request: NextRequest) {
   try {
     const expectedHash = process.env.FLUTTERWAVE_WEBHOOK_SECRET_HASH
     const receivedHash = request.headers.get("verif-hash")
+    const receivedSignature = request.headers.get("flutterwave-signature")
+    const rawBody = await request.text()
 
-    if (expectedHash && receivedHash !== expectedHash) {
-      return NextResponse.json({ error: "Invalid webhook hash" }, { status: 401 })
+    if (expectedHash) {
+      const computedSignature = crypto
+        .createHmac("sha256", expectedHash)
+        .update(rawBody)
+        .digest("base64")
+      const isV4SignatureValid = receivedSignature && receivedSignature === computedSignature
+      const isLegacyHashValid = receivedHash && receivedHash === expectedHash
+
+      if (!isV4SignatureValid && !isLegacyHashValid) {
+        return NextResponse.json({ error: "Invalid webhook hash" }, { status: 401 })
+      }
     }
 
-    const payload = await request.json()
+    const payload = JSON.parse(rawBody)
     const reference = payload?.data?.reference || payload?.data?.tx_ref || payload?.tx_ref
     const chargeId = payload?.data?.id
     const status = payload?.data?.status || payload?.status
@@ -60,6 +73,7 @@ export async function POST(request: NextRequest) {
 
       const metadata = transaction.metadata || {}
       if (transaction.type !== "premium_subscription" && metadata.type !== "premium_subscription") {
+        await handlePaymentVerification(reference)
         return NextResponse.json({ received: true })
       }
 

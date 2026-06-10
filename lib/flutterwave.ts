@@ -1,5 +1,6 @@
 import axios, { AxiosError } from "axios"
 import crypto from "crypto"
+import { getMobileMoneyFailureMessage, normalizeMobileMoneyPhone } from "@/lib/mobile-money"
 
 const FLUTTERWAVE_TOKEN_URL = "https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token"
 const FLUTTERWAVE_SANDBOX_BASE_URL = "https://developersandbox-api.flutterwave.com"
@@ -28,11 +29,13 @@ type InitializeFlutterwavePaymentParams = {
 type FlutterwavePaymentResponse = {
   status: string
   message: string
-  data?: {
-    id?: string
-    link: string
-    instruction?: string
-  }
+    data?: {
+      id?: string
+      link?: string
+      instruction?: string
+      status?: string
+      processorResponse?: any
+    }
 }
 
 type FlutterwaveVerifyResponse = {
@@ -57,9 +60,30 @@ type FlutterwaveVerifyResponse = {
 
 function getFlutterwaveErrorMessage(error: unknown, fallback: string) {
   const axiosError = error as AxiosError<any>
+  const providerError = axiosError.response?.data?.error
+  const validationErrors = providerError?.validation_errors
+  const validationMessage = Array.isArray(validationErrors)
+    ? validationErrors
+        .map((item: any) => item?.message || item?.detail || item?.field)
+        .filter(Boolean)
+        .join(", ")
+    : undefined
+  const providerType = String(providerError?.type || providerError?.code || "").toLowerCase()
+
+  if (providerType.includes("invalid_phone")) {
+    return "Invalid mobile money number. Please confirm this is an active wallet on the selected network, enter the local number without the country code, and try again."
+  }
+
+  if (providerType.includes("network") || providerType.includes("payment_method")) {
+    return "This mobile money network is not available for the selected country/currency right now. Please try the other network or Payment method I."
+  }
+
   return (
-    axiosError.response?.data?.error?.message ||
-    axiosError.response?.data?.error?.detail ||
+    providerError?.message ||
+    providerError?.detail ||
+    providerError?.type ||
+    providerError?.code ||
+    validationMessage ||
     axiosError.response?.data?.message ||
     fallback
   )
@@ -139,9 +163,20 @@ export async function initializeFlutterwavePayment(
   const baseUrl = flutterwaveBaseUrl()
   const name = splitName(params.customerName)
   const countryCode = params.mobileMoney.countryCode.replace(/\D/g, "")
-  const phoneNumber = params.mobileMoney.phoneNumber.replace(/\D/g, "")
+  const phoneNumber = normalizeMobileMoneyPhone(params.mobileMoney.phoneNumber, countryCode)
   const network = params.mobileMoney.network.toUpperCase()
   const currency = (params.currency || "XAF").toUpperCase()
+
+  if (phoneNumber.length < 8) {
+    throw new Error("Invalid mobile money number. Enter the local wallet number without the country code.")
+  }
+
+  console.log("[FLUTTERWAVE] Mobile money payload", {
+    countryCode,
+    network,
+    phoneNumber,
+    currency,
+  })
 
   let customerId: string | undefined
   try {
@@ -180,19 +215,34 @@ export async function initializeFlutterwavePayment(
 
   if (!customerId) throw new Error("Flutterwave customer creation failed")
 
-  const paymentMethodResponse = await axios.post(
-    `${baseUrl}/payment-methods`,
-    {
-      type: "mobile_money",
-      mobile_money: {
-        country_code: countryCode,
-        currency_code: currency,
-        network,
-        phone_number: phoneNumber,
+  let paymentMethodResponse
+  try {
+    paymentMethodResponse = await axios.post(
+      `${baseUrl}/payment-methods`,
+      {
+        type: "mobile_money",
+        mobile_money: {
+          country_code: countryCode,
+          currency_code: currency,
+          network,
+          phone_number: phoneNumber,
+        },
       },
-    },
-    { headers: await flutterwaveHeaders() }
-  )
+      { headers: await flutterwaveHeaders() }
+    )
+  } catch (error) {
+    const axiosError = error as AxiosError<any>
+    console.error(
+      "Flutterwave payment method creation failed:",
+      JSON.stringify(axiosError.response?.data || axiosError.message, null, 2)
+    )
+    throw new Error(
+      getFlutterwaveErrorMessage(
+        error,
+        "Flutterwave could not create this mobile money wallet. Please confirm the country, network, and wallet number."
+      )
+    )
+  }
 
   const paymentMethodId = paymentMethodResponse.data?.data?.id
   if (!paymentMethodId) throw new Error("Flutterwave payment method creation failed")
@@ -225,12 +275,22 @@ export async function initializeFlutterwavePayment(
     throw new Error("Flutterwave did not return a charge id")
   }
 
+  if (String(charge?.status || "").toLowerCase() === "failed") {
+    throw new Error(getMobileMoneyFailureMessage(charge?.processor_response, "Flutterwave rejected this mobile money payment"))
+  }
+
+  if (!link && !instruction && charge?.processor_response) {
+    throw new Error(getMobileMoneyFailureMessage(charge.processor_response, "Flutterwave did not return payment instructions"))
+  }
+
   return {
     status: chargeResponse.data?.status || "success",
     message: chargeResponse.data?.message || "Charge created",
     data: {
       id: charge.id,
-      link: link || params.redirect_url,
+      status: charge.status,
+      processorResponse: charge.processor_response,
+      ...(link ? { link } : {}),
       ...(instruction ? { instruction } : {}),
     },
   }

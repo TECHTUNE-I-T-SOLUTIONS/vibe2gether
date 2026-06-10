@@ -20,6 +20,7 @@ import { Loader2, Plus, Upload, Calendar, Clock, MapPin, Users, Trash2, LogOut, 
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { createClient } from "@/lib/supabase/client"
 import { PaymentMethodOptions } from "@/components/payment-method-options"
+import { normalizeMobileMoneyPhone } from "@/lib/mobile-money"
 
 const CATEGORIES = [
   "Entertainment",
@@ -45,22 +46,6 @@ const MOBILE_MONEY_COUNTRIES = [
       { value: "ORANGE", label: "Orange Money" },
     ],
   },
-  {
-    code: "NG",
-    label: "Nigeria",
-    dialCode: "234",
-    currency: "NGN",
-    placeholder: "8XXXXXXXXX",
-    networks: [{ value: "MTN", label: "MTN MoMo" }],
-  },
-  {
-    code: "US",
-    label: "United States",
-    dialCode: "1",
-    currency: "USD",
-    placeholder: "5550100000",
-    networks: [{ value: "MOBILE_MONEY", label: "Mobile Money" }],
-  },
 ]
 
 export default function DashboardEventsManagePage() {
@@ -82,6 +67,9 @@ export default function DashboardEventsManagePage() {
   const [loadingTickets, setLoadingTickets] = useState(false)
   const [purchasing, setPurchasing] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [mobileMoneyInstruction, setMobileMoneyInstruction] = useState("")
+  const [mobileMoneyReference, setMobileMoneyReference] = useState("")
+  const [checkingMobileMoney, setCheckingMobileMoney] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<"paystack" | "flutterwave">("paystack")
   const [mobileMoney, setMobileMoney] = useState({
     country: "CM",
@@ -135,15 +123,19 @@ export default function DashboardEventsManagePage() {
   }
 
   function getTicketAmountNgn(event: any) {
-    const explicitNgn = Number(event?.ticket_price_ngn || event?.ticket_price_ngn_amount || 0)
-    if (explicitNgn > 0) return Math.round(explicitNgn)
+    const priceNgn = Number(event?.ticket_price_ngn || event?.ticket_price_ngn_amount || 0)
+    const priceUsd = Number(event?.ticket_price_usd || 0)
+    const ticketPrice = Number(event?.ticket_price || 0)
+    const currency = String(event?.currency || "USD").toUpperCase()
 
-    const usdAmount = Number(event?.ticket_price_usd || event?.ticket_price || 0)
-    if ((event?.currency || "USD").toUpperCase() === "NGN") {
-      return Math.round(usdAmount)
+    if (priceNgn > 0) return Math.round(priceNgn)
+    if (priceUsd > 0) return Math.round(priceUsd * USD_TO_NGN)
+    if (currency === "NGN") {
+      return ticketPrice >= 100 ? Math.round(ticketPrice) : Math.round(ticketPrice * USD_TO_NGN)
     }
+    if (currency === "USD") return Math.round(ticketPrice * USD_TO_NGN)
 
-    return Math.round(usdAmount * USD_TO_NGN)
+    return Math.round(ticketPrice * USD_TO_NGN)
   }
 
   // Check authentication and redirect if not logged in
@@ -189,7 +181,7 @@ export default function DashboardEventsManagePage() {
 
     verificationHandledRef.current = true
 
-    const verifyAndRefresh = async () => {
+    const verifyAndRefresh = async (attempt = 0) => {
       try {
         const res = await fetch(`/api/payments/verify?reference=${encodeURIComponent(reference)}`)
         const data = await res.json()
@@ -201,6 +193,15 @@ export default function DashboardEventsManagePage() {
             fetchRegisteredEvents()
             fetchAllEvents()
           }, 1500)
+        } else if (data?.status === "pending" && attempt < 6) {
+          if (attempt === 0) {
+            toast({
+              title: "Awaiting mobile money approval",
+              description: data?.error || "Approve the payment on your phone. We'll keep checking for a few moments.",
+            })
+          }
+          window.setTimeout(() => verifyAndRefresh(attempt + 1), 5000)
+          return
         } else {
           toast({
             title: "Payment not confirmed",
@@ -556,6 +557,8 @@ export default function DashboardEventsManagePage() {
   async function handlePurchaseTicket(e: React.FormEvent) {
     e.preventDefault()
     if (!selectedEvent) return
+    setMobileMoneyInstruction("")
+    setMobileMoneyReference("")
 
     if (isEventUnavailable(selectedEvent)) {
       toast({ title: "Tickets unavailable", description: getEventAvailabilityLabel(selectedEvent), variant: "destructive" })
@@ -630,7 +633,16 @@ export default function DashboardEventsManagePage() {
         })
         const data = await res.json()
         if (!res.ok || data.error) throw new Error(data.error || "Failed to initialize Method II payment")
+        if (data.instruction) {
+          setMobileMoneyInstruction(data.instruction)
+          setMobileMoneyReference(data.reference || "")
+        }
         if (data.authorizationUrl) window.location.href = data.authorizationUrl
+        else {
+          window.setTimeout(() => {
+            if (data.reference) checkMobileMoneyPayment(data.reference, { silent: true })
+          }, 5000)
+        }
         return
       }
 
@@ -670,6 +682,41 @@ export default function DashboardEventsManagePage() {
       toast({ title: "Error", description: error.message || "Failed to purchase ticket", variant: "destructive" })
     } finally {
       setPurchasing(false)
+    }
+  }
+
+  async function checkMobileMoneyPayment(reference = mobileMoneyReference, options: { silent?: boolean } = {}) {
+    if (!reference) return
+    try {
+      setCheckingMobileMoney(true)
+      const res = await fetch(`/api/payments/verify?reference=${encodeURIComponent(reference)}`)
+      const data = await res.json()
+
+      if (data?.success) {
+        toast({ title: "Payment confirmed", description: "Your ticket has been registered successfully." })
+        setMobileMoneyInstruction("")
+        setMobileMoneyReference("")
+        setShowBuyDialog(false)
+        setActiveTab("registered")
+        await fetchRegisteredEvents()
+        await fetchAllEvents()
+        return
+      }
+
+      if (!options.silent) {
+        toast({
+          title: data?.status === "pending" ? "Still awaiting approval" : "Payment not confirmed",
+          description: data?.error || "Please approve the payment on your phone, then check again.",
+          variant: data?.status === "pending" ? "default" : "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Mobile money payment check failed:", error)
+      if (!options.silent) {
+        toast({ title: "Payment check failed", description: "Please try again in a moment.", variant: "destructive" })
+      }
+    } finally {
+      setCheckingMobileMoney(false)
     }
   }
 
@@ -1496,7 +1543,16 @@ export default function DashboardEventsManagePage() {
       </Dialog>
 
       {/* Buy Ticket Dialog */}
-      <Dialog open={showBuyDialog} onOpenChange={setShowBuyDialog}>
+      <Dialog
+        open={showBuyDialog}
+        onOpenChange={(open) => {
+          setShowBuyDialog(open)
+          if (!open) {
+            setMobileMoneyInstruction("")
+            setMobileMoneyReference("")
+          }
+        }}
+      >
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           {selectedEvent && (
             <div className="space-y-6">
@@ -1587,11 +1643,14 @@ export default function DashboardEventsManagePage() {
                           onChange={(event) =>
                             setMobileMoney((current) => ({
                               ...current,
-                              phoneNumber: event.target.value.replace(/\D/g, ""),
+                              phoneNumber: normalizeMobileMoneyPhone(event.target.value, current.countryCode),
                             }))
                           }
                           placeholder={selectedMobileMoneyCountry.placeholder}
                         />
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Enter the local wallet number only. The country code is added separately.
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -1687,8 +1746,30 @@ export default function DashboardEventsManagePage() {
                   </div>
                 </div>
 
+                {mobileMoneyInstruction && (
+                  <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
+                    <div>
+                      <h4 className="font-semibold">Approve on your phone</h4>
+                      <p className="mt-1 text-sm text-muted-foreground">{mobileMoneyInstruction}</p>
+                    </div>
+                    <div className="rounded-lg bg-background p-3 text-xs text-muted-foreground">
+                      After dialing/approving the prompt, tap the button below. We also listen for Flutterwave's webhook and will update your ticket automatically once payment is confirmed.
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      disabled={checkingMobileMoney}
+                      onClick={() => checkMobileMoneyPayment()}
+                    >
+                      {checkingMobileMoney ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Check payment status
+                    </Button>
+                  </div>
+                )}
+
                 <Button type="submit" className="w-full h-12 rounded-xl gradient-bg text-lg font-bold shadow-lg" disabled={purchasing}>
-                  {purchasing ? <Loader2 className="w-5 h-5 animate-spin" /> : (selectedEvent.is_free ? "Get Free Ticket" : "Pay & Get Ticket")}
+                  {purchasing ? <Loader2 className="w-5 h-5 animate-spin" /> : (selectedEvent.is_free ? "Get Free Ticket" : mobileMoneyInstruction ? "Restart Payment" : "Pay & Get Ticket")}
                 </Button>
               </form>
             </div>

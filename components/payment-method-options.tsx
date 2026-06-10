@@ -44,8 +44,8 @@ export function PaymentMethodOptions({ className, value = "paystack", onChange, 
       >
         <div>
           <p className="font-semibold">Payment method II</p>
-          <p className="text-xs text-muted-foreground">Supports XAF and other supported currencies.</p>
-          <p className="mt-2 text-xs font-medium text-primary">Currencies: XAF, NGN, USD and more</p>
+          <p className="text-xs text-muted-foreground">Supports Cameroon mobile money.</p>
+          <p className="mt-2 text-xs font-medium text-primary">Currency: XAF</p>
         </div>
         {value === "flutterwave" && <CheckCircle2 className="h-4 w-4 text-primary" />}
       </button>

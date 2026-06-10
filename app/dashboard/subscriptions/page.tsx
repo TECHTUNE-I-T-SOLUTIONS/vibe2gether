@@ -35,6 +35,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PaymentMethodOptions } from "@/components/payment-method-options"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import { normalizeMobileMoneyPhone } from "@/lib/mobile-money"
 
 export default function UserSubscriptionsPage() {
   return (
@@ -62,22 +63,6 @@ const MOBILE_MONEY_COUNTRIES = [
       { value: "ORANGE", label: "Orange Money" },
     ],
   },
-  {
-    code: "NG",
-    label: "Nigeria",
-    dialCode: "234",
-    currency: "NGN",
-    placeholder: "8XXXXXXXXX",
-    networks: [{ value: "MTN", label: "MTN MoMo" }],
-  },
-  {
-    code: "US",
-    label: "United States",
-    dialCode: "1",
-    currency: "USD",
-    placeholder: "5550100000",
-    networks: [{ value: "MOBILE_MONEY", label: "Mobile Money" }],
-  },
 ]
 
 function UserSubscriptionsContent() {
@@ -97,6 +82,9 @@ function UserSubscriptionsContent() {
   const [verificationReference, setVerificationReference] = useState("")
   const [resendingReceiptId, setResendingReceiptId] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<"paystack" | "flutterwave">("paystack")
+  const [mobileMoneyInstruction, setMobileMoneyInstruction] = useState("")
+  const [mobileMoneyReference, setMobileMoneyReference] = useState("")
+  const [checkingMobileMoney, setCheckingMobileMoney] = useState(false)
   const [mobileMoney, setMobileMoney] = useState({
     country: "CM",
     countryCode: "237",
@@ -179,13 +167,11 @@ function UserSubscriptionsContent() {
       }
       if (!res.ok) throw new Error(data.error || "Payment failed")
       if (method === "flutterwave" && data.instruction) {
-        setConfirmService(null)
-        toast({
-          title: "Approve on your phone",
-          description: data.instruction,
-        })
-        setViewTab("mine")
-        loadSubscriptions()
+        setMobileMoneyInstruction(data.instruction)
+        setMobileMoneyReference(data.reference || "")
+        window.setTimeout(() => {
+          if (data.reference) checkSubscriptionMobileMoney(data.reference)
+        }, 5000)
         return true
       }
       setConfirmService(null)
@@ -205,7 +191,47 @@ function UserSubscriptionsContent() {
       return
     }
     if (!service.is_active || activePurchaseByService.has(service.id)) return
+    setMobileMoneyInstruction("")
+    setMobileMoneyReference("")
     setConfirmService(service)
+  }
+
+  async function checkSubscriptionMobileMoney(reference = mobileMoneyReference) {
+    if (!reference) return
+    try {
+      setCheckingMobileMoney(true)
+      const res = await fetch("/api/subscriptions/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reference }),
+      })
+      const data = await res.json().catch(() => ({}))
+
+      if (res.ok) {
+        toast({
+          title: "Subscription active",
+          description: data.receiptEmailSent
+            ? "Your receipt has been emailed to you."
+            : "Your payment was verified. You can retry the receipt email from My subscriptions.",
+        })
+        setMobileMoneyInstruction("")
+        setMobileMoneyReference("")
+        setConfirmService(null)
+        setViewTab("mine")
+        loadSubscriptions()
+        return
+      }
+
+      toast({
+        title: data.status === "pending" ? "Still awaiting approval" : "Payment not confirmed",
+        description: data.error || "Approve the payment on your phone, then check again.",
+        variant: data.status === "pending" ? "default" : "destructive",
+      })
+    } catch (error: any) {
+      toast({ title: "Payment check failed", description: error.message || "Please try again.", variant: "destructive" })
+    } finally {
+      setCheckingMobileMoney(false)
+    }
   }
 
   async function resendReceipt(purchaseId: string) {
@@ -622,13 +648,35 @@ function UserSubscriptionsContent() {
                           onChange={(event) =>
                             setMobileMoney((current) => ({
                               ...current,
-                              phoneNumber: event.target.value.replace(/\D/g, ""),
+                              phoneNumber: normalizeMobileMoneyPhone(event.target.value, current.countryCode),
                             }))
                           }
                           placeholder={selectedMobileMoneyCountry.placeholder}
                         />
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Enter the local wallet number only. The country code is added separately.
+                        </p>
                       </div>
                     </div>
+                  </div>
+                )}
+                {mobileMoneyInstruction && (
+                  <div className="rounded-lg border border-primary/40 bg-primary/5 p-4">
+                    <p className="font-semibold">Approve on your phone</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{mobileMoneyInstruction}</p>
+                    <p className="mt-3 rounded-md bg-background p-3 text-xs text-muted-foreground">
+                      After approving the prompt, use the button below. We also listen for Flutterwave's webhook and will activate your subscription automatically once payment is confirmed.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-3 w-full"
+                      onClick={() => checkSubscriptionMobileMoney()}
+                      disabled={checkingMobileMoney}
+                    >
+                      {checkingMobileMoney ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Check payment status
+                    </Button>
                   </div>
                 )}
               </div>
@@ -647,7 +695,7 @@ function UserSubscriptionsContent() {
                   }
                 >
                   {payingId === confirmService.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BadgeCheck className="mr-2 h-4 w-4" />}
-                  Proceed to Payment
+                  {mobileMoneyInstruction ? "Restart Payment" : "Proceed to Payment"}
                 </Button>
               </DialogFooter>
             </>

@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { useSession } from "next-auth/react"
 import { PaymentMethodOptions } from "@/components/payment-method-options"
+import { normalizeMobileMoneyPhone } from "@/lib/mobile-money"
 
 const MOBILE_MONEY_COUNTRIES = [
   {
@@ -26,36 +27,24 @@ const MOBILE_MONEY_COUNTRIES = [
       { value: "ORANGE", label: "Orange Money" },
     ],
   },
-  {
-    code: "NG",
-    label: "Nigeria",
-    dialCode: "234",
-    currency: "NGN",
-    placeholder: "8XXXXXXXXX",
-    networks: [{ value: "MTN", label: "MTN MoMo" }],
-  },
-  {
-    code: "US",
-    label: "United States",
-    dialCode: "1",
-    currency: "USD",
-    placeholder: "5550100000",
-    networks: [{ value: "MOBILE_MONEY", label: "Mobile Money" }],
-  },
 ]
 
 const USD_TO_NGN = 1450
 
 function getTicketAmountNgn(event: any) {
-  const explicitNgn = Number(event?.ticket_price_ngn || event?.ticket_price_ngn_amount || 0)
-  if (explicitNgn > 0) return Math.round(explicitNgn)
+  const priceNgn = Number(event?.ticket_price_ngn || event?.ticket_price_ngn_amount || 0)
+  const priceUsd = Number(event?.ticket_price_usd || 0)
+  const ticketPrice = Number(event?.ticket_price || 0)
+  const currency = String(event?.currency || "USD").toUpperCase()
 
-  const amount = Number(event?.ticket_price_usd || event?.ticket_price || 0)
-  if ((event?.currency || "USD").toUpperCase() === "NGN") {
-    return Math.round(amount)
+  if (priceNgn > 0) return Math.round(priceNgn)
+  if (priceUsd > 0) return Math.round(priceUsd * USD_TO_NGN)
+  if (currency === "NGN") {
+    return ticketPrice >= 100 ? Math.round(ticketPrice) : Math.round(ticketPrice * USD_TO_NGN)
   }
+  if (currency === "USD") return Math.round(ticketPrice * USD_TO_NGN)
 
-  return Math.round(amount * USD_TO_NGN)
+  return Math.round(ticketPrice * USD_TO_NGN)
 }
 
 export function TicketActions({ event }: { event: any }) {
@@ -134,7 +123,14 @@ export function TicketActions({ event }: { event: any }) {
         })
         const data = await res.json()
         if (!res.ok || data.error) throw new Error(data.error || "Failed to initialize Method II payment")
+        if (data.instruction) {
+          toast({
+            title: "Approve on your phone",
+            description: data.instruction,
+          })
+        }
         if (data.authorizationUrl) window.location.href = data.authorizationUrl
+        else setOpen(false)
         return
       }
 
@@ -250,11 +246,14 @@ export function TicketActions({ event }: { event: any }) {
                         onChange={(changeEvent) =>
                           setMobileMoney((current) => ({
                             ...current,
-                            phoneNumber: changeEvent.target.value.replace(/\D/g, ""),
+                            phoneNumber: normalizeMobileMoneyPhone(changeEvent.target.value, current.countryCode),
                           }))
                         }
                         placeholder={selectedMobileMoneyCountry.placeholder}
                       />
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Enter the local wallet number only. The country code is added separately.
+                      </p>
                     </div>
                   </div>
                 </div>

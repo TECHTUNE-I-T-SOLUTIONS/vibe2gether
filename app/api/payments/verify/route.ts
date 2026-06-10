@@ -1,15 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceRoleClient } from "@/lib/supabase/server"
 import { verifyPayment } from "@/lib/paystack"
 import { verifyFlutterwavePayment } from "@/lib/flutterwave"
 import { generateTicketPDF } from "@/lib/ticket-generator"
 import { sendTicketEmail } from "@/lib/email-service"
+import { getMobileMoneyFailureMessage } from "@/lib/mobile-money"
 
-async function handlePaymentVerification(reference: string) {
+export async function handlePaymentVerification(reference: string) {
   try {
     console.log(`[Verify Payment] Processing verification for reference: ${reference}`)
 
-    const supabase = await createClient()
+    const supabase = createServiceRoleClient()
 
     // Find transaction by payment_reference column (primary lookup)
     let transaction: any = null
@@ -64,12 +65,66 @@ async function handlePaymentVerification(reference: string) {
       : verification.status && paymentData?.status === "success"
 
     if (!paymentSucceeded || !paymentData) {
-      console.error("[Verify Payment] Payment verification failed from provider:", provider)
+      const providerStatus = String(paymentData?.status || verification.message || "").toLowerCase()
+      const isPending =
+        provider === "flutterwave" &&
+        [
+          "pending",
+          "processing",
+          "requires_action",
+          "requires_confirmation",
+          "requires_payment_method",
+          "action_required",
+          "authorization_required",
+          "initiated",
+          "created",
+          "queued",
+        ].includes(providerStatus)
+      console.error("[Verify Payment] Payment verification failed from provider:", provider, {
+        providerStatus,
+        verificationStatus: verification.status,
+        providerMessage: verification.message,
+        paymentData,
+      })
+      const failureMessage =
+        provider === "flutterwave"
+          ? getMobileMoneyFailureMessage(paymentData?.processor_response, "Payment verification failed")
+          : "Payment verification failed"
+      if (!isPending) {
+        await supabase
+          .from("transactions")
+          .update({
+            status: "failed",
+            metadata: {
+              ...transaction.metadata,
+              provider_status: providerStatus,
+              processor_response: paymentData?.processor_response || null,
+              failed_at: new Date().toISOString(),
+            },
+          })
+          .eq("id", transaction.id)
+
+        if (transaction.metadata?.registration_id) {
+          await supabase
+            .from("event_registrations")
+            .update({ payment_status: "failed", status: "cancelled" })
+            .eq("id", transaction.metadata.registration_id)
+        }
+
+        if (transaction.metadata?.isTicketPurchase) {
+          await supabase
+            .from("event_tickets")
+            .update({ status: "cancelled" })
+            .eq("payment_reference", reference)
+        }
+      }
       return {
         success: false,
-        status: "failed",
-        error: "Payment verification failed",
-        code: "PAYMENT_FAILED",
+        status: isPending ? "pending" : "failed",
+        error: isPending ? "Payment is still awaiting mobile money approval" : failureMessage,
+        code: isPending ? "PAYMENT_PENDING" : "PAYMENT_FAILED",
+        providerStatus,
+        processorResponse: paymentData?.processor_response,
       }
     }
 
@@ -417,7 +472,7 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await handlePaymentVerification(reference)
-    const statusCode = result.success ? 200 : 400
+    const statusCode = result.success ? 200 : result.status === "pending" ? 202 : 400
 
     return NextResponse.json(result, { status: statusCode })
   } catch (error) {
@@ -439,7 +494,7 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await handlePaymentVerification(reference)
-    const statusCode = result.success ? 200 : 400
+    const statusCode = result.success ? 200 : result.status === "pending" ? 202 : 400
 
     return NextResponse.json(result, { status: statusCode })
   } catch (error) {
