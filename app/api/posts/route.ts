@@ -16,15 +16,19 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient()
     const session = await getServerSession(authOptions)
 
-    // Check if current user is premium
+    // Check if current user is premium using the premium check API
     let isViewerPremium = false
     if (session?.user?.id) {
-      const { data: viewerData } = await supabase
-        .from("users")
-        .select("is_premium")
-        .eq("id", session.user.id)
-        .single()
-      isViewerPremium = viewerData?.is_premium || false
+      const premiumCheckResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/premium/check`, {
+        headers: {
+          cookie: request.headers.get('cookie') || '',
+        },
+      })
+
+      if (premiumCheckResponse.ok) {
+        const premiumData = await premiumCheckResponse.json()
+        isViewerPremium = premiumData.isPremium || false
+      }
     }
 
     let query = supabase

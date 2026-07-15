@@ -6,16 +6,16 @@ import { reconcileExpiredPremiumSubscriptions } from "@/lib/premium-expiry"
 
 /**
  * Check if user has an active premium subscription
- * 
+ *
  * This endpoint queries the premium_subscriptions table to determine
  * if a user has an active subscription with a valid expiration date.
- * 
+ *
  * Premium is considered active if:
  * - Status is 'active'
  * - Expiration date is in the future
- * 
- * NOTE: This check includes BOTH 'active' and 'pending' subscriptions for feature access
- * See /api/premium/sync for strict 'active' only checks
+ *
+ * Only successfully completed subscriptions (status: 'active') are considered premium.
+ * Pending subscriptions are NOT granted premium access until payment is verified.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -88,39 +88,6 @@ export async function GET(request: NextRequest) {
               paymentMethod: "coins",
               daysRemaining: Math.ceil(
                 (new Date(activeCoinSubscription.expires_at).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-              ),
-            },
-          },
-          { status: 200 }
-        )
-      }
-    }
-
-    // Also check for pending paid subscriptions that haven't expired (payment in progress only)
-    const { data: pendingSubscriptions, error: pendingError } = await supabase
-      .from("premium_subscriptions")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("status", "pending") // Pending subscriptions
-      .order("expires_at", { ascending: false })
-
-    if (!pendingError && pendingSubscriptions?.length > 0) {
-      const pendingSubscription = pendingSubscriptions.find((sub) => {
-        const expiresAt = new Date(sub.expires_at)
-        return expiresAt > now
-      })
-
-      if (pendingSubscription) {
-        // User has a pending subscription - treat as premium for UX
-        return NextResponse.json(
-          {
-            isPremium: true,
-            subscription: {
-              plan: pendingSubscription.plan,
-              expiresAt: pendingSubscription.expires_at,
-              status: "pending",
-              daysRemaining: Math.ceil(
-                (new Date(pendingSubscription.expires_at).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
               ),
             },
           },

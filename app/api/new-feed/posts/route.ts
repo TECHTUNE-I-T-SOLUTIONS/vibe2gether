@@ -14,14 +14,18 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url)
     const limit = parseInt(url.searchParams.get("limit") || "50")
 
-    // Check if user is premium
-    const { data: userData } = await supabase
-      .from("users")
-      .select("is_premium")
-      .eq("id", session.user.id)
-      .single()
+    // Check if user is premium using the premium check API
+    const premiumCheckResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/premium/check`, {
+      headers: {
+        cookie: request.headers.get('cookie') || '',
+      },
+    })
 
-    const isPremium = userData?.is_premium || false
+    let isPremium = false
+    if (premiumCheckResponse.ok) {
+      const premiumData = await premiumCheckResponse.json()
+      isPremium = premiumData.isPremium || false
+    }
 
     // Generate a seed for shuffling that changes on each request
     const timestamp = Math.floor(Date.now() / 1000) // Change every second for fresh shuffling
