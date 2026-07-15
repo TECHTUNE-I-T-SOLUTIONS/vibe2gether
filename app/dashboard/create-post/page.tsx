@@ -13,13 +13,17 @@ import { uploadPostMedia } from "@/lib/supabase/storage"
 import { createPost } from "@/lib/supabase/queries"
 import { Card, CardContent } from "@/components/ui/card"
 import { useUserProfile } from "@/hooks/use-user-profile"
+import { usePremiumCheck } from "@/hooks/use-premium-check"
 import { LocationPicker } from "@/components/location-picker"
+import { Crown } from "lucide-react"
 
 export default function CreatePostPage() {
   const { data: session, status } = useSession()
   const { user } = useUserProfile()
+  const { isPremium } = usePremiumCheck()
   const router = useRouter()
   const [content, setContent] = useState("")
+  const [isPremiumPost, setIsPremiumPost] = useState(false)
 
   // Auth check
   useEffect(() => {
@@ -93,7 +97,8 @@ export default function CreatePostPage() {
         location?.latitude,
         location?.longitude,
         isPublic,
-        allowComments
+        allowComments,
+        isPremiumPost
       )
       if (error) throw error
 
@@ -239,6 +244,19 @@ export default function CreatePostPage() {
                 />
                 <Label htmlFor="allowComments" className="text-sm cursor-pointer">Allow comments on this post</Label>
               </div>
+              {isPremium && (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="isPremiumPost"
+                    checked={isPremiumPost}
+                    onCheckedChange={(checked) => setIsPremiumPost(checked as boolean)}
+                  />
+                  <Label htmlFor="isPremiumPost" className="text-sm cursor-pointer flex items-center gap-1">
+                    <Crown className="w-4 h-4 text-amber-500" />
+                    Make this a premium post
+                  </Label>
+                </div>
+              )}
             </div>
           </div>
 

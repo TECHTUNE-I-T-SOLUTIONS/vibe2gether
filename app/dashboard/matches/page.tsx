@@ -73,6 +73,14 @@ export default function MatchesPage() {
     }
   }, [status, router])
 
+  // Premium check - entire page is premium-only
+  useEffect(() => {
+    if (status === "loading") return
+    if (status === "authenticated" && !isPremium && !loading) {
+      router.push("/dashboard/premium?feature=Vibes+Page")
+    }
+  }, [status, isPremium, loading, router])
+
   useEffect(() => {
     async function loadMatches() {
       if (!user) return
@@ -234,12 +242,7 @@ export default function MatchesPage() {
           Your Vibes ({activeMatches.length})
         </button>
         <button
-          onClick={() => {
-            if (!checkPremium("View Vibes")) {
-              return
-            }
-            setTab("potential")
-          }}
+          onClick={() => setTab("potential")}
           className={cn(
             "px-4 py-2 font-semibold border-b-2 transition-colors flex items-center gap-2",
             tab === "potential"
@@ -248,9 +251,6 @@ export default function MatchesPage() {
           )}
         >
           Discover Vibes ({potentialMatches.length})
-          {!isPremium && (
-            <Lock className="w-4 h-4" />
-          )}
         </button>
       </div>
 
@@ -457,21 +457,7 @@ export default function MatchesPage() {
       {/* Discover Vibes Tab */}
       {tab === "potential" && (
         <div>
-          {!isPremium ? (
-            <Card className="border-border/50 p-12 text-center">
-              <Crown className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-              <h3 className="text-2xl font-bold mb-2">Premium Feature</h3>
-              <p className="text-muted-foreground mb-6">
-                Unlock Discover Vibes and browse new profiles with a premium membership
-              </p>
-              <Button
-                onClick={() => router.push("/dashboard/premium?feature=View+Matches")}
-                className="gradient-bg"
-              >
-                Upgrade to Premium
-              </Button>
-            </Card>
-          ) : potentialMatches.length === 0 ? (
+          {potentialMatches.length === 0 ? (
             <Card className="border-border/50 p-12 text-center">
               <Sparkles className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
               <p className="text-muted-foreground">

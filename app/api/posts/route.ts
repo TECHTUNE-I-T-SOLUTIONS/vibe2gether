@@ -16,6 +16,17 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient()
     const session = await getServerSession(authOptions)
 
+    // Check if current user is premium
+    let isViewerPremium = false
+    if (session?.user?.id) {
+      const { data: viewerData } = await supabase
+        .from("users")
+        .select("is_premium")
+        .eq("id", session.user.id)
+        .single()
+      isViewerPremium = viewerData?.is_premium || false
+    }
+
     let query = supabase
       .from("posts")
       .select(
@@ -30,6 +41,11 @@ export async function GET(request: NextRequest) {
 
     if (userId) {
       query = query.eq("user_id", userId)
+      
+      // Filter premium posts if viewer is not premium and not viewing own profile
+      if (!isViewerPremium && session?.user?.id !== userId) {
+        query = query.eq("is_premium", false)
+      }
     }
 
     const { data: posts, error } = await query

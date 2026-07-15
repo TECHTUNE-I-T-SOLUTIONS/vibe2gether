@@ -24,6 +24,7 @@ import {
   X,
   Sparkles,
   RefreshCw,
+  Crown,
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -32,6 +33,15 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 import { getFlagAssetFromLocation } from "@/lib/location-country"
 import { cn } from "@/lib/utils"
@@ -39,6 +49,7 @@ import { PostMenu } from "@/components/post-menu"
 import { FeatureCards } from "@/components/dashboard/feature-cards"
 import { CreatePost } from "@/components/create-post"
 import { useUserProfile } from "@/hooks/use-user-profile"
+import { usePremiumCheck } from "@/hooks/use-premium-check"
 import { getPostComments, deletePost, createPost } from "@/lib/supabase/queries"
 import { uploadPostMedia } from "@/lib/supabase/storage"
 
@@ -55,6 +66,7 @@ interface Post {
   comments_count: number
   saves_count: number
   views_count: number
+  is_premium?: boolean
   user: {
     id: string
     display_name: string
@@ -135,6 +147,7 @@ function OptimizedImage({ src, alt, priority = false, className }: {
 export default function NewFeedPage() {
   const { data: session } = useSession()
   const { user } = useUserProfile()
+  const { isPremium } = usePremiumCheck()
   const router = useRouter()
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -168,6 +181,9 @@ export default function NewFeedPage() {
     longitude: number
   }>>([])
   const [isSearchingLocation, setIsSearchingLocation] = useState(false)
+  const [isPremiumPost, setIsPremiumPost] = useState(false)
+  const [showPremiumModal, setShowPremiumModal] = useState(false)
+  const [hasSeenPremiumModal, setHasSeenPremiumModal] = useState(false)
 
   // Comment-related state
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set())
@@ -180,6 +196,38 @@ export default function NewFeedPage() {
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set())
 
   const [loadKey, setLoadKey] = useState(0)
+
+  // Handle premium checkbox change with modal
+  const handlePremiumCheckboxChange = (checked: boolean) => {
+    if (checked && !hasSeenPremiumModal) {
+      setShowPremiumModal(true)
+    } else {
+      setIsPremiumPost(checked)
+    }
+  }
+
+  const handleConfirmPremiumPost = () => {
+    setIsPremiumPost(true)
+    setShowPremiumModal(false)
+    setHasSeenPremiumModal(true)
+    // Store in localStorage so it persists across sessions
+    if (typeof window !== "undefined") {
+      localStorage.setItem("hasSeenPremiumPostModal", "true")
+    }
+  }
+
+  const handleCancelPremiumPost = () => {
+    setIsPremiumPost(false)
+    setShowPremiumModal(false)
+  }
+
+  // Check if user has seen the modal before
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hasSeen = localStorage.getItem("hasSeenPremiumPostModal") === "true"
+      setHasSeenPremiumModal(hasSeen)
+    }
+  }, [])
 
   // Force reshuffle on page load/refresh
   useEffect(() => {
@@ -734,7 +782,8 @@ export default function NewFeedPage() {
         postLocation?.latitude,
         postLocation?.longitude,
         true, // isPublic
-        true  // allowComments
+        true, // allowComments
+        isPremiumPost // isPremium
       )
 
       if (error) {
@@ -848,6 +897,7 @@ export default function NewFeedPage() {
   }
 
   return (
+    <>
     <div className="max-w-2xl mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6">
       {/* Error Alert */}
       {queryError && (
@@ -1063,6 +1113,24 @@ export default function NewFeedPage() {
                     <Sparkles className="w-4 h-4" />
                     <span className="hidden sm:inline ml-2">Tag</span>
                   </Button>
+
+                  {isPremium && (
+                    <div className="flex items-center gap-2 px-2 py-1 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                      <Checkbox
+                        id="premium-post"
+                        checked={isPremiumPost}
+                        onCheckedChange={(checked) => handlePremiumCheckboxChange(checked as boolean)}
+                        className="border-amber-300 data-[state=checked]:bg-amber-500 data-[state=checked]:border-amber-500"
+                      />
+                      <label
+                        htmlFor="premium-post"
+                        className="text-xs font-medium text-amber-700 dark:text-amber-400 cursor-pointer flex items-center gap-1"
+                      >
+                        <Crown className="w-3 h-3" />
+                        Premium
+                      </label>
+                    </div>
+                  )}
                 </div>
 
                 <Button
@@ -1148,6 +1216,9 @@ export default function NewFeedPage() {
                         <Link href={`/user/${post.user.id}`} className="hover:underline">
                           <p className="font-semibold text-sm flex items-center gap-1.5">
                             <span>{post.user.display_name}</span>
+                            {post.is_premium && (
+                              <Crown className="w-4 h-4 text-amber-500" />
+                            )}
                             <Image
                               src={locationFlag.src}
                               alt={`${locationFlag.name} flag`}
@@ -1458,5 +1529,40 @@ export default function NewFeedPage() {
         </>
       )}
     </div>
+
+    {/* Premium Post Explanation Modal */}
+    <Dialog open={showPremiumModal} onOpenChange={setShowPremiumModal}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Crown className="w-5 h-5 text-amber-500" />
+            Premium Post
+          </DialogTitle>
+          <DialogDescription>
+            Make this post exclusive to premium members only
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-4">
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>When you mark a post as premium:</p>
+            <ul className="list-disc list-inside space-y-2 ml-2">
+              <li>Only premium users can see this post in their feed</li>
+              <li>Non-premium users won't see it on your profile</li>
+              <li>The post will display a premium crown badge</li>
+              <li>Perfect for exclusive content, special updates, or premium-only offers</li>
+            </ul>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={handleCancelPremiumPost}>
+            Cancel
+          </Button>
+          <Button onClick={handleConfirmPremiumPost} className="gradient-bg">
+            Make Premium
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }

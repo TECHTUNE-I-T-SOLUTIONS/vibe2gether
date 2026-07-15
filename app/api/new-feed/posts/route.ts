@@ -14,6 +14,15 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url)
     const limit = parseInt(url.searchParams.get("limit") || "50")
 
+    // Check if user is premium
+    const { data: userData } = await supabase
+      .from("users")
+      .select("is_premium")
+      .eq("id", session.user.id)
+      .single()
+
+    const isPremium = userData?.is_premium || false
+
     // Generate a seed for shuffling that changes on each request
     const timestamp = Math.floor(Date.now() / 1000) // Change every second for fresh shuffling
     const sessionSeed = parseInt(session.user.id.slice(-8), 16)
@@ -23,7 +32,9 @@ export async function GET(request: NextRequest) {
 
     // Get all posts (user's own + others) - fetch more than needed for shuffling
     const fetchLimit = Math.min(limit * 5, 200) // Fetch up to 5x or 200 posts max for good shuffling
-    const { data: otherPosts, error: postsError } = await supabase
+    
+    // Build query for other users' posts
+    let otherPostsQuery = supabase
       .from("posts")
       .select(`
         id,
@@ -37,6 +48,7 @@ export async function GET(request: NextRequest) {
         comments_count,
         saves_count,
         views_count,
+        is_premium,
         users!inner (
           id,
           display_name,
@@ -46,7 +58,13 @@ export async function GET(request: NextRequest) {
       `)
       .neq("user_id", session.user.id) // Start with other users' posts
       .order("created_at", { ascending: false })
-      .limit(fetchLimit)
+
+    // Filter out premium posts for non-premium users
+    if (!isPremium) {
+      otherPostsQuery = otherPostsQuery.eq("is_premium", false)
+    }
+
+    const { data: otherPosts, error: postsError } = await otherPostsQuery.limit(fetchLimit)
 
     if (postsError) {
       console.error("Error fetching posts:", postsError)
@@ -54,7 +72,7 @@ export async function GET(request: NextRequest) {
       allPosts = [...otherPosts]
     }
 
-    // Add user's own posts
+    // Add user's own posts (always show own posts regardless of premium status)
     const { data: userPosts, error: userPostsError } = await supabase
       .from("posts")
       .select(`
@@ -69,6 +87,7 @@ export async function GET(request: NextRequest) {
         comments_count,
         saves_count,
         views_count,
+        is_premium,
         users!inner (
           id,
           display_name,

@@ -2,8 +2,6 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
 import { verifyPayment } from "@/lib/paystack"
 import { verifyFlutterwavePayment } from "@/lib/flutterwave"
-import { generateTicketPDF } from "@/lib/ticket-generator"
-import { sendTicketEmail } from "@/lib/email-service"
 import { getMobileMoneyFailureMessage } from "@/lib/mobile-money"
 
 export async function handlePaymentVerification(reference: string) {
@@ -318,6 +316,10 @@ export async function handlePaymentVerification(reference: string) {
                   .eq("id", event.id)
 
                 try {
+                  // Dynamic import to avoid jspdf UTF-8 issues in Turbopack
+                  const { generateTicketPDF } = await import("@/lib/ticket-generator")
+                  const { sendTicketEmail } = await import("@/lib/email-service")
+
                   const pdfBuffer = await generateTicketPDF({
                     eventName: event.title,
                     eventDate: new Date(event.event_date).toLocaleDateString(),

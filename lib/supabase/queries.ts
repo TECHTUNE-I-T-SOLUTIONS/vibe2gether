@@ -117,7 +117,8 @@ export async function createPost(
   latitude?: number,
   longitude?: number,
   isPublic: boolean = true,
-  allowComments: boolean = true
+  allowComments: boolean = true,
+  isPremium: boolean = false
 ) {
   const supabase = createClient()
   const { data, error } = await supabase
@@ -132,6 +133,7 @@ export async function createPost(
       longitude,
       is_public: isPublic,
       allow_comments: allowComments,
+      is_premium: isPremium,
     })
     .select()
 
