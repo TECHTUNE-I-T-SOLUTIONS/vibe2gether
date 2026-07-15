@@ -4,19 +4,6 @@ import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 import { reconcileExpiredPremiumSubscriptions } from "@/lib/premium-expiry"
 
-/**
- * Check if user has an active premium subscription
- *
- * This endpoint queries the premium_subscriptions table to determine
- * if a user has an active subscription with a valid expiration date.
- *
- * Premium is considered active if:
- * - Status is 'active'
- * - Expiration date is in the future
- *
- * Only successfully completed subscriptions (status: 'active') are considered premium.
- * Pending subscriptions are NOT granted premium access until payment is verified.
- */
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
