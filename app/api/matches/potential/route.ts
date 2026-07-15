@@ -44,7 +44,7 @@ function calculateCompatibilityScore(currentUser: any, potentialMatch: any): num
   const matchInterests = Array.isArray(potentialMatch.interests)
     ? potentialMatch.interests
     : []
-  const commonInterests = currentInterests.filter((interest) =>
+  const commonInterests = currentInterests.filter((interest: string) =>
     matchInterests.includes(interest)
   )
   score += commonInterests.length * 5
@@ -110,15 +110,69 @@ export async function GET(request: NextRequest) {
       `[GET /api/matches/potential] Excluding ${excludedIds.size} user IDs from potential Connections`
     )
 
-    // Get all active users except current user and already matched
-    const { data: potentialMatches, error: potentialError } = await supabase
+    // Check if current user is premium
+    const { data: currentUserPremium } = await supabase
+      .from("premium_subscriptions")
+      .select("*")
+      .eq("user_id", session.user.id)
+      .eq("status", "active")
+      .order("expires_at", { ascending: false })
+      .limit(1)
+
+    const { data: currentUserCoinPremium } = await supabase
+      .from("coin_premium_subscriptions")
+      .select("*")
+      .eq("user_id", session.user.id)
+      .eq("status", "active")
+      .order("expires_at", { ascending: false })
+      .limit(1)
+
+    const now = new Date()
+    const isCurrentUserPremium = (currentUserPremium?.[0] && new Date(currentUserPremium[0].expires_at) > now) ||
+                                   (currentUserCoinPremium?.[0] && new Date(currentUserCoinPremium[0].expires_at) > now)
+
+    // Build query for potential matches
+    let potentialQuery = supabase
       .from("users")
       .select(
         "id, display_name, profile_picture, bio, gender, date_of_birth, country, city, interests, looking_for"
       )
       .neq("id", session.user.id)
       .eq("is_active", true)
-      .limit(50)
+
+    // If current user is premium, only show premium users
+    if (isCurrentUserPremium) {
+      // Get premium user IDs
+      const { data: premiumUsers } = await supabase
+        .from("premium_subscriptions")
+        .select("user_id")
+        .eq("status", "active")
+        .gt("expires_at", now.toISOString())
+
+      const { data: coinPremiumUsers } = await supabase
+        .from("coin_premium_subscriptions")
+        .select("user_id")
+        .eq("status", "active")
+        .gt("expires_at", now.toISOString())
+
+      const premiumUserIds = new Set([
+        ...(premiumUsers?.map(p => p.user_id) || []),
+        ...(coinPremiumUsers?.map(p => p.user_id) || [])
+      ])
+
+      if (premiumUserIds.size > 0) {
+        potentialQuery = potentialQuery.in("id", Array.from(premiumUserIds))
+      } else {
+        // If no premium users exist, return empty
+        return NextResponse.json({
+          success: true,
+          potentialMatches: [],
+          count: 0
+        })
+      }
+    }
+
+    const { data: potentialMatches, error: potentialError } = await potentialQuery.limit(50)
 
     if (potentialError) {
       console.error("[GET /api/matches/potential] Error fetching potential matches:", potentialError)

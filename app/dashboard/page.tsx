@@ -173,9 +173,9 @@ export default function DashboardPage() {
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err)
 
-        // Treat AbortError (timeout or navigation) as non-fatal and avoid spamming the console
+        // Treat AbortError (timeout or navigation) as non-fatal and silent
         if ((err as any)?.name === "AbortError" || (typeof errorMsg === "string" && errorMsg.toLowerCase().includes("abort"))) {
-          console.warn("[Dashboard] Fetch aborted:", errorMsg)
+          // Silent - expected during navigation or timeout
           return
         }
 

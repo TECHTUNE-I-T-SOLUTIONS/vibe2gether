@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
-import { Heart, X, MessageCircle, Loader2, Sparkles, Eye, User, Lock, Crown } from "lucide-react"
+import { Heart, X, MessageCircle, Loader2, Sparkles, Eye, User, Lock, Crown, UserPlus } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -59,43 +59,63 @@ export default function MatchesPage() {
   const router = useRouter()
   const { user } = useUserProfile()
   const { toast } = useToast()
-  const { checkPremium, isPremium } = usePremiumCheck()
+  const { checkPremium, isPremium, loading: premiumLoading } = usePremiumCheck()
   const [activeMatches, setActiveMatches] = useState<Match[]>([])
   const [potentialMatches, setPotentialMatches] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [checkingPremium, setCheckingPremium] = useState(true)
   const [tab, setTab] = useState<"active" | "potential">("active")
 
-  // Auth check
+  // Auth and Premium check - must complete before any content renders
   useEffect(() => {
-    if (status === "loading") return
-    if (status === "unauthenticated") {
-      router.push("/login")
-    }
-  }, [status, router])
+    async function checkAccess() {
+      // Wait for session to load
+      if (status === "loading") return
 
-  // Premium check - entire page is premium-only
-  useEffect(() => {
-    if (status === "loading") return
-    if (status === "authenticated" && !isPremium && !loading) {
-      router.push("/dashboard/premium?feature=Vibes+Page")
-    }
-  }, [status, isPremium, loading, router])
+      // Check authentication first
+      if (status === "unauthenticated") {
+        router.push("/login")
+        return
+      }
 
+      // Wait for premium check to complete
+      if (premiumLoading) {
+        return
+      }
+
+      // Check premium status
+      if (!isPremium) {
+        router.push("/dashboard/premium?feature=Vibes+Page")
+        return
+      }
+
+      // User is authenticated and premium, allow access
+      setCheckingPremium(false)
+    }
+
+    checkAccess()
+  }, [status, isPremium, premiumLoading, router])
+
+  // Only load matches after premium check passes
   useEffect(() => {
     async function loadMatches() {
-      if (!user) return
+      if (!user || checkingPremium) return
 
       try {
         setLoading(true)
 
         // Fetch all matches using API
-        const matchesResponse = await fetch("/api/matches/user")
+        const matchesResponse = await fetch("/api/matches/user", {
+          cache: 'force-cache'
+        })
         if (!matchesResponse.ok) throw new Error("Failed to fetch connections")
         const matchesData = await matchesResponse.json()
         setActiveMatches(matchesData.matches || [])
 
         // Fetch potential matches using API
-        const potentialResponse = await fetch("/api/matches/potential")
+        const potentialResponse = await fetch("/api/matches/potential", {
+          cache: 'force-cache'
+        })
         if (!potentialResponse.ok) throw new Error("Failed to fetch potential connections")
         const potentialData = await potentialResponse.json()
         setPotentialMatches(potentialData.potentialMatches || [])
@@ -112,7 +132,7 @@ export default function MatchesPage() {
     }
 
     loadMatches()
-  }, [user, toast])
+  }, [user, checkingPremium, toast])
 
   const handleAcceptMatch = async (matchId: string) => {
     try {
@@ -213,7 +233,7 @@ export default function MatchesPage() {
     }
   }
 
-  if (loading) {
+  if (loading || checkingPremium) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -530,18 +550,17 @@ export default function MatchesPage() {
                       <Button
                         variant="outline"
                         className="flex-1"
-                        onClick={() => handlePassOnPotential(match.id)}
-                      >
-                        <X className="w-4 h-4 mr-2" />
-                        Pass
-                      </Button>
-                      <Button 
-                        className="flex-1 gradient-bg"
                         onClick={() => handleLikePotential(match)}
                       >
-                        <Heart className="w-4 h-4 mr-2" />
-                        Like
+                        <UserPlus className="w-4 h-4 mr-2" />
+                        Follow
                       </Button>
+                      <Link href={`/messages?userId=${match.id}`} className="flex-1">
+                        <Button className="w-full gradient-bg">
+                          <MessageCircle className="w-4 h-4 mr-2" />
+                          Message
+                        </Button>
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>

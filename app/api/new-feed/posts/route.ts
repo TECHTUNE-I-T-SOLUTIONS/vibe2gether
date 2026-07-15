@@ -12,31 +12,37 @@ export async function GET(request: NextRequest) {
 
     const supabase = await createClient()
     const url = new URL(request.url)
-    const limit = parseInt(url.searchParams.get("limit") || "50")
+    const limit = parseInt(url.searchParams.get("limit") || "10") // Reduced default from 50 to 10
+    const page = parseInt(url.searchParams.get("page") || "1")
+    const offset = (page - 1) * limit
 
-    // Check if user is premium using the premium check API
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'http://localhost:3000'
-    const premiumCheckResponse = await fetch(`${baseUrl}/api/premium/check`, {
-      headers: {
-        cookie: request.headers.get('cookie') || '',
-      },
-    })
+    // Check if user is premium using direct database query for better performance
+    const { data: activeSubscriptions } = await supabase
+      .from("premium_subscriptions")
+      .select("*")
+      .eq("user_id", session.user.id)
+      .eq("status", "active")
+      .order("expires_at", { ascending: false })
+      .limit(1)
 
-    let isPremium = false
-    if (premiumCheckResponse.ok) {
-      const premiumData = await premiumCheckResponse.json()
-      isPremium = premiumData.isPremium || false
-    }
+    const { data: activeCoinSubscriptions } = await supabase
+      .from("coin_premium_subscriptions")
+      .select("*")
+      .eq("user_id", session.user.id)
+      .eq("status", "active")
+      .order("expires_at", { ascending: false })
+      .limit(1)
 
-    // Generate a seed for shuffling that changes on each request
-    const timestamp = Math.floor(Date.now() / 1000) // Change every second for fresh shuffling
-    const sessionSeed = parseInt(session.user.id.slice(-8), 16)
-    const shuffleSeed = (sessionSeed + timestamp) % 10000
+    const now = new Date()
+    const hasActiveSubscription = activeSubscriptions?.[0] && new Date(activeSubscriptions[0].expires_at) > now
+    const hasActiveCoinSubscription = activeCoinSubscriptions?.[0] && new Date(activeCoinSubscriptions[0].expires_at) > now
+    const isPremium = hasActiveSubscription || hasActiveCoinSubscription
 
     let allPosts: any[] = []
 
-    // Get all posts (user's own + others) - fetch more than needed for shuffling
-    const fetchLimit = Math.min(limit * 5, 200) // Fetch up to 5x or 200 posts max for good shuffling
+    // For pagination, we need consistent ordering - no shuffling
+    // Fetch smaller batches for better performance
+    const fetchLimit = limit
     
     // Build query for other users' posts
     let otherPostsQuery = supabase
@@ -69,7 +75,7 @@ export async function GET(request: NextRequest) {
       otherPostsQuery = otherPostsQuery.eq("is_premium", false)
     }
 
-    const { data: otherPosts, error: postsError } = await otherPostsQuery.limit(fetchLimit)
+    const { data: otherPosts, error: postsError } = await otherPostsQuery.range(offset, offset + fetchLimit - 1)
 
     if (postsError) {
       console.error("Error fetching posts:", postsError)
@@ -78,56 +84,50 @@ export async function GET(request: NextRequest) {
     }
 
     // Add user's own posts (always show own posts regardless of premium status)
-    const { data: userPosts, error: userPostsError } = await supabase
-      .from("posts")
-      .select(`
-        id,
-        content,
-        media,
-        tags,
-        location_name,
-        created_at,
-        user_id,
-        likes_count,
-        comments_count,
-        saves_count,
-        views_count,
-        is_premium,
-        users!inner (
+    // Only add user posts on first page to avoid duplicates
+    if (page === 1) {
+      const { data: userPosts, error: userPostsError } = await supabase
+        .from("posts")
+        .select(`
           id,
-          display_name,
-          full_name,
-          profile_picture
-        )
-      `)
-      .eq("user_id", session.user.id)
-      .order("created_at", { ascending: false })
+          content,
+          media,
+          tags,
+          location_name,
+          created_at,
+          user_id,
+          likes_count,
+          comments_count,
+          saves_count,
+          views_count,
+          is_premium,
+          users!inner (
+            id,
+            display_name,
+            full_name,
+            profile_picture
+          )
+        `)
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false })
+        .limit(5) // Limit user posts to 5 on first page
 
-    if (userPostsError) {
-      console.error("Error fetching user posts:", userPostsError)
-    } else if (userPosts) {
-      allPosts = [...allPosts, ...userPosts]
-    }
-
-    // Shuffle all posts together using seeded shuffle for fresh randomization on each load
-    const seededShuffle = (array: any[], seed: number) => {
-      const shuffled = [...array]
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor((seedRandom(seed + i) * (i + 1)))
-        ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+      if (userPostsError) {
+        console.error("Error fetching user posts:", userPostsError)
+      } else if (userPosts) {
+        allPosts = [...allPosts, ...userPosts]
       }
-      return shuffled
     }
 
-    const seedRandom = (seed: number) => {
-      const x = Math.sin(seed) * 10000
-      return x - Math.floor(x)
-    }
+    // Remove duplicates by post ID (in case user posts overlap with other posts)
+    const uniquePosts = Array.from(
+      new Map(allPosts.map(post => [post.id, post])).values()
+    )
 
-    const shuffledPosts = seededShuffle(allPosts, shuffleSeed)
+    // Sort by created_at to maintain consistent order
+    uniquePosts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
-    // Take only the requested number of posts
-    const paginatedPosts = shuffledPosts.slice(0, limit)
+    const paginatedPosts = uniquePosts
 
     // Get post IDs for batch interaction check
     const postIds = paginatedPosts.map(post => post.id)

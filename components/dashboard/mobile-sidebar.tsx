@@ -49,8 +49,8 @@ const mainItems: SidebarItem[] = [
 ]
 
 const secondaryItems: SidebarItem[] = [
-  { icon: Eye, label: "Opportunities", href: "/dashboard/opportunities" },
-  { icon: ShoppingBag, label: "Marketplace", href: "/dashboard/marketplace/manage" },
+  // { icon: Eye, label: "Opportunities", href: "/dashboard/opportunities" },
+  // { icon: ShoppingBag, label: "Marketplace", href: "/dashboard/marketplace/manage" },
   { icon: Repeat, label: "Subscriptions", href: "/dashboard/subscriptions" },
   { icon: Calendar, label: "Events & Webinars", href: "/dashboard/events/manage" },
   { icon: Briefcase, label: "Learn & Grow", href: "/dashboard/learn" },
@@ -80,24 +80,38 @@ export function MobileSidebar() {
   useEffect(() => {
     async function fetchBadgeCounts() {
       try {
-        const statsRes = await fetch("/api/dashboard/stats", { method: "POST" })
-        if (statsRes.ok) {
-          const statsData = await statsRes.json()
-          const findStat = (label: string) => statsData.stats.find((s: any) => s.label === label)?.value || "0"
-          setStats({
-            connections: parseInt(findStat("followers")),
-            views: parseInt(findStat("totalViews")),
-            opportunities: parseInt(findStat("yourMatches")),
-          })
-        }
+        // Fetch stats but with caching and only after other critical data loads
+        setTimeout(async () => {
+          try {
+            const statsRes = await fetch("/api/dashboard/stats", {
+              method: "POST",
+              cache: 'force-cache'
+            })
+            if (statsRes.ok) {
+              const statsData = await statsRes.json()
+              const findStat = (label: string) => statsData.stats.find((s: any) => s.label === label)?.value || "0"
+              setStats({
+                connections: parseInt(findStat("followers")),
+                views: parseInt(findStat("totalViews")),
+                opportunities: parseInt(findStat("yourMatches")),
+              })
+            }
+          } catch (err) {
+            console.error("Failed to fetch stats:", err)
+          }
+        }, 2000) // Delay stats fetch by 2 seconds
 
-        const notifRes = await fetch("/api/notifications")
+        const notifRes = await fetch("/api/notifications", {
+          cache: 'force-cache'
+        })
         if (notifRes.ok) {
           const notifData = await notifRes.json()
           setNotificationBadge(notifData.unreadCount || 0)
         }
 
-        const messagesRes = await fetch("/api/messages")
+        const messagesRes = await fetch("/api/messages", {
+          cache: 'force-cache'
+        })
         if (messagesRes.ok) {
           const messagesData = await messagesRes.json()
           const unreadCount = (messagesData.conversations || []).reduce(
@@ -167,7 +181,7 @@ export function MobileSidebar() {
           </div>
         </div>
 
-        {/* Stats Row */}
+        {/* Stats Row - Optimized with delayed loading */}
         <div className="grid grid-cols-3 gap-2 py-2 border-y border-sidebar-border/50">
           <div className="text-center">
             <p className="text-sm font-bold text-sidebar-foreground">{stats.connections}</p>

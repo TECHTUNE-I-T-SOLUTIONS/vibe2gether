@@ -1,11 +1,12 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
+import dynamic from "next/dynamic"
 import {
   Heart,
   MessageCircle,
@@ -46,8 +47,13 @@ import { useToast } from "@/hooks/use-toast"
 import { getFlagAssetFromLocation } from "@/lib/location-country"
 import { cn } from "@/lib/utils"
 import { PostMenu } from "@/components/post-menu"
-import { FeatureCards } from "@/components/dashboard/feature-cards"
 import { CreatePost } from "@/components/create-post"
+
+// Lazy load non-critical components for performance
+const FeatureCards = dynamic(() => import("@/components/dashboard/feature-cards").then(mod => ({ default: mod.FeatureCards })), {
+  loading: () => <div className="h-20 bg-muted rounded-lg animate-pulse" />,
+  ssr: false
+})
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { usePremiumCheck } from "@/hooks/use-premium-check"
 import { getPostComments, deletePost, createPost } from "@/lib/supabase/queries"
@@ -234,27 +240,47 @@ export default function NewFeedPage() {
     setLoadKey(prev => prev + 1)
   }, [])
 
-  // Fetch posts with React Query
+  // Fetch posts with React Query - using infinite query for appending posts
   const {
     data,
     isLoading,
     error: queryError,
     refetch,
-  } = useQuery({
-    queryKey: ["new-feed-posts", session?.user?.id, loadKey], // Include load key to force reshuffle on page load
-    queryFn: async () => {
-      const response = await fetch(`/api/new-feed/posts?page=1&limit=50`) // Load 50 posts at once
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ["new-feed-posts", session?.user?.id, loadKey], // Include load key for reshuffle
+    queryFn: async ({ pageParam = 1 }) => {
+      const response = await fetch(`/api/new-feed/posts?page=${pageParam}&limit=10`)
       if (!response.ok) throw new Error("Failed to fetch posts")
       return response.json() as Promise<{ posts: Post[] }>
     },
-    staleTime: 0, // Always refetch on mount for fresh data
-    gcTime: 1000 * 60 * 2, // 2 minutes cache
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      // If we got less than 10 posts, we've reached the end
+      if (lastPage.posts.length < 10) return undefined
+      return allPages.length + 1
+    },
+    staleTime: 0,
+    gcTime: 1000 * 60 * 2,
     refetchOnWindowFocus: false,
-    refetchOnMount: true, // Always refetch on mount
+    refetchOnMount: true,
   })
 
-  // Get posts from data
-  const allPosts = data?.posts || []
+  // Flatten all pages into a single array of posts
+  const allPosts = data?.pages.flatMap(page => page.posts) || []
+
+  // Handle loading more posts
+  const loadMore = useCallback(() => {
+    if (!hasNextPage || isFetchingNextPage) return
+    fetchNextPage()
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+
+  // Reset pagination when refresh is clicked
+  const handleRefresh = useCallback(() => {
+    refetch()
+  }, [refetch])
 
   // Warm up the first few videos so they are playable as soon as the feed settles.
   useEffect(() => {
@@ -267,13 +293,18 @@ export default function NewFeedPage() {
       const mediaUrl = getMediaUrl(post.media, 0)
       if (!mediaUrl) return
 
+      const mediaId = `${post.id}-0`
+
+      // Skip if already loaded
+      if (loadedImages.has(mediaId)) return
+
       if (!isVideo(mediaUrl)) {
-        initialMediaToLoad.add(`${post.id}-0`)
+        initialMediaToLoad.add(mediaId)
         return
       }
 
       if (warmedVideos < 3) {
-        initialMediaToLoad.add(`${post.id}-0`)
+        initialMediaToLoad.add(mediaId)
         warmedVideos += 1
       }
     })
@@ -285,7 +316,8 @@ export default function NewFeedPage() {
         return next
       })
     }
-  }, [allPosts])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allPosts.length]) // Only re-run when number of posts changes, not on every render
 
   // Preload images for better performance
   const preloadImage = useCallback((src: string) => {
@@ -405,7 +437,7 @@ export default function NewFeedPage() {
         if (entry.isIntersecting) {
           const mediaId = (entry.target as HTMLElement).getAttribute("data-media-id")
 
-          if (mediaId) {
+          if (mediaId && !loadedImages.has(mediaId)) {
             setLoadedImages((prev) => {
               const next = new Set(prev)
               next.add(mediaId)
@@ -424,7 +456,7 @@ export default function NewFeedPage() {
         mediaObserverRef.current.disconnect()
       }
     }
-  }, [])
+  }, [loadedImages])
 
   const handleShowComments = async (postId: string) => {
     const isExpanded = expandedComments.has(postId)
@@ -1159,7 +1191,7 @@ export default function NewFeedPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => refetch()}
+          onClick={handleRefresh}
           disabled={isLoading}
           className="flex items-center gap-2"
         >
@@ -1168,10 +1200,10 @@ export default function NewFeedPage() {
         </Button>
       </div>
 
-      {/* Feature Stats Cards */}
-      <div className="mb-2">
+      {/* Feature Stats Cards - Removed for performance */}
+      {/* <div className="mb-2">
         <FeatureCards />
-      </div>
+      </div> */}
 
       {/* Posts */}
       {isLoading ? (
@@ -1524,6 +1556,34 @@ export default function NewFeedPage() {
             <div className="text-center py-12">
               <p className="text-muted-foreground mb-4">No posts yet</p>
               <Button>Create the first post</Button>
+            </div>
+          )}
+
+          {/* Load More Button */}
+          {allPosts.length > 0 && hasNextPage && (
+            <div className="text-center py-8">
+              <Button
+                variant="outline"
+                onClick={loadMore}
+                disabled={isFetchingNextPage}
+                className="min-w-32"
+              >
+                {isFetchingNextPage ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  "Load More"
+                )}
+              </Button>
+            </div>
+          )}
+
+          {/* No more posts indicator */}
+          {allPosts.length > 0 && !hasNextPage && (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              You've reached the end of the feed
             </div>
           )}
         </>
