@@ -15,7 +15,8 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(url.searchParams.get("limit") || "50")
 
     // Check if user is premium using the premium check API
-    const premiumCheckResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/premium/check`, {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'http://localhost:3000'
+    const premiumCheckResponse = await fetch(`${baseUrl}/api/premium/check`, {
       headers: {
         cookie: request.headers.get('cookie') || '',
       },
