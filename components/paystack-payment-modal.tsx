@@ -11,6 +11,8 @@ import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { PaymentMethodOptions } from "@/components/payment-method-options"
 import { normalizeMobileMoneyPhone } from "@/lib/mobile-money"
+import { uploadReceiptMedia } from "@/lib/supabase/storage"
+import { Upload, Image as ImageIcon, X } from "lucide-react"
 
 const MOBILE_MONEY_COUNTRIES = [
   {
@@ -64,6 +66,8 @@ export function PaystackPaymentModal({
   const [isLoading, setIsLoading] = useState(true)
   const [paymentReference, setPaymentReference] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<"paystack" | "flutterwave">(initialPaymentMethod)
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
   const [mobileMoney, setMobileMoney] = useState({
     country: "CM",
     countryCode: "237",
@@ -166,10 +170,10 @@ export function PaystackPaymentModal({
       return
     }
 
-    if (paymentMethod === "flutterwave" && (!mobileMoney.countryCode || !mobileMoney.network || mobileMoney.phoneNumber.length < 8)) {
+    if (paymentMethod === "flutterwave" && !receiptFile) {
       toast({
-        title: "Wallet details required",
-        description: "Enter a valid mobile money wallet before continuing.",
+        title: "Receipt Required",
+        description: "Please upload a screenshot of your payment receipt.",
         variant: "destructive",
       })
       return
@@ -181,51 +185,88 @@ export function PaystackPaymentModal({
     setMobileMoneyInstruction("")
 
     try {
-      const endpoint = paymentMethod === "flutterwave" ? "/api/flutterwave/initialize" : "/api/paystack/initialize"
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          fullName,
-          amount: paymentAmount,
-          currency,
-          itemType,
-          itemData,
-          mobileMoney: paymentMethod === "flutterwave" ? mobileMoney : undefined,
-          metadata: {
-            itemType: itemType || "coins",
-            itemId: itemData?.id,
-            itemTitle: itemData?.title || purpose || "Purchase",
+      if (paymentMethod === "flutterwave") {
+        if (!session?.user?.id) throw new Error("You must be logged in to pay")
+        
+        // 1. Upload receipt
+        const { url: receiptUrl, error: uploadError } = await uploadReceiptMedia(session.user.id, receiptFile!)
+        if (uploadError || !receiptUrl) {
+          throw new Error(uploadError || "Failed to upload receipt")
+        }
+
+        // 2. Submit manual payment
+        const response = await fetch("/api/payments/manual", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: paymentAmount,
+            currency,
+            itemType,
+            itemData,
+            receiptUrl,
+            metadata: {
+              itemType: itemType || "coins",
+              itemId: itemData?.id,
+              itemTitle: itemData?.title || purpose || "Purchase",
+              eventId: itemData?.id,
+            },
+          }),
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || error.message || "Failed to submit manual payment")
+        }
+
+        const data = await response.json()
+        setPaymentStatus("success")
+        toast({
+          title: "Payment Submitted",
+          description: "Your receipt has been uploaded. Verification may take between a few minutes and an hour.",
+          variant: "default",
+        })
+        
+        // Don't auto-redirect, let them read the message
+      } else {
+        const endpoint = "/api/paystack/initialize"
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-        }),
-      })
+          body: JSON.stringify({
+            email,
+            fullName,
+            amount: paymentAmount,
+            currency,
+            itemType,
+            itemData,
+            metadata: {
+              itemType: itemType || "coins",
+              itemId: itemData?.id,
+              itemTitle: itemData?.title || purpose || "Purchase",
+            },
+          }),
+        })
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || error.message || "Failed to initialize payment")
-      }
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || error.message || "Failed to initialize payment")
+        }
 
-      const data = await response.json()
-      const { authorizationUrl, reference } = data
+        const data = await response.json()
+        const { authorizationUrl, reference } = data
 
-      // Store reference in localStorage for polling if redirect fails
-      if (reference) {
-        localStorage.setItem(paymentMethod === "flutterwave" ? "flutterwave_reference" : "paystack_reference", reference)
-        setPaymentReference(reference)
-      }
+        // Store reference in localStorage for polling if redirect fails
+        if (reference) {
+          localStorage.setItem("paystack_reference", reference)
+          setPaymentReference(reference)
+        }
 
-      if (paymentMethod === "flutterwave" && data.instruction) {
-        setMobileMoneyInstruction(data.instruction)
-        setPaymentStatus("processing")
-        setIsProcessing(false)
-      }
-
-      // Redirect to the selected payment provider.
-      if (authorizationUrl) {
-        window.location.href = authorizationUrl
+        // Redirect to the selected payment provider.
+        if (authorizationUrl) {
+          window.location.href = authorizationUrl
+        }
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Payment initialization failed"
@@ -246,6 +287,8 @@ export function PaystackPaymentModal({
       setErrorMessage("")
       setMobileMoneyInstruction("")
       setPaymentReference(null)
+      setReceiptFile(null)
+      setReceiptPreview(null)
       onClose()
     }
   }
@@ -388,83 +431,69 @@ export function PaystackPaymentModal({
               <Label>Payment method</Label>
               <PaymentMethodOptions value={paymentMethod} onChange={setPaymentMethod} layout="stack" />
               {paymentMethod === "flutterwave" && (
-                <div className="space-y-3 rounded-lg border p-3">
-                  <div>
-                    <p className="font-semibold">Mobile money wallet</p>
-                    <p className="text-xs text-muted-foreground">Choose the country/currency and wallet that will approve this payment.</p>
-                  </div>
-                  <div className="grid gap-3">
-                    <div>
-                      <Label className="mb-1 block text-sm font-medium">Country</Label>
-                      <select
-                        value={mobileMoney.country}
-                        onChange={(event) =>
-                          setMobileMoney((current) => {
-                            const country = MOBILE_MONEY_COUNTRIES.find((item) => item.code === event.target.value) || MOBILE_MONEY_COUNTRIES[0]
-                            return {
-                              ...current,
-                              country: country.code,
-                              countryCode: country.dialCode,
-                              currency: country.currency,
-                              network: country.networks[0]?.value || "",
-                            }
-                          })
-                        }
-                        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      >
-                        {MOBILE_MONEY_COUNTRIES.map((country) => (
-                          <option key={country.code} value={country.code}>
-                            {country.label} ({country.currency})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <Label className="mb-1 block text-sm font-medium">Network</Label>
-                      <select
-                        value={mobileMoney.network}
-                        onChange={(event) => setMobileMoney((current) => ({ ...current, network: event.target.value }))}
-                        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      >
-                        {selectedMobileMoneyCountry.networks.map((network) => (
-                          <option key={network.value} value={network.value}>
-                            {network.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="grid grid-cols-[90px_1fr] gap-2">
-                      <div>
-                        <Label className="mb-1 block text-sm font-medium">Code</Label>
-                        <Input value={mobileMoney.countryCode} readOnly />
-                      </div>
-                      <div>
-                        <Label className="mb-1 block text-sm font-medium">Wallet phone</Label>
-                        <Input
-                          value={mobileMoney.phoneNumber}
-                          onChange={(event) =>
-                            setMobileMoney((current) => ({
-                              ...current,
-                              phoneNumber: normalizeMobileMoneyPhone(event.target.value, current.countryCode),
-                            }))
-                          }
-                          placeholder={selectedMobileMoneyCountry.placeholder}
-                        />
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Enter the local wallet number only. The country code is added separately.
-                        </p>
-                      </div>
+                <div className="space-y-4 rounded-lg border p-4 bg-muted/30">
+                  <div className="bg-primary/5 border border-primary/20 rounded-md p-3 mb-2">
+                    <h4 className="font-semibold text-primary mb-1">Mobile Money Transfer (Cameroon)</h4>
+                    <p className="text-sm text-muted-foreground mb-3">Please send exactly <strong className="text-foreground">FCFA {xafEquivalent.toLocaleString()}</strong> to the following account:</p>
+                    
+                    <div className="grid grid-cols-2 gap-2 text-sm bg-background p-3 rounded border">
+                      <span className="text-muted-foreground">Number:</span>
+                      <strong className="font-mono text-base">672945939</strong>
+                      <span className="text-muted-foreground">Name:</span>
+                      <strong>Nko levis</strong>
+                      <span className="text-muted-foreground">Network:</span>
+                      <strong>Momo (MTN/Orange)</strong>
                     </div>
                   </div>
-                </div>
-              )}
-              {mobileMoneyInstruction && (
-                <div className="rounded-lg border border-primary/40 bg-primary/5 p-3">
-                  <p className="font-semibold">Approve on your phone</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{mobileMoneyInstruction}</p>
-                  <p className="mt-3 rounded-md bg-background p-3 text-xs text-muted-foreground">
-                    After approving the prompt, use Verify Payment below. We also listen for Flutterwave's webhook and will complete the payment automatically once confirmed.
-                  </p>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="block text-sm font-medium mb-1">Upload Receipt Screenshot</Label>
+                      <p className="text-xs text-muted-foreground mb-2">After making the transfer, upload the screenshot or PDF receipt here for verification.</p>
+                      
+                      {receiptPreview ? (
+                        <div className="relative border rounded-md p-2 bg-background flex items-center justify-between">
+                          <div className="flex items-center gap-3 overflow-hidden">
+                              {receiptFile?.type.startsWith("image/") ? (
+                                <img src={receiptPreview!} alt="Preview" className="w-10 h-10 object-cover rounded border" />
+                              ) : (
+                                <div className="w-10 h-10 bg-muted rounded flex items-center justify-center shrink-0">
+                                  <ImageIcon className="w-5 h-5 text-muted-foreground" />
+                                </div>
+                              )}
+                              <span className="text-sm truncate">{receiptFile?.name}</span>
+                            </div>
+                          <Button variant="ghost" size="sm" onClick={() => { setReceiptFile(null); setReceiptPreview(null); }}>
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => document.getElementById('receipt-upload')?.click()}>
+                          <Upload className="w-8 h-8 text-muted-foreground mb-2" />
+                          <span className="text-sm font-medium text-primary">Click to upload receipt</span>
+                          <span className="text-xs text-muted-foreground mt-1">PNG, JPG, PDF up to 5MB</span>
+                          <input 
+                            id="receipt-upload" 
+                            type="file" 
+                            accept="image/*,.pdf" 
+                            className="hidden" 
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (file) {
+                                setReceiptFile(file)
+                                setReceiptPreview(URL.createObjectURL(file))
+                              }
+                            }} 
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="rounded-md bg-yellow-500/10 border border-yellow-500/20 p-3 flex gap-2 text-sm text-yellow-700 dark:text-yellow-400">
+                    <AlertCircle className="w-5 h-5 shrink-0" />
+                    <p>Verification may take between a few minutes and an hour. Your e-ticket/product will be sent to your email once verified by admins.</p>
+                  </div>
                 </div>
               )}
             </div>
@@ -483,14 +512,14 @@ export function PaystackPaymentModal({
                   <div className="space-y-2">
                     <Label htmlFor="full-name">Full Name</Label>
                     <div className="px-4 py-2 bg-muted rounded-md text-sm font-medium">
-                      {fullName || "—"}
+                      {fullName || "â€”"}
                     </div>
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="email">Email Address</Label>
                     <div className="px-4 py-2 bg-muted rounded-md text-sm font-medium break-all">
-                      {email || "—"}
+                      {email || "â€”"}
                     </div>
                   </div>
                 </>
@@ -499,7 +528,7 @@ export function PaystackPaymentModal({
               {/* Paystack Info */}
               <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
                 <p className="text-xs text-blue-900 dark:text-blue-100">
-                  <strong>🔒 Secure:</strong> Your payment details are encrypted and processed securely by Paystack
+                  <strong>ðŸ”’ Secure:</strong> Your payment details are encrypted and processed securely by Paystack
                 </p>
               </div>
             </div>
@@ -513,8 +542,8 @@ export function PaystackPaymentModal({
                 <p className="font-semibold text-lg">Payment Successful!</p>
                 <p className="text-sm text-muted-foreground mt-2">
                   {itemType === "coins" || purpose === "Buy Coins" 
-                    ? "Your coins have been added to your wallet. Check your email for details."
-                    : `Your ${itemType} has been created. Check your email for details.`
+                    ? (paymentMethod === "flutterwave" ? "Your receipt has been submitted and is pending verification. You will be credited once verified." : "Your coins have been added to your wallet. Check your email for details.")
+                    : (paymentMethod === "flutterwave" ? `Your receipt has been submitted and is pending verification. Your ${itemType} will be created and e-ticket sent once verified by admins.` : `Your ${itemType} has been created. Check your email for details.`)
                   }
                 </p>
               </div>
@@ -531,7 +560,7 @@ export function PaystackPaymentModal({
                   className="gap-2 gradient-bg"
                   size="lg"
                 >
-                  ✓ Return to Marketplace
+                  âœ“ Return to Marketplace
                 </Button>
               )}
               {itemType !== "product" && (
@@ -573,13 +602,12 @@ export function PaystackPaymentModal({
                     !fullName ||
                     isLoading ||
                     Number(paymentAmount) < 1500 ||
-                    (paymentMethod === "flutterwave" &&
-                      (!mobileMoney.countryCode || !mobileMoney.network || mobileMoney.phoneNumber.length < 8))
+                    (paymentMethod === "flutterwave" && !receiptFile)
                   }
                   className="gap-2"
                 >
                   {isProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {isProcessing ? "Processing..." : `Pay ₦${paymentAmount.toLocaleString()}`}
+                  {isProcessing ? "Processing..." : paymentMethod === "flutterwave" ? "Submit Receipt" : `Pay ₦${paymentAmount.toLocaleString()}`}
                 </Button>
               )}
             </>

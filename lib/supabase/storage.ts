@@ -197,6 +197,30 @@ export async function uploadLearnMedia(userId: string, file: File) {
   }
 }
 
+export async function uploadReceiptMedia(userId: string, file: File) {
+  try {
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("userId", userId)
+    formData.append("bucket", "receipts")
+
+    const response = await fetch("/api/upload-file", {
+      method: "POST",
+      body: formData,
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      return { url: null, error: data.error || "Upload failed" }
+    }
+
+    return { url: data.url, error: null }
+  } catch (error) {
+    return { url: null, error: error instanceof Error ? error.message : "Upload failed" }
+  }
+}
+
 export async function deleteFile(bucket: string, path: string) {
   const supabase = createClient()
   const { error } = await supabase.storage.from(bucket).remove([path])

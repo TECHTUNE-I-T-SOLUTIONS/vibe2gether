@@ -124,8 +124,11 @@ export async function GET(request: NextRequest) {
       new Map(allPosts.map(post => [post.id, post])).values()
     )
 
-    // Sort by created_at to maintain consistent order
-    uniquePosts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    // Shuffle the uniquePosts array to randomize the order on each refresh
+    for (let i = uniquePosts.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [uniquePosts[i], uniquePosts[j]] = [uniquePosts[j], uniquePosts[i]];
+    }
 
     const paginatedPosts = uniquePosts
 

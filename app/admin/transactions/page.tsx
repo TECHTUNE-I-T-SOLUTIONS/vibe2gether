@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Filter, MoreHorizontal, TrendingUp, Loader, X, Eye, Check, XCircle, RefreshCw } from "lucide-react"
+import { Search, Filter, MoreHorizontal, TrendingUp, Loader, X, Eye, Check, XCircle, RefreshCw, Mail } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -62,7 +62,10 @@ function normalizeCurrency(currency: string): "NGN" | "USD" {
 // Convert amount from database format to naira
 // NGN amounts are stored as plain naira (1500 = 1500 NGN)
 // USD amounts are stored as cents of naira equivalent (1448550 cents = 14485.50 NGN)
-function convertFromKobo(amount: number, currency: string): number {
+function convertFromKobo(amount: number, currency: string, type?: string): number {
+  if (type === "event_registration") {
+    return amount / 100
+  }
   const normalized = normalizeCurrency(currency)
   
   if (normalized === "USD") {
@@ -75,7 +78,11 @@ function convertFromKobo(amount: number, currency: string): number {
 }
 
 // Convert amount to USD
-function convertToUSD(amount: number, currency: string): number {
+function convertToUSD(amount: number, currency: string, type?: string): number {
+  if (type === "event_registration") {
+    const base = amount / 100
+    return normalizeCurrency(currency) === "USD" ? base : base / CONVERSION_RATE
+  }
   const normalizedCurrency = normalizeCurrency(currency)
   
   if (normalizedCurrency === "USD") {
@@ -89,7 +96,11 @@ function convertToUSD(amount: number, currency: string): number {
 }
 
 // Convert amount to NGN
-function convertToNGN(amount: number, currency: string): number {
+function convertToNGN(amount: number, currency: string, type?: string): number {
+  if (type === "event_registration") {
+    const base = amount / 100
+    return normalizeCurrency(currency) === "NGN" ? base : base * CONVERSION_RATE
+  }
   const normalizedCurrency = normalizeCurrency(currency)
   
   if (normalizedCurrency === "USD") {
@@ -166,6 +177,8 @@ export default function AdminTransactionsPage() {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [detailsModalOpen, setDetailsModalOpen] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [eventDetails, setEventDetails] = useState<any>(null)
+  const [loadingEventDetails, setLoadingEventDetails] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -197,10 +210,10 @@ export default function AdminTransactionsPage() {
         const pending = enrichedTx.filter((t: any) => t.status === "pending")
         const failed = enrichedTx.filter((t: any) => t.status === "failed")
 
-        const totalRevenueUSD = completed.reduce((sum: number, t: any) => sum + convertToUSD(t.amount || 0, t.currency || "NGN"), 0)
-        const totalRevenueNGN = completed.reduce((sum: number, t: any) => sum + convertToNGN(t.amount || 0, t.currency || "NGN"), 0)
-        const pendingAmountUSD = pending.reduce((sum: number, t: any) => sum + convertToUSD(t.amount || 0, t.currency || "NGN"), 0)
-        const pendingAmountNGN = pending.reduce((sum: number, t: any) => sum + convertToNGN(t.amount || 0, t.currency || "NGN"), 0)
+        const totalRevenueUSD = completed.reduce((sum: number, t: any) => sum + convertToUSD(t.amount || 0, t.currency || "NGN", t.type), 0)
+        const totalRevenueNGN = completed.reduce((sum: number, t: any) => sum + convertToNGN(t.amount || 0, t.currency || "NGN", t.type), 0)
+        const pendingAmountUSD = pending.reduce((sum: number, t: any) => sum + convertToUSD(t.amount || 0, t.currency || "NGN", t.type), 0)
+        const pendingAmountNGN = pending.reduce((sum: number, t: any) => sum + convertToNGN(t.amount || 0, t.currency || "NGN", t.type), 0)
 
         setStats({
           totalRevenue: totalRevenueUSD,
@@ -243,9 +256,33 @@ export default function AdminTransactionsPage() {
     return matchesSearch && matchesType && matchesStatus
   })
 
-  const handleViewDetails = (tx: Transaction) => {
+  const handleViewDetails = async (tx: Transaction) => {
     setSelectedTransaction(tx)
     setDetailsModalOpen(true)
+    
+    // Fetch event details if this is an event registration
+    if (tx.type === "event_registration" && tx.metadata?.eventId) {
+      setLoadingEventDetails(true)
+      setEventDetails(null)
+      try {
+        const supabase = createClient()
+        const { data: event, error } = await supabase
+          .from("events")
+          .select("*")
+          .eq("id", tx.metadata.eventId)
+          .single()
+        
+        if (!error && event) {
+          setEventDetails(event)
+        }
+      } catch (error) {
+        console.error("Error fetching event details:", error)
+      } finally {
+        setLoadingEventDetails(false)
+      }
+    } else {
+      setEventDetails(null)
+    }
   }
 
   const handleUpdateStatus = async (newStatus: "completed" | "failed") => {
@@ -253,14 +290,17 @@ export default function AdminTransactionsPage() {
 
     setUpdatingStatus(true)
     try {
-      const supabase = createClient()
+      const response = await fetch("/api/admin/transactions/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transactionId: selectedTransaction.id,
+          status: newStatus
+        })
+      })
       
-      const { error } = await supabase
-        .from("transactions")
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq("id", selectedTransaction.id)
-
-      if (error) throw error
+      const data = await response.json()
+      if (!response.ok || data.error) throw new Error(data.error || "Failed to update status")
 
       // Update local state
       setTransactions(
@@ -330,6 +370,38 @@ export default function AdminTransactionsPage() {
       })
     } finally {
       setUpdatingStatus(false)
+    }
+  }
+
+  const handleResendTicket = async (tx: Transaction) => {
+    if (!tx || tx.type !== "event_registration") return
+
+    toast({
+      title: "Sending...",
+      description: "Generating and sending E-Ticket...",
+    })
+
+    try {
+      const response = await fetch("/api/admin/resend-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transactionId: tx.id }),
+      })
+
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || "Failed to resend ticket")
+
+      toast({
+        title: "Success",
+        description: data.message || "E-Ticket sent successfully",
+      })
+    } catch (error) {
+      console.error("Error resending ticket:", error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to resend ticket",
+        variant: "destructive",
+      })
     }
   }
 
@@ -456,7 +528,101 @@ export default function AdminTransactionsPage() {
                   No transactions found
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+              <>
+                                <div className="block md:hidden space-y-4 mb-4">
+                  {filteredTransactions.slice(0, 100).map((tx: any) => (
+                    <Card key={tx.id} className="p-4 flex flex-col gap-3 relative">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="w-10 h-10">
+                            <AvatarImage src={tx.user?.avatar_url || "/placeholder.svg"} />
+                            <AvatarFallback>{tx.user?.full_name?.[0] || "U"}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium text-sm">{tx.user?.full_name}</p>
+                            <p className="text-xs text-muted-foreground break-all max-w-[200px] truncate">{tx.id}</p>
+                          </div>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="rounded-full">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleViewDetails(tx)}>
+                              <Eye className="w-4 h-4 mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            {tx.type === "event_registration" && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-blue-600" onClick={() => handleResendTicket(tx)}>
+                                  <Mail className="w-4 h-4 mr-2" />
+                                  Send/Resend E-Ticket
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            {tx.status === "pending" && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-green-600" onClick={() => handleUpdateStatus(tx, "completed")}>
+                                  <Check className="w-4 h-4 mr-2" />
+                                  Mark as Completed
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-red-600" onClick={() => handleUpdateStatus(tx, "failed")}>
+                                  <XCircle className="w-4 h-4 mr-2" />
+                                  Mark as Failed
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            {tx.status === "failed" && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-blue-600" onClick={() => handleUpdateStatus(tx, "refunded")}>
+                                  <RefreshCw className="w-4 h-4 mr-2" />
+                                  Refund
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="flex flex-col">
+                          <span className="text-xs text-muted-foreground">Amount</span>
+                          <span className="font-semibold text-lg flex items-center gap-1">
+                            {getCurrencySymbol(tx.currency)}
+                            {convertFromKobo(tx.amount || 0, tx.currency || "NGN", tx.type).toLocaleString("en-NG", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </span>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <span className="text-xs text-muted-foreground">Status</span>
+                          <Badge className={`${getStatusColor(tx.status)} text-white mt-1`}>
+                            {tx.status}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-3 mt-1">
+                        <div className="flex items-center gap-1">
+                          <Badge variant="outline" className="text-[10px] uppercase font-semibold">
+                            {normalizeCurrency(tx.currency)}
+                          </Badge>
+                          <Badge variant="secondary" className="text-[10px]">
+                            {tx.type?.replace("_", " ")}
+                          </Badge>
+                        </div>
+                        <span>{formatDate(tx.created_at)}</span>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-border bg-muted/30">
@@ -492,15 +658,15 @@ export default function AdminTransactionsPage() {
                               <div className="flex flex-col gap-0.5">
                                 <span className="font-semibold">
                                   {getCurrencySymbol(tx.currency)}
-                                  {convertFromKobo(tx.amount || 0, tx.currency || "NGN").toLocaleString("en-NG", {
+                                  {convertFromKobo(tx.amount || 0, tx.currency || "NGN", tx.type).toLocaleString("en-NG", {
                                     minimumFractionDigits: 2,
                                     maximumFractionDigits: 2,
                                   })}
                                 </span>
                                 <span className="text-xs text-muted-foreground">
                                   {normalizeCurrency(tx.currency) === "USD" 
-                                    ? formatCurrency(convertToNGN(tx.amount || 0, tx.currency), "NGN")
-                                    : formatCurrency(convertToUSD(tx.amount || 0, tx.currency), "USD")
+                                    ? formatCurrency(convertToNGN(tx.amount || 0, tx.currency, tx.type), "NGN")
+                                    : formatCurrency(convertToUSD(tx.amount || 0, tx.currency, tx.type), "USD")
                                   }
                                 </span>
                               </div>
@@ -536,6 +702,15 @@ export default function AdminTransactionsPage() {
                                   <Eye className="w-4 h-4 mr-2" />
                                   View Details
                                 </DropdownMenuItem>
+                                {tx.type === "event_registration" && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem className="text-blue-600" onClick={() => handleResendTicket(tx)}>
+                                      <Mail className="w-4 h-4 mr-2" />
+                                      Send/Resend E-Ticket
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                                 {tx.status === "pending" && (
                                   <>
                                     <DropdownMenuSeparator />
@@ -566,6 +741,7 @@ export default function AdminTransactionsPage() {
                     </tbody>
                   </table>
                 </div>
+              </>
               )}
             </CardContent>
           </Card>
@@ -579,7 +755,101 @@ export default function AdminTransactionsPage() {
                   No completed transactions found
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+              <>
+                                <div className="block md:hidden space-y-4 mb-4">
+                  {filteredTransactions.slice(0, 100).map((tx: any) => (
+                    <Card key={tx.id} className="p-4 flex flex-col gap-3 relative">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="w-10 h-10">
+                            <AvatarImage src={tx.user?.avatar_url || "/placeholder.svg"} />
+                            <AvatarFallback>{tx.user?.full_name?.[0] || "U"}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium text-sm">{tx.user?.full_name}</p>
+                            <p className="text-xs text-muted-foreground break-all max-w-[200px] truncate">{tx.id}</p>
+                          </div>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="rounded-full">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleViewDetails(tx)}>
+                              <Eye className="w-4 h-4 mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            {tx.type === "event_registration" && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-blue-600" onClick={() => handleResendTicket(tx)}>
+                                  <Mail className="w-4 h-4 mr-2" />
+                                  Send/Resend E-Ticket
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            {tx.status === "pending" && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-green-600" onClick={() => handleUpdateStatus(tx, "completed")}>
+                                  <Check className="w-4 h-4 mr-2" />
+                                  Mark as Completed
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-red-600" onClick={() => handleUpdateStatus(tx, "failed")}>
+                                  <XCircle className="w-4 h-4 mr-2" />
+                                  Mark as Failed
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            {tx.status === "failed" && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-blue-600" onClick={() => handleUpdateStatus(tx, "refunded")}>
+                                  <RefreshCw className="w-4 h-4 mr-2" />
+                                  Refund
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="flex flex-col">
+                          <span className="text-xs text-muted-foreground">Amount</span>
+                          <span className="font-semibold text-lg flex items-center gap-1">
+                            {getCurrencySymbol(tx.currency)}
+                            {convertFromKobo(tx.amount || 0, tx.currency || "NGN", tx.type).toLocaleString("en-NG", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </span>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <span className="text-xs text-muted-foreground">Status</span>
+                          <Badge className={`${getStatusColor(tx.status)} text-white mt-1`}>
+                            {tx.status}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-3 mt-1">
+                        <div className="flex items-center gap-1">
+                          <Badge variant="outline" className="text-[10px] uppercase font-semibold">
+                            {normalizeCurrency(tx.currency)}
+                          </Badge>
+                          <Badge variant="secondary" className="text-[10px]">
+                            {tx.type?.replace("_", " ")}
+                          </Badge>
+                        </div>
+                        <span>{formatDate(tx.created_at)}</span>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-border bg-muted/30">
@@ -616,15 +886,15 @@ export default function AdminTransactionsPage() {
                               <div className="flex flex-col gap-0.5">
                                 <span className="font-semibold">
                                   {getCurrencySymbol(tx.currency)}
-                                  {convertFromKobo(tx.amount || 0, tx.currency || "NGN").toLocaleString("en-NG", {
+                                  {convertFromKobo(tx.amount || 0, tx.currency || "NGN", tx.type).toLocaleString("en-NG", {
                                     minimumFractionDigits: 2,
                                     maximumFractionDigits: 2,
                                   })}
                                 </span>
                                 <span className="text-xs text-muted-foreground">
                                   {normalizeCurrency(tx.currency) === "USD" 
-                                    ? formatCurrency(convertToNGN(tx.amount || 0, tx.currency), "NGN")
-                                    : formatCurrency(convertToUSD(tx.amount || 0, tx.currency), "USD")
+                                    ? formatCurrency(convertToNGN(tx.amount || 0, tx.currency, tx.type), "NGN")
+                                    : formatCurrency(convertToUSD(tx.amount || 0, tx.currency, tx.type), "USD")
                                   }
                                 </span>
                               </div>
@@ -660,6 +930,15 @@ export default function AdminTransactionsPage() {
                                   <Eye className="w-4 h-4 mr-2" />
                                   View Details
                                 </DropdownMenuItem>
+                                {tx.type === "event_registration" && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem className="text-blue-600" onClick={() => handleResendTicket(tx)}>
+                                      <Mail className="w-4 h-4 mr-2" />
+                                      Send/Resend E-Ticket
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </td>
@@ -668,6 +947,7 @@ export default function AdminTransactionsPage() {
                     </tbody>
                   </table>
                 </div>
+              </>
               )}
             </CardContent>
           </Card>
@@ -681,7 +961,101 @@ export default function AdminTransactionsPage() {
                   No pending transactions found
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+              <>
+                                <div className="block md:hidden space-y-4 mb-4">
+                  {filteredTransactions.slice(0, 100).map((tx: any) => (
+                    <Card key={tx.id} className="p-4 flex flex-col gap-3 relative">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="w-10 h-10">
+                            <AvatarImage src={tx.user?.avatar_url || "/placeholder.svg"} />
+                            <AvatarFallback>{tx.user?.full_name?.[0] || "U"}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium text-sm">{tx.user?.full_name}</p>
+                            <p className="text-xs text-muted-foreground break-all max-w-[200px] truncate">{tx.id}</p>
+                          </div>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="rounded-full">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleViewDetails(tx)}>
+                              <Eye className="w-4 h-4 mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            {tx.type === "event_registration" && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-blue-600" onClick={() => handleResendTicket(tx)}>
+                                  <Mail className="w-4 h-4 mr-2" />
+                                  Send/Resend E-Ticket
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            {tx.status === "pending" && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-green-600" onClick={() => handleUpdateStatus(tx, "completed")}>
+                                  <Check className="w-4 h-4 mr-2" />
+                                  Mark as Completed
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-red-600" onClick={() => handleUpdateStatus(tx, "failed")}>
+                                  <XCircle className="w-4 h-4 mr-2" />
+                                  Mark as Failed
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            {tx.status === "failed" && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-blue-600" onClick={() => handleUpdateStatus(tx, "refunded")}>
+                                  <RefreshCw className="w-4 h-4 mr-2" />
+                                  Refund
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="flex flex-col">
+                          <span className="text-xs text-muted-foreground">Amount</span>
+                          <span className="font-semibold text-lg flex items-center gap-1">
+                            {getCurrencySymbol(tx.currency)}
+                            {convertFromKobo(tx.amount || 0, tx.currency || "NGN", tx.type).toLocaleString("en-NG", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </span>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <span className="text-xs text-muted-foreground">Status</span>
+                          <Badge className={`${getStatusColor(tx.status)} text-white mt-1`}>
+                            {tx.status}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-3 mt-1">
+                        <div className="flex items-center gap-1">
+                          <Badge variant="outline" className="text-[10px] uppercase font-semibold">
+                            {normalizeCurrency(tx.currency)}
+                          </Badge>
+                          <Badge variant="secondary" className="text-[10px]">
+                            {tx.type?.replace("_", " ")}
+                          </Badge>
+                        </div>
+                        <span>{formatDate(tx.created_at)}</span>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-border bg-muted/30">
@@ -718,15 +1092,15 @@ export default function AdminTransactionsPage() {
                               <div className="flex flex-col gap-0.5">
                                 <span className="font-semibold">
                                   {getCurrencySymbol(tx.currency)}
-                                  {convertFromKobo(tx.amount || 0, tx.currency || "NGN").toLocaleString("en-NG", {
+                                  {convertFromKobo(tx.amount || 0, tx.currency || "NGN", tx.type).toLocaleString("en-NG", {
                                     minimumFractionDigits: 2,
                                     maximumFractionDigits: 2,
                                   })}
                                 </span>
                                 <span className="text-xs text-muted-foreground">
                                   {normalizeCurrency(tx.currency) === "USD" 
-                                    ? formatCurrency(convertToNGN(tx.amount || 0, tx.currency), "NGN")
-                                    : formatCurrency(convertToUSD(tx.amount || 0, tx.currency), "USD")
+                                    ? formatCurrency(convertToNGN(tx.amount || 0, tx.currency, tx.type), "NGN")
+                                    : formatCurrency(convertToUSD(tx.amount || 0, tx.currency, tx.type), "USD")
                                   }
                                 </span>
                               </div>
@@ -762,6 +1136,15 @@ export default function AdminTransactionsPage() {
                                   <Eye className="w-4 h-4 mr-2" />
                                   View Details
                                 </DropdownMenuItem>
+                                {tx.type === "event_registration" && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem className="text-blue-600" onClick={() => handleResendTicket(tx)}>
+                                      <Mail className="w-4 h-4 mr-2" />
+                                      Send/Resend E-Ticket
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem className="text-green-600" onClick={() => handleUpdateStatus("completed")}>
                                   <Check className="w-4 h-4 mr-2" />
@@ -779,6 +1162,7 @@ export default function AdminTransactionsPage() {
                     </tbody>
                   </table>
                 </div>
+              </>
               )}
             </CardContent>
           </Card>
@@ -845,6 +1229,19 @@ export default function AdminTransactionsPage() {
                 </div>
               )}
 
+              {/* Receipt Preview */}
+              {selectedTransaction.metadata?.receiptUrl && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Uploaded Receipt</p>
+                  <div className="border rounded-lg p-2 bg-muted/20">
+                    <a href={selectedTransaction.metadata.receiptUrl} target="_blank" rel="noreferrer" className="block w-full max-w-sm">
+                      <img src={selectedTransaction.metadata.receiptUrl} alt="Payment Receipt" className="w-full h-auto object-contain rounded border" />
+                    </a>
+                    <p className="text-xs text-muted-foreground mt-2 text-center">Click image to view full size</p>
+                  </div>
+                </div>
+              )}
+
               {/* Dates */}
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
@@ -856,6 +1253,94 @@ export default function AdminTransactionsPage() {
                   <p>{formatDate(selectedTransaction.updated_at)}</p>
                 </div>
               </div>
+
+              {/* Event Details */}
+              {selectedTransaction.type === "event_registration" && selectedTransaction.metadata?.eventId && (
+                <div className="bg-muted/30 p-4 rounded-lg border border-border/50">
+                  <h3 className="font-semibold mb-2">Event Registration Details</h3>
+                  
+                  {loadingEventDetails ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader className="w-5 h-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : eventDetails ? (
+                    <div className="space-y-4">
+                      {/* Event Image */}
+                      {eventDetails.thumbnail_url || eventDetails.thumbnail ? (
+                        <div className="relative rounded-lg overflow-hidden">
+                          <img 
+                            src={eventDetails.thumbnail_url || eventDetails.thumbnail} 
+                            alt={eventDetails.title}
+                            className="w-full h-48 object-cover"
+                          />
+                        </div>
+                      ) : null}
+                      
+                      {/* Event Info */}
+                      <div className="space-y-2">
+                        <div>
+                          <p className="text-muted-foreground text-sm">Event Name</p>
+                          <p className="font-semibold">{eventDetails.title}</p>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <p className="text-muted-foreground text-sm">Date</p>
+                            <p className="text-sm">{new Date(eventDetails.event_date).toLocaleDateString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground text-sm">Time</p>
+                            <p className="text-sm">{new Date(eventDetails.event_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <p className="text-muted-foreground text-sm">Location</p>
+                          <p className="text-sm">{eventDetails.location_name || eventDetails.location || "Online / TBD"}</p>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Event ID</p>
+                            <p className="font-mono text-xs break-all">{selectedTransaction.metadata.eventId}</p>
+                          </div>
+                          {selectedTransaction.metadata?.registration_id && (
+                            <div>
+                              <p className="text-muted-foreground">Registration ID</p>
+                              <p className="font-mono text-xs break-all">{selectedTransaction.metadata.registration_id}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* View Event Button */}
+                      <Button 
+                        variant="outline" 
+                        className="w-full"
+                        onClick={() => window.open(`/events/${selectedTransaction.metadata.eventId}`, '_blank')}
+                      >
+                        <Eye className="w-4 h-4 mr-2" />
+                        View Event Page
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      <p>Event ID: {selectedTransaction.metadata.eventId}</p>
+                      {selectedTransaction.metadata?.registration_id && (
+                        <p>Registration ID: {selectedTransaction.metadata.registration_id}</p>
+                      )}
+                      <Button 
+                        variant="outline" 
+                        className="w-full mt-2"
+                        onClick={() => window.open(`/events/${selectedTransaction.metadata.eventId}`, '_blank')}
+                      >
+                        <Eye className="w-4 h-4 mr-2" />
+                        View Event Page
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Actions */}
               {selectedTransaction.status === "pending" && (
@@ -877,6 +1362,16 @@ export default function AdminTransactionsPage() {
                     Mark as Failed
                   </Button>
                 </div>
+              )}
+              
+              {selectedTransaction.type === "event_registration" && (
+                <Button
+                  className="w-full mt-2 bg-blue-600 hover:bg-blue-700"
+                  onClick={() => handleResendTicket(selectedTransaction)}
+                >
+                  <Mail className="w-4 h-4 mr-2" />
+                  Send/Resend E-Ticket
+                </Button>
               )}
 
               {selectedTransaction.status === "failed" && (

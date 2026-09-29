@@ -16,9 +16,10 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
-import { Loader2, Plus, Upload, Calendar, Clock, MapPin, Users, Trash2, LogOut, MessageCircle, Ticket, Eye, Search, Phone, Mail, Home, Download, Share2 } from "lucide-react"
+import { Loader2, Plus, Calendar, Clock, MapPin, Users, Trash2, LogOut, MessageCircle, Ticket, Eye, Search, Phone, Mail, Home, Download, Share2, Upload, Image as ImageIcon, X, AlertCircle } from "lucide-react"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { createClient } from "@/lib/supabase/client"
+import { uploadReceiptMedia } from "@/lib/supabase/storage"
 import { PaymentMethodOptions } from "@/components/payment-method-options"
 import { normalizeMobileMoneyPhone } from "@/lib/mobile-money"
 
@@ -78,6 +79,8 @@ export default function DashboardEventsManagePage() {
     network: "MTN",
     phoneNumber: "",
   })
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
   const verificationHandledRef = useRef(false)
 
   // Ticket Purchase Form
@@ -266,7 +269,7 @@ export default function DashboardEventsManagePage() {
         console.error("Error fetching registrations:", error.message || error)
         throw error
       }
-      const registrations = (data || []).filter(isCompletedRegistration)
+      const registrations = (data || [])
       const updatedEvents = await updatePastEvents(
         registrations.map((registration: any) => registration.event).filter(Boolean)
       )
@@ -600,49 +603,77 @@ export default function DashboardEventsManagePage() {
       const ticketAmountNgn = getTicketAmountNgn(selectedEvent)
 
       if (paymentMethod === "flutterwave") {
-        if (!mobileMoney.countryCode || !mobileMoney.network || mobileMoney.phoneNumber.length < 8) {
+        if (!receiptFile) {
           toast({
-            title: "Wallet details required",
-            description: "Enter a valid mobile money wallet before continuing.",
+            title: "Receipt Required",
+            description: "Please upload a screenshot of your payment receipt.",
             variant: "destructive",
           })
+          setPurchasing(false)
           return
         }
-
-        const res = await fetch("/api/flutterwave/initialize", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            amount: ticketAmountNgn,
-            itemType: "event",
-            itemData: {
-              id: selectedEvent.id,
-              title: selectedEvent.title,
-            },
-            mobileMoney,
-            metadata: {
-              type: "event_registration",
-              eventId: selectedEvent.id,
-              eventTitle: selectedEvent.title,
-              attendeeName: ticketForm.attendeeName,
-              attendeeEmail: ticketForm.attendeeEmail,
-              attendeePhone: ticketForm.attendeePhone,
-              attendeeAddress: ticketForm.attendeeAddress,
-            },
-          }),
-        })
-        const data = await res.json()
-        if (!res.ok || data.error) throw new Error(data.error || "Failed to initialize Method II payment")
-        if (data.instruction) {
-          setMobileMoneyInstruction(data.instruction)
-          setMobileMoneyReference(data.reference || "")
+        
+        try {
+          if (!session?.user?.id) throw new Error("You must be logged in to pay")
+          
+          // 1. Upload receipt
+          const { url: receiptUrl, error: uploadError } = await uploadReceiptMedia(session.user.id, receiptFile)
+          if (uploadError || !receiptUrl) {
+            throw new Error(uploadError || "Failed to upload receipt")
+          }
+          
+          // 2. Submit manual payment
+          const response = await fetch("/api/payments/manual", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              amount: ticketAmountNgn,
+              currency: "NGN",
+              itemType: "event_registration",
+              itemData: {
+                id: selectedEvent.id,
+                title: selectedEvent.title,
+              },
+              receiptUrl,
+              metadata: {
+                type: "event_registration",
+                eventId: selectedEvent.id,
+                eventTitle: selectedEvent.title,
+                attendeeName: ticketForm.attendeeName,
+                attendeeEmail: ticketForm.attendeeEmail,
+                attendeePhone: ticketForm.attendeePhone,
+                attendeeAddress: ticketForm.attendeeAddress,
+              },
+            }),
+          })
+          
+          if (!response.ok) {
+            const error = await response.json()
+            throw new Error(error.error || error.message || "Failed to submit manual payment")
+          }
+          
+          toast({
+            title: "Payment Submitted",
+            description: "Your receipt has been uploaded. Verification may take between a few minutes and an hour. Your e-ticket will be sent once verified.",
+            variant: "default",
+          })
+          
+          setShowBuyDialog(false)
+          setTicketForm({
+            attendeeName: "",
+            attendeeEmail: "",
+            attendeePhone: "",
+            attendeeAddress: "",
+          })
+          fetchRegisteredEvents()
+        } catch (error) {
+          toast({
+            title: "Payment Error",
+            description: error instanceof Error ? error.message : "Failed to submit payment",
+            variant: "destructive",
+          })
         }
-        if (data.authorizationUrl) window.location.href = data.authorizationUrl
-        else {
-          window.setTimeout(() => {
-            if (data.reference) checkMobileMoneyPayment(data.reference, { silent: true })
-          }, 5000)
-        }
+        setPurchasing(false)
         return
       }
 
@@ -1040,9 +1071,10 @@ export default function DashboardEventsManagePage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {allEvents.map((event) => {
                     const isOwnEvent = event.created_by === session?.user?.id
-                    const alreadyPurchased = registrations.some(
-                      (reg) => (reg.event?.id || reg.event_id) === event.id && isCompletedRegistration(reg)
-                    )
+                    const userReg = registrations.find((reg) => (reg.event?.id || reg.event_id) === event.id)
+                    const isCompleted = userReg ? isCompletedRegistration(userReg) : false
+                    const isPending = userReg ? userReg.status === "pending" : false
+                    const alreadyPurchased = isCompleted || isPending
                     return (
                       <Card key={event.id} className="overflow-hidden hover:shadow-lg transition-shadow flex flex-col">
                         {/* Event Thumbnail */}
@@ -1134,20 +1166,51 @@ export default function DashboardEventsManagePage() {
                             <div className="flex flex-col gap-2 mt-3">
                               <Button
                                 className="w-full gap-1 text-xs gradient-bg"
-                                disabled={alreadyPurchased || isEventUnavailable(event)}
-                                onClick={() => {
-                                  if (alreadyPurchased || isEventUnavailable(event)) return
+                                disabled={isCompleted || (isEventUnavailable(event) && !isPending)}
+                                onClick={async () => {
+                                  if (isCompleted || (isEventUnavailable(event) && !isPending)) return
                                   setSelectedEvent(event)
-                                  setTicketForm(prev => ({
-                                    ...prev,
-                                    attendeeName: user?.display_name || "",
-                                    attendeeEmail: session?.user?.email || ""
-                                  }))
+                                  
+                                  if (isPending) {
+                                    // Set form to the existing data
+                                    setTicketForm(prev => ({
+                                      ...prev,
+                                      attendeeName: userReg.attendee_name || user?.display_name || "",
+                                      attendeeEmail: userReg.attendee_email || session?.user?.email || "",
+                                      attendeePhone: userReg.attendee_phone || "",
+                                      attendeeAddress: userReg.attendee_address || "",
+                                    }))
+                                    setPaymentMethod(userReg.payment_method === "mobile_money_manual" ? "flutterwave" : "paystack")
+                                    
+                                    // Also pre-fetch the transaction receipt URL to show it!
+                                    try {
+                                      if (userReg.payment_reference) {
+                                        const res = await fetch(`/api/transactions/${userReg.payment_reference}`)
+                                        if (res.ok) {
+                                          const txData = await res.json()
+                                          if (txData?.transaction?.metadata?.receiptUrl) {
+                                            setReceiptPreview(txData.transaction.metadata.receiptUrl)
+                                            // Optional: Create a dummy File object so we know they already have a receipt uploaded
+                                            // We can't do this easily, but we can set a state `existingReceiptUrl`
+                                          }
+                                        }
+                                      }
+                                    } catch (e) {}
+                                    
+                                  } else {
+                                    setTicketForm(prev => ({
+                                      ...prev,
+                                      attendeeName: user?.display_name || "",
+                                      attendeeEmail: session?.user?.email || "",
+                                      attendeePhone: "",
+                                      attendeeAddress: "",
+                                    }))
+                                  }
                                   setShowBuyDialog(true)
                                 }}
                               >
                                 <Ticket className="w-3 h-3" />
-                                {alreadyPurchased ? "Already Purchased" : getEventAvailabilityLabel(event) || "Get Ticket"}
+                                {isCompleted ? "Already Purchased" : isPending ? "Awaiting Verification" : getEventAvailabilityLabel(event) || "Get Ticket"}
                               </Button>
                               <div className="flex gap-2">
                                 <Button
@@ -1585,73 +1648,68 @@ export default function DashboardEventsManagePage() {
                   </div>
                 )}
                 {!selectedEvent.is_free && paymentMethod === "flutterwave" && (
-                  <div className="space-y-3 rounded-xl border p-4">
-                    <div>
-                      <p className="font-semibold">Mobile money wallet</p>
-                      <p className="text-sm text-muted-foreground">Choose the country/currency and wallet that will approve this payment.</p>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div>
-                        <Label className="mb-1 block text-sm font-medium">Country</Label>
-                        <select
-                          value={mobileMoney.country}
-                          onChange={(event) =>
-                            setMobileMoney((current) => {
-                              const country = MOBILE_MONEY_COUNTRIES.find((item) => item.code === event.target.value) || MOBILE_MONEY_COUNTRIES[0]
-                              return {
-                                ...current,
-                                country: country.code,
-                                countryCode: country.dialCode,
-                                currency: country.currency,
-                                network: country.networks[0]?.value || "",
-                              }
-                            })
-                          }
-                          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                        >
-                          {MOBILE_MONEY_COUNTRIES.map((country) => (
-                            <option key={country.code} value={country.code}>
-                              {country.label} ({country.currency})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <Label className="mb-1 block text-sm font-medium">Network</Label>
-                        <select
-                          value={mobileMoney.network}
-                          onChange={(event) => setMobileMoney((current) => ({ ...current, network: event.target.value }))}
-                          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                        >
-                          {selectedMobileMoneyCountry.networks.map((network) => (
-                            <option key={network.value} value={network.value}>
-                              {network.label}
-                            </option>
-                          ))}
-                        </select>
+                  <div className="space-y-4 rounded-xl border p-4 bg-muted/30">
+                    <div className="bg-primary/5 border border-primary/20 rounded-md p-3 mb-2">
+                      <h4 className="font-semibold text-primary mb-1">Mobile Money Transfer (Cameroon)</h4>
+                      <p className="text-sm text-muted-foreground mb-3">Please send exactly <strong className="text-foreground">FCFA {Math.round((Number(selectedEvent.ticket_price) || 0) * 605).toLocaleString()}</strong> to the following account:</p>
+
+                      <div className="grid grid-cols-2 gap-2 text-sm bg-background p-3 rounded border">
+                        <span className="text-muted-foreground">Number:</span>
+                        <strong className="font-mono text-base">672945939</strong>
+                        <span className="text-muted-foreground">Name:</span>
+                        <strong>Nko levis</strong>
+                        <span className="text-muted-foreground">Network:</span>
+                        <strong>Momo (MTN/Orange)</strong>
                       </div>
                     </div>
-                    <div className="grid grid-cols-[96px_1fr] gap-3">
+
+                    <div className="space-y-3">
                       <div>
-                        <Label className="mb-1 block text-sm font-medium">Code</Label>
-                        <Input value={mobileMoney.countryCode} readOnly />
+                        <Label className="block text-sm font-medium mb-1">Upload Receipt Screenshot</Label>
+                        <p className="text-xs text-muted-foreground mb-2">After making the transfer, upload the screenshot or PDF receipt here for verification.</p>
+
+                        {receiptPreview ? (
+                          <div className="relative border rounded-md p-2 bg-background flex items-center justify-between">
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              {receiptFile?.type.startsWith("image/") ? (
+                                <img src={receiptPreview!} alt="Preview" className="w-10 h-10 object-cover rounded border" />
+                              ) : (
+                                <div className="w-10 h-10 bg-muted rounded flex items-center justify-center shrink-0">
+                                  <ImageIcon className="w-5 h-5 text-muted-foreground" />
+                                </div>
+                              )}
+                              <span className="text-sm truncate">{receiptFile?.name}</span>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => { setReceiptFile(null); setReceiptPreview(null); }}>
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => document.getElementById('receipt-upload')?.click()}>
+                            <Upload className="w-8 h-8 text-muted-foreground mb-2" />
+                            <span className="text-sm font-medium text-primary">Click to upload receipt</span>
+                            <span className="text-xs text-muted-foreground mt-1">PNG, JPG, PDF up to 5MB</span>
+                            <input
+                              id="receipt-upload"
+                              type="file"
+                              accept="image/*,.pdf"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0]
+                                if (file) {
+                                  setReceiptFile(file)
+                                  setReceiptPreview(URL.createObjectURL(file))
+                                }
+                              }}
+                            />
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <Label className="mb-1 block text-sm font-medium">Wallet phone</Label>
-                        <Input
-                          value={mobileMoney.phoneNumber}
-                          onChange={(event) =>
-                            setMobileMoney((current) => ({
-                              ...current,
-                              phoneNumber: normalizeMobileMoneyPhone(event.target.value, current.countryCode),
-                            }))
-                          }
-                          placeholder={selectedMobileMoneyCountry.placeholder}
-                        />
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Enter the local wallet number only. The country code is added separately.
-                        </p>
-                      </div>
+                    </div>
+
+                    <div className="rounded-md bg-yellow-500/10 border border-yellow-500/20 p-3 flex gap-2 text-sm text-yellow-700 dark:text-yellow-400">
+                      <AlertCircle className="w-5 h-5 shrink-0" />
+                      <p>Verification may take between a few minutes and an hour. Your e-ticket will be sent to your email once verified by admins.</p>
                     </div>
                   </div>
                 )}
@@ -1746,30 +1804,10 @@ export default function DashboardEventsManagePage() {
                   </div>
                 </div>
 
-                {mobileMoneyInstruction && (
-                  <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
-                    <div>
-                      <h4 className="font-semibold">Approve on your phone</h4>
-                      <p className="mt-1 text-sm text-muted-foreground">{mobileMoneyInstruction}</p>
-                    </div>
-                    <div className="rounded-lg bg-background p-3 text-xs text-muted-foreground">
-                      After dialing/approving the prompt, tap the button below. We also listen for Flutterwave's webhook and will update your ticket automatically once payment is confirmed.
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full"
-                      disabled={checkingMobileMoney}
-                      onClick={() => checkMobileMoneyPayment()}
-                    >
-                      {checkingMobileMoney ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                      Check payment status
-                    </Button>
-                  </div>
-                )}
 
-                <Button type="submit" className="w-full h-12 rounded-xl gradient-bg text-lg font-bold shadow-lg" disabled={purchasing}>
-                  {purchasing ? <Loader2 className="w-5 h-5 animate-spin" /> : (selectedEvent.is_free ? "Get Free Ticket" : mobileMoneyInstruction ? "Restart Payment" : "Pay & Get Ticket")}
+
+                <Button type="submit" className="w-full h-12 rounded-xl gradient-bg text-lg font-bold shadow-lg" disabled={purchasing || (paymentMethod === "flutterwave" && !receiptFile && !receiptPreview)}>
+                  {purchasing ? <Loader2 className="w-5 h-5 animate-spin" /> : (selectedEvent.is_free ? "Get Free Ticket" : paymentMethod === "flutterwave" ? "Submit Receipt" : "Pay & Get Ticket")}
                 </Button>
               </form>
             </div>

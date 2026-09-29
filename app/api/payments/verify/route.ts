@@ -316,51 +316,15 @@ export async function handlePaymentVerification(reference: string) {
                   .eq("id", event.id)
 
                 try {
-                  // Dynamic import to avoid jspdf UTF-8 issues in Turbopack
-                  const { generateTicketPDF } = await import("@/lib/ticket-generator")
-                  const { sendTicketEmail } = await import("@/lib/email-service")
-
-                  const pdfBuffer = await generateTicketPDF({
-                    eventName: event.title,
-                    eventDate: new Date(event.event_date).toLocaleDateString(),
-                    eventTime: new Date(event.event_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                    venue: event.location_name || "Online / TBD",
-                    address: event.location_name || "Not specified",
-                    ticketType: event.is_free ? "Free Pass" : "General Access",
-                    attendeeName: updatedTicket.attendee_name,
-                    barcode: updatedTicket.barcode,
-                  })
-
-                  const emailHtml = `
-                    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee;">
-                      <div style="text-align: center; margin-bottom: 16px;">
-                        <img src="https://vibe2gether.com/v2g-logo.png" alt="Vibe2Gether Logo" style="max-width: 100px; margin: 0 auto 12px; display: block;" />
-                        <h1 style="color: #FF5874; margin: 0;">Vibe2Gether Event Ticket</h1>
-                      </div>
-                      <p>Hi ${updatedTicket.attendee_name},</p>
-                      <p>Thank you for purchasing a ticket for <strong>${event.title}</strong>!</p>
-                      <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                        <p><strong>Event:</strong> ${event.title}</p>
-                        <p><strong>Date:</strong> ${new Date(event.event_date).toLocaleDateString()}</p>
-                        <p><strong>Time:</strong> ${new Date(event.event_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
-                        <p><strong>Venue:</strong> ${event.location_name || "Not specified"}</p>
-                      </div>
-                      <p>Your official ticket PDF is attached to this email. Please present it at the venue for scanning.</p>
-                      <p>Best regards,<br/>The Vibe2Gether Team</p>
-                    </div>
-                  `
-
-                  await sendTicketEmail({
-                    to: updatedTicket.attendee_email,
-                    subject: `Your Ticket for ${event.title} - Vibe2Gether`,
-                    html: emailHtml,
-                    attachments: [
-                      {
-                        filename: `ticket-${event.title.replace(/\s+/g, "-").toLowerCase()}.pdf`,
-                        content: pdfBuffer,
-                        contentType: "application/pdf",
-                      },
-                    ],
+                  // Use new generate-ticket endpoint to avoid jsPDF issues
+                  await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/admin/generate-ticket`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      registrationId: updatedTicket.registration_id,
+                      eventId: event.id,
+                      userId: updatedTicket.user_id
+                    })
                   })
                 } catch (ticketEmailError) {
                   console.error("[Verify Payment] Ticket email failed after payment confirmation:", ticketEmailError)
