@@ -60,6 +60,7 @@ CREATE TABLE public.posts (
   is_flagged boolean DEFAULT false,
   status character varying DEFAULT 'published'::character varying,
   reports_count integer DEFAULT 0,
+  is_premium boolean DEFAULT false,
   CONSTRAINT posts_pkey PRIMARY KEY (id),
   CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
@@ -327,6 +328,9 @@ CREATE TABLE public.event_registrations (
   currency character varying DEFAULT 'USD'::character varying,
   payment_method character varying,
   paid_at timestamp with time zone,
+  attendee_name character varying,
+  attendee_email character varying,
+  barcode character varying UNIQUE,
   CONSTRAINT event_registrations_pkey PRIMARY KEY (id),
   CONSTRAINT event_registrations_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id),
   CONSTRAINT event_registrations_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),

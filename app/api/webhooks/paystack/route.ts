@@ -1,7 +1,6 @@
 import { createClient } from "@supabase/supabase-js"
 import { NextRequest, NextResponse } from "next/server"
 import crypto from "crypto"
-import { generateTicketPDF } from "@/lib/ticket-generator"
 import { sendTicketEmail } from "@/lib/email-service"
 
 const supabase = createClient(
@@ -114,23 +113,37 @@ export async function POST(request: NextRequest) {
       } else if (transaction.type === "event_registration") {
         const metadata = transaction.metadata || {}
 
+        // Only update registrations that were created via Paystack, not manual payments
+        // Manual payments have payment_method: "mobile_money_manual" and should only be updated by admin approval
         if (metadata.registration_id) {
-          const { error: regError } = await supabase
+          // First check if this is a manual payment registration
+          const { data: existingReg } = await supabase
             .from("event_registrations")
-            .update({
-              status: "confirmed",
-              payment_status: "completed",
-              payment_reference: reference,
-              transaction_id: transaction.id,
-              paid_at: new Date().toISOString(),
-              amount_paid: amount,
-              currency: "NGN",
-              payment_method: "paystack",
-            })
+            .select("payment_method")
             .eq("id", metadata.registration_id)
+            .single()
 
-          if (regError) {
-            console.error("[Paystack] Failed to update event registration:", regError)
+          // Skip updating if this is a manual payment (admin should approve it)
+          if (existingReg?.payment_method === "mobile_money_manual") {
+            console.log("[Paystack] Skipping manual payment registration - admin should approve it")
+          } else {
+            const { error: regError } = await supabase
+              .from("event_registrations")
+              .update({
+                status: "confirmed",
+                payment_status: "completed",
+                payment_reference: reference,
+                transaction_id: transaction.id,
+                paid_at: new Date().toISOString(),
+                amount_paid: amount,
+                currency: "NGN",
+                payment_method: "paystack",
+              })
+              .eq("id", metadata.registration_id)
+
+            if (regError) {
+              console.error("[Paystack] Failed to update event registration:", regError)
+            }
           }
         } else if (transaction.user_id && metadata.eventId) {
           const { data: existingReg } = await supabase
@@ -188,76 +201,15 @@ export async function POST(request: NextRequest) {
 
               const thumbnailUrl = event.thumbnail_url || event.thumbnail || "";
 
-              const pdfBuffer = await generateTicketPDF({
-                eventName: event.title,
-                eventDate: new Date(event.event_date).toLocaleDateString(),
-                eventTime: new Date(event.event_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                venue: event.location_name || "Online / TBD",
-                address: event.location_name || "Not specified",
-                ticketType: event.is_free ? "Free Pass" : "General Access",
-                attendeeName: ticket.attendee_name,
-                barcode: ticket.barcode,
-                thumbnailUrl: thumbnailUrl
-              })
-
-              const emailHtml = `
-                <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; background-color: #1a1a1a; color: #ffffff; border-radius: 12px;">
-                  <div style="text-align: center; margin-bottom: 20px;">
-                    <h1 style="color: #ffffff; margin: 0;">Vibe2Gether</h1>
-                    <p style="color: #4ade80; margin: 5px 0 0 0;">✓ Confirmed</p>
-                  </div>
-                  
-                  <h2 style="text-align: center; font-size: 24px; margin-bottom: 20px;">
-                    Hi ${ticket.attendee_name}, your ticket for<br/>
-                    <span style="color: #f97316;">${event.title}</span><br/>
-                    is confirmed.
-                  </h2>
-
-                  ${thumbnailUrl ? `
-                    <div style="width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 20px;">
-                      <img src="${thumbnailUrl}" alt="Event Flyer" style="width: 100%; height: auto; display: block;" />
-                    </div>
-                  ` : ""}
-
-                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; border-top: 1px solid #333; border-bottom: 1px solid #333; padding: 15px 0;">
-                    <div>
-                      <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Date</p>
-                      <p style="margin: 5px 0 0 0; font-weight: bold;">${new Date(event.event_date).toLocaleDateString()}</p>
-                    </div>
-                    <div>
-                      <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Time</p>
-                      <p style="margin: 5px 0 0 0; font-weight: bold;">${new Date(event.event_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                    </div>
-                    <div>
-                      <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Venue</p>
-                      <p style="margin: 5px 0 0 0; font-weight: bold;">${event.location_name || "Not specified"}</p>
-                    </div>
-                    <div>
-                      <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Type</p>
-                      <p style="margin: 5px 0 0 0; font-weight: bold;">${event.is_free ? "Free Pass" : "General Access"}</p>
-                    </div>
-                  </div>
-
-                  <div style="background: #222; padding: 15px; border-radius: 8px;">
-                    <p style="color: #888; font-size: 12px; margin: 0; text-transform: uppercase;">Order #${ticket.barcode}</p>
-                    <h3 style="margin: 10px 0;">${event.title}</h3>
-                    <p style="color: #aaa; font-size: 14px; line-height: 1.5;">${event.description || ""}</p>
-                    <p style="color: #888; font-size: 12px; margin-top: 15px;">Your official ticket PDF is attached to this email. Please present it at the venue.</p>
-                  </div>
-                </div>
-              `
-
-              await sendTicketEmail({
-                to: ticket.attendee_email,
-                subject: `Your Ticket for ${event.title} - Vibe2Gether`,
-                html: emailHtml,
-                attachments: [
-                  {
-                    filename: `ticket-${event.title.replace(/\s+/g, "-").toLowerCase()}.pdf`,
-                    content: pdfBuffer,
-                    contentType: "application/pdf",
-                  },
-                ],
+              // Use generate-ticket endpoint to avoid jsPDF issues
+              await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/admin/generate-ticket`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  registrationId: ticket.registration_id,
+                  eventId: event.id,
+                  userId: ticket.user_id
+                })
               })
             }
           }

@@ -224,9 +224,31 @@ export async function handlePaymentVerification(reference: string) {
         const eventAmountPaid = provider === "flutterwave" ? Number(paymentData.amount || transaction.amount || 0) : Number(paymentData.amount || 0) / 100
         const eventCurrency = provider === "flutterwave" ? paymentData.currency || transaction.currency || "XAF" : "NGN"
         let resolvedEventId = metadata.eventId
+        let registrationId = metadata.registration_id
+
+        // Get user details for attendee info
+        const { data: userData } = await supabase
+          .from("users")
+          .select("email, full_name, display_name")
+          .eq("id", transaction.user_id)
+          .single()
+
+        // Use barcode from metadata, or from registration, or generate new one
+        let barcode = metadata.barcode
+        if (!barcode && registrationId) {
+          const { data: existingReg } = await supabase
+            .from("event_registrations")
+            .select("barcode")
+            .eq("id", registrationId)
+            .single()
+          barcode = existingReg?.barcode
+        }
+        if (!barcode) {
+          barcode = `V2G-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+        }
 
         if (metadata.registration_id) {
-          await supabase
+          const { data: updatedReg } = await supabase
             .from("event_registrations")
             .update({
               status: "confirmed",
@@ -237,10 +259,23 @@ export async function handlePaymentVerification(reference: string) {
               amount_paid: eventAmountPaid,
               currency: eventCurrency,
               payment_method: provider,
+              barcode: barcode,
+              attendee_name: userData?.full_name || userData?.display_name || "Unknown",
+              attendee_email: userData?.email || "",
             })
             .eq("id", metadata.registration_id)
+            .select()
+            .single()
+
+          if (updatedReg && !updatedReg.barcode) {
+            // If update didn't include barcode, try to update it separately
+            await supabase
+              .from("event_registrations")
+              .update({ barcode: barcode })
+              .eq("id", metadata.registration_id)
+          }
         } else if (transaction.user_id && metadata.eventId) {
-          await supabase
+          const { data: newReg } = await supabase
             .from("event_registrations")
             .upsert(
               {
@@ -254,9 +289,18 @@ export async function handlePaymentVerification(reference: string) {
                 amount_paid: eventAmountPaid,
                 currency: eventCurrency,
                 payment_method: provider,
+                barcode: barcode,
+                attendee_name: userData?.full_name || userData?.display_name || "Unknown",
+                attendee_email: userData?.email || "",
               },
               { onConflict: "event_id,user_id" }
             )
+            .select()
+            .single()
+
+          if (newReg) {
+            registrationId = newReg.id
+          }
         } else if (transaction.user_id) {
           const { data: ticketByRef } = await supabase
             .from("event_tickets")
@@ -266,7 +310,7 @@ export async function handlePaymentVerification(reference: string) {
 
           if (ticketByRef?.event_id) {
             resolvedEventId = ticketByRef.event_id
-            await supabase
+            const { data: newReg } = await supabase
               .from("event_registrations")
               .upsert(
                 {
@@ -280,9 +324,58 @@ export async function handlePaymentVerification(reference: string) {
                   amount_paid: eventAmountPaid,
                   currency: eventCurrency,
                   payment_method: provider,
+                  barcode: barcode,
+                  attendee_name: userData?.full_name || userData?.display_name || "Unknown",
+                  attendee_email: userData?.email || "",
                 },
                 { onConflict: "event_id,user_id" }
               )
+              .select()
+              .single()
+
+            if (newReg) {
+              registrationId = newReg.id
+            }
+          }
+        }
+
+        // Generate and send ticket email for event_registration
+        if (resolvedEventId && transaction.user_id) {
+          // If we don't have a registrationId, try to find the registration
+          if (!registrationId) {
+            const { data: foundReg } = await supabase
+              .from("event_registrations")
+              .select("id")
+              .eq("event_id", resolvedEventId)
+              .eq("user_id", transaction.user_id)
+              .single()
+
+            if (foundReg) {
+              registrationId = foundReg.id
+              console.log("[Verify Payment] Found registration for ticket generation:", registrationId)
+            }
+          }
+
+          if (registrationId) {
+            try {
+              await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/admin/generate-ticket`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  registrationId: registrationId,
+                  eventId: resolvedEventId,
+                  userId: transaction.user_id
+                })
+              })
+              console.log("[Verify Payment] Ticket email sent for registration:", registrationId)
+            } catch (ticketEmailError) {
+              console.error("[Verify Payment] Ticket email failed after payment confirmation:", ticketEmailError)
+            }
+          } else {
+            console.error("[Verify Payment] Could not find registration for ticket generation:", {
+              resolvedEventId,
+              userId: transaction.user_id
+            })
           }
         }
 

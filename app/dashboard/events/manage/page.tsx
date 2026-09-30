@@ -9,14 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
-import { Loader2, Plus, Calendar, Clock, MapPin, Users, Trash2, LogOut, MessageCircle, Ticket, Eye, Search, Phone, Mail, Home, Download, Share2, Upload, Image as ImageIcon, X, AlertCircle } from "lucide-react"
+import { Loader2, Plus, Calendar, Clock, MapPin, Users, Trash2, LogOut, MessageCircle, Ticket, Eye, Search, Phone, Mail, Home, Download, Share2, Upload, Image as ImageIcon, X, AlertCircle, ChevronDown } from "lucide-react"
 import { useUserProfile } from "@/hooks/use-user-profile"
 import { createClient } from "@/lib/supabase/client"
 import { uploadReceiptMedia } from "@/lib/supabase/storage"
@@ -24,15 +23,36 @@ import { PaymentMethodOptions } from "@/components/payment-method-options"
 import { normalizeMobileMoneyPhone } from "@/lib/mobile-money"
 
 const CATEGORIES = [
-  "Entertainment",
-  "Music & Concerts",
+  "Music",
   "Sports",
+  "Technology",
+  "Arts & Culture",
   "Food & Drink",
+  "Business",
+  "Education",
+  "Health & Wellness",
+  "Fashion",
+  "Comedy",
+  "Theater",
+  "Workshop",
   "Networking",
-  "Educational",
+  "Charity",
+  "Party",
   "Conference",
-  "Art & Culture",
-  "Other",
+  "Exhibition",
+  "Festival",
+  "Gaming",
+  "Film",
+  "Literature",
+  "Photography",
+  "Dance",
+  "Travel",
+  "Outdoor",
+  "Family",
+  "Religious",
+  "Political",
+  "Science",
+  "Other"
 ]
 
 const MOBILE_MONEY_COUNTRIES = [
@@ -82,6 +102,8 @@ export default function DashboardEventsManagePage() {
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
   const verificationHandledRef = useRef(false)
+  const [categorySearchOpen, setCategorySearchOpen] = useState(false)
+  const [categorySearchTerm, setCategorySearchTerm] = useState("")
 
   // Ticket Purchase Form
   const [ticketForm, setTicketForm] = useState({
@@ -120,8 +142,17 @@ export default function DashboardEventsManagePage() {
     return (
       registration?.status === "confirmed" ||
       registration?.status === "paid" ||
+      registration?.status === "completed" ||
       registration?.payment_status === "completed" ||
       registration?.payment_status === "paid"
+    )
+  }
+
+  function isFailedRegistration(registration: any) {
+    return (
+      registration?.status === "cancelled" ||
+      registration?.status === "failed" ||
+      registration?.payment_status === "failed"
     )
   }
 
@@ -1074,6 +1105,7 @@ export default function DashboardEventsManagePage() {
                     const userReg = registrations.find((reg) => (reg.event?.id || reg.event_id) === event.id)
                     const isCompleted = userReg ? isCompletedRegistration(userReg) : false
                     const isPending = userReg ? userReg.status === "pending" : false
+                    const isFailed = userReg ? isFailedRegistration(userReg) : false
                     const alreadyPurchased = isCompleted || isPending
                     return (
                       <Card key={event.id} className="overflow-hidden hover:shadow-lg transition-shadow flex flex-col">
@@ -1164,12 +1196,40 @@ export default function DashboardEventsManagePage() {
                             </div>
                           ) : (
                             <div className="flex flex-col gap-2 mt-3">
-                              <Button
-                                className="w-full gap-1 text-xs gradient-bg"
-                                disabled={isCompleted || (isEventUnavailable(event) && !isPending)}
-                                onClick={async () => {
-                                  if (isCompleted || (isEventUnavailable(event) && !isPending)) return
-                                  setSelectedEvent(event)
+                              {isFailed ? (
+                                <Button
+                                  className="w-full gap-1 text-xs bg-orange-500 hover:bg-orange-600"
+                                  onClick={async () => {
+                                    // Delete failed registration so user can retry
+                                    const supabase = createClient()
+                                    await supabase
+                                      .from("event_registrations")
+                                      .delete()
+                                      .eq("id", userReg.id)
+                                    
+                                    // Refresh registrations
+                                    const { data: updatedRegs } = await supabase
+                                      .from("event_registrations")
+                                      .select("*, events(*)")
+                                      .eq("user_id", session?.user?.id)
+                                    setRegistrations(updatedRegs || [])
+                                    
+                                    toast({
+                                      title: "Registration Removed",
+                                      description: "You can now try purchasing the ticket again",
+                                    })
+                                  }}
+                                >
+                                  <AlertCircle className="w-3 h-3" />
+                                  Remove Failed Payment
+                                </Button>
+                              ) : (
+                                <Button
+                                  className="w-full gap-1 text-xs gradient-bg"
+                                  disabled={isCompleted || (isEventUnavailable(event) && !isPending)}
+                                  onClick={async () => {
+                                    if (isCompleted || (isEventUnavailable(event) && !isPending)) return
+                                    setSelectedEvent(event)
                                   
                                   if (isPending) {
                                     // Set form to the existing data
@@ -1212,6 +1272,7 @@ export default function DashboardEventsManagePage() {
                                 <Ticket className="w-3 h-3" />
                                 {isCompleted ? "Already Purchased" : isPending ? "Awaiting Verification" : getEventAvailabilityLabel(event) || "Get Ticket"}
                               </Button>
+                              )}
                               <div className="flex gap-2">
                                 <Button
                                   variant="outline"
@@ -1284,18 +1345,56 @@ export default function DashboardEventsManagePage() {
               {/* Category */}
               <div className="space-y-2">
                 <Label htmlFor="category">Category *</Label>
-                <Select value={formData.category} onValueChange={(v) => setFormData({ ...formData, category: v })}>
-                  <SelectTrigger id="category" className="text-sm">
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map((cat) => (
-                      <SelectItem key={cat} value={cat}>
-                        {cat}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="relative">
+                  <Input
+                    id="category"
+                    placeholder="Search or select category"
+                    value={formData.category}
+                    onChange={(e) => {
+                      setFormData({ ...formData, category: e.target.value })
+                      setCategorySearchTerm(e.target.value)
+                      setCategorySearchOpen(true)
+                    }}
+                    onFocus={() => setCategorySearchOpen(true)}
+                    onBlur={() => setTimeout(() => setCategorySearchOpen(false), 200)}
+                    className="text-sm"
+                  />
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                </div>
+                {categorySearchOpen && (
+                  <div className="absolute z-50 w-full mt-1 bg-background border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                    <div className="p-2 border-b">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search categories..."
+                          value={categorySearchTerm}
+                          onChange={(e) => setCategorySearchTerm(e.target.value)}
+                          className="pl-9 text-sm"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    </div>
+                    {CATEGORIES
+                      .filter(cat => 
+                        cat.toLowerCase().includes(categorySearchTerm.toLowerCase()) ||
+                        categorySearchTerm === ""
+                      )
+                      .map((category) => (
+                        <div
+                          key={category}
+                          className="px-3 py-2 hover:bg-accent cursor-pointer text-sm"
+                          onClick={() => {
+                            setFormData({ ...formData, category })
+                            setCategorySearchTerm("")
+                            setCategorySearchOpen(false)
+                          }}
+                        >
+                          {category}
+                        </div>
+                      ))}
+                  </div>
+                )}
               </div>
 
               {/* Date & Time */}

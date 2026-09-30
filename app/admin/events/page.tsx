@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAdminAuth } from "@/hooks/use-admin-auth"
 import Image from "next/image"
-import { Plus, Edit2, Trash2, Loader2, CheckCircle, XCircle, Upload, X, Calendar } from "lucide-react"
+import { Plus, Edit2, Trash2, Loader2, CheckCircle, XCircle, Upload, X, Calendar, Search, ChevronDown } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,6 +23,40 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { createClient } from "@/lib/supabase/client"
 import AdminEventEditModal from "@/components/admin-event-edit-modal"
+
+// Event categories
+const EVENT_CATEGORIES = [
+  "Music",
+  "Sports",
+  "Technology",
+  "Arts & Culture",
+  "Food & Drink",
+  "Business",
+  "Education",
+  "Health & Wellness",
+  "Fashion",
+  "Comedy",
+  "Theater",
+  "Workshop",
+  "Networking",
+  "Charity",
+  "Party",
+  "Conference",
+  "Exhibition",
+  "Festival",
+  "Gaming",
+  "Film",
+  "Literature",
+  "Photography",
+  "Dance",
+  "Travel",
+  "Outdoor",
+  "Family",
+  "Religious",
+  "Political",
+  "Science",
+  "Other"
+]
 
 export default function EventsAdminPage() {
   const router = useRouter()
@@ -46,6 +80,8 @@ export default function EventsAdminPage() {
   const [activationEvent, setActivationEvent] = useState<any>(null)
   const [activatingLoading, setActivatingLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [categorySearchOpen, setCategorySearchOpen] = useState(false)
+  const [categorySearchTerm, setCategorySearchTerm] = useState("")
 
   const [newEvent, setNewEvent] = useState({
     title: "",
@@ -79,10 +115,24 @@ export default function EventsAdminPage() {
   async function fetchAllData() {
     try {
       setLoading(true)
+      
+      // Find user ID corresponding to admin email
+      let userId = admin?.id
+      if (admin?.email) {
+        const { data: userRecord } = await supabase
+          .from("users")
+          .select("id")
+          .eq("email", admin.email)
+          .single()
+        if (userRecord) {
+          userId = userRecord.id
+        }
+      }
+      
       const { data: adminEventsData } = await supabase
         .from("events")
         .select("*")
-        .eq("created_by", admin?.id)
+        .eq("created_by", userId)
         .neq("status", "rejected")
         .order("event_date", { ascending: true })
 
@@ -153,10 +203,24 @@ export default function EventsAdminPage() {
 
     try {
       setCreatingEventLoading(true)
+      
+      // Find user ID corresponding to admin email
+      let userId = admin?.id
+      if (admin?.email) {
+        const { data: userRecord } = await supabase
+          .from("users")
+          .select("id")
+          .eq("email", admin.email)
+          .single()
+        if (userRecord) {
+          userId = userRecord.id
+        }
+      }
+      
       const { data: event, error: insertError } = await supabase
         .from("events")
         .insert({
-          created_by: admin?.id,
+          created_by: userId,
           title: newEvent.title,
           description: newEvent.description,
           category: newEvent.category,
@@ -614,13 +678,56 @@ export default function EventsAdminPage() {
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div>
+                <div className="relative">
                   <Label>Category</Label>
-                  <Input
-                    placeholder="Category"
-                    value={newEvent.category}
-                    onChange={(e) => setNewEvent({ ...newEvent, category: e.target.value })}
-                  />
+                  <div className="relative">
+                    <Input
+                      placeholder="Search or select category"
+                      value={newEvent.category}
+                      onChange={(e) => {
+                        setNewEvent({ ...newEvent, category: e.target.value })
+                        setCategorySearchTerm(e.target.value)
+                        setCategorySearchOpen(true)
+                      }}
+                      onFocus={() => setCategorySearchOpen(true)}
+                      onBlur={() => setTimeout(() => setCategorySearchOpen(false), 200)}
+                    />
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  </div>
+                  {categorySearchOpen && (
+                    <div className="absolute z-50 w-full mt-1 bg-background border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      {/* <div className="p-2 border-b"> */}
+                        {/* <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            placeholder="Search categories..."
+                            value={categorySearchTerm}
+                            onChange={(e) => setCategorySearchTerm(e.target.value)}
+                            className="pl-9"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div> */}
+                      {/* </div> */}
+                      {EVENT_CATEGORIES
+                        .filter(cat => 
+                          cat.toLowerCase().includes(categorySearchTerm.toLowerCase()) ||
+                          categorySearchTerm === ""
+                        )
+                        .map((category) => (
+                          <div
+                            key={category}
+                            className="px-3 py-2 hover:bg-accent cursor-pointer text-sm"
+                            onClick={() => {
+                              setNewEvent({ ...newEvent, category })
+                              setCategorySearchTerm("")
+                              setCategorySearchOpen(false)
+                            }}
+                          >
+                            {category}
+                          </div>
+                        ))}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label>Location *</Label>

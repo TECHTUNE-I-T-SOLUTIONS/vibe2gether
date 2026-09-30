@@ -62,12 +62,14 @@ function normalizeCurrency(currency: string): "NGN" | "USD" {
 // Convert amount from database format to naira
 // NGN amounts are stored as plain naira (1500 = 1500 NGN)
 // USD amounts are stored as cents of naira equivalent (1448550 cents = 14485.50 NGN)
+// Event registration amounts are stored in NGN directly (not kobo)
 function convertFromKobo(amount: number, currency: string, type?: string): number {
   if (type === "event_registration") {
-    return amount / 100
+    // Event registration amounts are stored in NGN directly, not kobo
+    return amount
   }
   const normalized = normalizeCurrency(currency)
-  
+
   if (normalized === "USD") {
     // USD amounts are in cents of naira equivalent, convert to naira
     return amount / 100
@@ -80,11 +82,12 @@ function convertFromKobo(amount: number, currency: string, type?: string): numbe
 // Convert amount to USD
 function convertToUSD(amount: number, currency: string, type?: string): number {
   if (type === "event_registration") {
-    const base = amount / 100
+    // Event registration amounts are stored in NGN directly
+    const base = amount
     return normalizeCurrency(currency) === "USD" ? base : base / CONVERSION_RATE
   }
   const normalizedCurrency = normalizeCurrency(currency)
-  
+
   if (normalizedCurrency === "USD") {
     // USD: amount is in cents of naira, convert to naira first, then to USD
     const amountInNaira = amount / 100
@@ -98,11 +101,12 @@ function convertToUSD(amount: number, currency: string, type?: string): number {
 // Convert amount to NGN
 function convertToNGN(amount: number, currency: string, type?: string): number {
   if (type === "event_registration") {
-    const base = amount / 100
+    // Event registration amounts are stored in NGN directly
+    const base = amount
     return normalizeCurrency(currency) === "NGN" ? base : base * CONVERSION_RATE
   }
   const normalizedCurrency = normalizeCurrency(currency)
-  
+
   if (normalizedCurrency === "USD") {
     // USD: amount is in cents of naira, convert to naira
     return amount / 100
@@ -285,8 +289,21 @@ export default function AdminTransactionsPage() {
     }
   }
 
-  const handleUpdateStatus = async (newStatus: "completed" | "failed") => {
-    if (!selectedTransaction) return
+  const handleUpdateStatus = async (transaction: Transaction | "completed" | "failed", newStatus?: "completed" | "failed") => {
+    // Handle both calling patterns: handleUpdateStatus(tx, "completed") and handleUpdateStatus("completed")
+    let tx: Transaction
+    let status: "completed" | "failed"
+
+    if (typeof transaction === "string") {
+      // Old pattern: handleUpdateStatus("completed")
+      if (!selectedTransaction) return
+      tx = selectedTransaction
+      status = transaction
+    } else {
+      // New pattern: handleUpdateStatus(tx, "completed")
+      tx = transaction
+      status = newStatus || "completed"
+    }
 
     setUpdatingStatus(true)
     try {
@@ -294,23 +311,25 @@ export default function AdminTransactionsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          transactionId: selectedTransaction.id,
-          status: newStatus
+          transactionId: tx.id,
+          status: status
         })
       })
-      
+
       const data = await response.json()
       if (!response.ok || data.error) throw new Error(data.error || "Failed to update status")
 
       // Update local state
       setTransactions(
-        transactions.map((tx) =>
-          tx.id === selectedTransaction.id ? { ...tx, status: newStatus } : tx
+        transactions.map((t) =>
+          t.id === tx.id ? { ...t, status: status } : t
         )
       )
 
-      // Update selected transaction
-      setSelectedTransaction({ ...selectedTransaction, status: newStatus })
+      // Update selected transaction if it's the same one
+      if (selectedTransaction && selectedTransaction.id === tx.id) {
+        setSelectedTransaction({ ...selectedTransaction, status: status })
+      }
 
       toast({
         title: "Success",
@@ -328,8 +347,9 @@ export default function AdminTransactionsPage() {
     }
   }
 
-  const handleRefund = async () => {
-    if (!selectedTransaction) return
+  const handleRefund = async (transaction?: Transaction) => {
+    const tx = transaction || selectedTransaction
+    if (!tx) return
 
     setUpdatingStatus(true)
     try {
@@ -339,12 +359,12 @@ export default function AdminTransactionsPage() {
       const { error } = await supabase
         .from("transactions")
         .insert({
-          user_id: selectedTransaction.user_id,
-          amount: selectedTransaction.amount,
-          type: `${selectedTransaction.type}_refund`,
+          user_id: tx.user_id,
+          amount: tx.amount,
+          type: `${tx.type}_refund`,
           status: "completed",
-          payment_method: selectedTransaction.payment_method,
-          description: `Refund for transaction ${selectedTransaction.id}`,
+          payment_method: tx.payment_method,
+          description: `Refund for transaction ${tx.id}`,
         })
 
       if (error) throw error
@@ -353,9 +373,11 @@ export default function AdminTransactionsPage() {
       await supabase
         .from("transactions")
         .update({ status: "refunded", updated_at: new Date().toISOString() })
-        .eq("id", selectedTransaction.id)
+        .eq("id", tx.id)
 
-      setSelectedTransaction({ ...selectedTransaction, status: "refunded" })
+      if (selectedTransaction && selectedTransaction.id === tx.id) {
+        setSelectedTransaction({ ...selectedTransaction, status: "refunded" })
+      }
 
       toast({
         title: "Success",
@@ -579,7 +601,7 @@ export default function AdminTransactionsPage() {
                             {tx.status === "failed" && (
                               <>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-blue-600" onClick={() => handleUpdateStatus(tx, "refunded")}>
+                                <DropdownMenuItem className="text-blue-600" onClick={() => handleRefund(tx)}>
                                   <RefreshCw className="w-4 h-4 mr-2" />
                                   Refund
                                 </DropdownMenuItem>
@@ -714,11 +736,11 @@ export default function AdminTransactionsPage() {
                                 {tx.status === "pending" && (
                                   <>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem className="text-green-600" onClick={() => handleUpdateStatus("completed")}>
+                                    <DropdownMenuItem className="text-green-600" onClick={() => handleUpdateStatus(tx, "completed")}>
                                       <Check className="w-4 h-4 mr-2" />
                                       Mark as Completed
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem className="text-red-600" onClick={() => handleUpdateStatus("failed")}>
+                                    <DropdownMenuItem className="text-red-600" onClick={() => handleUpdateStatus(tx, "failed")}>
                                       <XCircle className="w-4 h-4 mr-2" />
                                       Mark as Failed
                                     </DropdownMenuItem>
@@ -727,7 +749,7 @@ export default function AdminTransactionsPage() {
                                 {tx.status === "failed" && (
                                   <>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem className="text-blue-600" onClick={handleRefund}>
+                                    <DropdownMenuItem className="text-blue-600" onClick={() => handleRefund(tx)}>
                                       <RefreshCw className="w-4 h-4 mr-2" />
                                       Refund User
                                     </DropdownMenuItem>
@@ -806,7 +828,7 @@ export default function AdminTransactionsPage() {
                             {tx.status === "failed" && (
                               <>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-blue-600" onClick={() => handleUpdateStatus(tx, "refunded")}>
+                                <DropdownMenuItem className="text-blue-600" onClick={() => handleRefund(tx)}>
                                   <RefreshCw className="w-4 h-4 mr-2" />
                                   Refund
                                 </DropdownMenuItem>
@@ -1012,7 +1034,7 @@ export default function AdminTransactionsPage() {
                             {tx.status === "failed" && (
                               <>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-blue-600" onClick={() => handleUpdateStatus(tx, "refunded")}>
+                                <DropdownMenuItem className="text-blue-600" onClick={() => handleRefund(tx)}>
                                   <RefreshCw className="w-4 h-4 mr-2" />
                                   Refund
                                 </DropdownMenuItem>
@@ -1146,11 +1168,11 @@ export default function AdminTransactionsPage() {
                                   </>
                                 )}
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-green-600" onClick={() => handleUpdateStatus("completed")}>
+                                <DropdownMenuItem className="text-green-600" onClick={() => handleUpdateStatus(tx, "completed")}>
                                   <Check className="w-4 h-4 mr-2" />
                                   Mark as Completed
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="text-red-600" onClick={() => handleUpdateStatus("failed")}>
+                                <DropdownMenuItem className="text-red-600" onClick={() => handleUpdateStatus(tx, "failed")}>
                                   <XCircle className="w-4 h-4 mr-2" />
                                   Mark as Failed
                                 </DropdownMenuItem>
@@ -1205,7 +1227,13 @@ export default function AdminTransactionsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Amount</p>
-                  <p className="font-semibold text-lg">{formatCurrency(selectedTransaction.amount / 100)}</p>
+                  <p className="font-semibold text-lg">
+                    {getCurrencySymbol(selectedTransaction.currency || "NGN")}
+                    {convertFromKobo(selectedTransaction.amount || 0, selectedTransaction.currency || "NGN", selectedTransaction.type).toLocaleString("en-NG", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Type</p>
@@ -1377,7 +1405,7 @@ export default function AdminTransactionsPage() {
               {selectedTransaction.status === "failed" && (
                 <Button
                   className="w-full bg-blue-600 hover:bg-blue-700"
-                  onClick={handleRefund}
+                  onClick={() => handleRefund()}
                   disabled={updatingStatus}
                 >
                   {updatingStatus ? <Loader className="w-4 h-4 animate-spin mr-2" /> : null}

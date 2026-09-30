@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET) as any
+    const decoded = jwt.verify(token, JWT_SECRET) as { id: string }
 
     if (!decoded.id) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 })
@@ -64,59 +64,65 @@ export async function POST(request: NextRequest) {
       throw updateError
     }
 
-    // 3. Handle specific logic based on transaction type if completed
-    if (status === "completed") {
-      if (transaction.type === "event_registration") {
-        let registration = null;
-        
-        // Try multiple ways to find the registration
-        // 1. By payment_reference
-        const { data: regByRef } = await supabase
+    // 3. Handle specific logic based on transaction type
+    if (transaction.type === "event_registration") {
+      let registration = null;
+      
+      // Try multiple ways to find the registration
+      // 1. By payment_reference
+      const { data: regByRef } = await supabase
+        .from("event_registrations")
+        .select("*, events(*)")
+        .eq("payment_reference", transactionId)
+        .single()
+      
+      if (regByRef) {
+        registration = regByRef;
+      } 
+      // 2. By registration_id in metadata
+      else if (transaction.metadata?.registration_id) {
+        const { data: regById } = await supabase
           .from("event_registrations")
           .select("*, events(*)")
-          .eq("payment_reference", transactionId)
+          .eq("id", transaction.metadata.registration_id)
           .single()
         
-        if (regByRef) {
-          registration = regByRef;
-        } 
-        // 2. By registration_id in metadata
-        else if (transaction.metadata?.registration_id) {
-          const { data: regById } = await supabase
-            .from("event_registrations")
-            .select("*, events(*)")
-            .eq("id", transaction.metadata.registration_id)
-            .single()
-          
-          if (regById) {
-            registration = regById;
-          }
+        if (regById) {
+          registration = regById;
         }
-        // 3. By event_id and user_id as fallback
-        else if (transaction.metadata?.eventId && transaction.user_id) {
-          const { data: regByEvent } = await supabase
-            .from("event_registrations")
-            .select("*, events(*)")
-            .eq("event_id", transaction.metadata.eventId)
-            .eq("user_id", transaction.user_id)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .single()
-          
-          if (regByEvent) {
-            registration = regByEvent;
-          }
-        }
+      }
+      // 3. By event_id and user_id as fallback
+      else if (transaction.metadata?.eventId && transaction.user_id) {
+        const { data: regByEvent } = await supabase
+          .from("event_registrations")
+          .select("*, events(*)")
+          .eq("event_id", transaction.metadata.eventId)
+          .eq("user_id", transaction.user_id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single()
         
-        if (registration) {
-          // Update registration status
-          await supabase
+        if (regByEvent) {
+          registration = regByEvent;
+        }
+      }
+      
+      if (registration) {
+        if (status === "completed") {
+          // Update registration status to completed
+          const { error: regUpdateError } = await supabase
             .from("event_registrations")
             .update({
               status: "completed",
               payment_status: "paid",
             })
             .eq("id", registration.id)
+
+          if (regUpdateError) {
+            console.error("[Approve] Failed to update registration to completed:", regUpdateError)
+          } else {
+            console.log("[Approve] Successfully updated registration to completed:", registration.id)
+          }
 
           // Auto-send ticket using new endpoint to avoid jsPDF issues
           try {
@@ -133,12 +139,27 @@ export async function POST(request: NextRequest) {
             console.error("Failed to send ticket email on approve:", emailError)
             // don't throw, we still successfully approved it
           }
-        } else {
-          console.warn("No registration found for transaction:", transactionId)
+        } else if (status === "failed") {
+          // Update registration status to cancelled so user can retry
+          const { error: regUpdateError } = await supabase
+            .from("event_registrations")
+            .update({
+              status: "cancelled",
+              payment_status: "failed",
+            })
+            .eq("id", registration.id)
+
+          if (regUpdateError) {
+            console.error("[Approve] Failed to update registration to failed:", regUpdateError)
+          } else {
+            console.log("[Approve] Successfully updated registration to failed:", registration.id)
+          }
         }
+      } else {
+        console.warn("No registration found for transaction:", transactionId)
       }
-      // Note: we can add handlers for coin_purchase and premium_subscription here in the future.
     }
+    // Note: we can add handlers for coin_purchase and premium_subscription here in the future.
 
     return NextResponse.json({ success: true })
   } catch (error) {

@@ -201,6 +201,9 @@ export async function POST(request: NextRequest) {
             amount_paid: amountInNGN,
             currency: "NGN",
             payment_method: "paystack",
+            barcode: barcode,
+            attendee_name: attendeeName,
+            attendee_email: attendeeEmail,
           },
           { onConflict: "event_id,user_id" }
         )
